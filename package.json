@@ -1,0 +1,13 @@
+{
+  "name": "logistics-normalizer",
+  "version": "1.0.0",
+  "description": "Microservicio para normalizar patentes y registrar OTs",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "googleapis": "^134.0.0"
+  }
+}
