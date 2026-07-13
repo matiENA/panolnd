@@ -7,11 +7,16 @@ app.use(express.json());
 
 // === 1. AUTENTICACIÓN CENTRALIZADA ===
 // Render inyectará el JSON de Firebase desde tus Environment Variables
+
 const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+
+// Poka-Yoke: Forzamos los saltos de línea correctos para que Google acepte la firma
+const privateKey = credentials.private_key.replace(/\\n/g, '\n');
+
 const auth = new google.auth.GoogleAuth({
   credentials: {
     client_email: credentials.client_email,
-    private_key: credentials.private_key,
+    private_key: privateKey, // Usamos la variable sanitizada
   },
   scopes: ['https://www.googleapis.com/auth/spreadsheets']
 });
