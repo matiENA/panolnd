@@ -1,13 +1,15 @@
 {
-  "name": "logistics-normalizer",
+  "name": "panol-logistics-microservice",
   "version": "1.0.0",
-  "description": "Microservicio para normalizar patentes y registrar OTs",
+  "description": "Microservicio Node.js para normalización de patentes, gestión de OTs, Pañol Monitor y Devoluciones con WebSockets",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
+    "cors": "^2.8.5",
     "express": "^4.19.2",
-    "googleapis": "^134.0.0"
+    "googleapis": "^134.0.0",
+    "socket.io": "^4.7.5"
   }
 }
