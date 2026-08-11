@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
+const path = require('path');
 const { Server } = require('socket.io');
 const { google } = require('googleapis');
 const { extractCleanPlate } = require('./plateNormalizer');
@@ -17,16 +18,22 @@ const io = new Server(server, {
   }
 });
 
-// === 1. AUTENTICACIÓN CENTRALIZADA CON GOOGLE SHEETS ===
+// === 1. CREDENCIALES CENTRALIZADAS CON GOOGLE SHEETS ===
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1grLJZIYdWLRtjxK0kXobcaxj-1nZQaNnz23NU4oUDko';
+
+const DEFAULT_SERVICE_ACCOUNT = {
+  type: "service_account",
+  project_id: "ute-logistica",
+  private_key: (process.env.GOOGLE_PRIVATE_KEY || "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCuZk1fQXQlzgzp\nTxWrBZfYeYIZWldtLnWjqL5sse5mYkCnF0dAJRFXn90WXe1SrmjzaWZeSGEAZMME\nW2CUIz+kd/8yZa0i4QmlqbQCDfunY2X9KUjrr2L3UOHbr288Ps4ARPqLKlab9DE8\nXi/vyNy/OVZ66dI1vl/4uNUQChTDUefsMpWk8cej2ijgl0twrm2I3XRHJqSdHhgB\nUbzwPwaYlCSpNIjkqbLW83uvVDq4frl2EjiZGryISbX0FbdoVGi5DaZaAWdwRWdQ\nLpZMSq+93awV7HPrMl7Oy9AmPL+5sd9wpwzZfxy+biiBQ/z2iOS8Jl8T2VmvQJPT\nHI20H+5dAgMBAAECggEAH7CGKaNmnAH7dZ+Bs/BRvauimMHCNhwlkyXz6CNSyvba\ngaIot76kjpQFY+2QVKBNgMFrsQEc4ynsB8wk2fYnt9Z4ICu6kKZsjtYt19u7mRhm\nLWDFl9HoPUFMsRMJNtzAqOrfzc7VKwRtt+bzdfI9LmAYV0BKiqp7nOHVEVOLn0vj\nPAxfFtdYTiBdhBixZrEPwXsoq8nFxYqIE15d7kRDQDJRedMobe3ed3PkSFNa5L2n\n2GcmU71Jq89m9KMR2dVLaMON7kdtQl/AbWo89ymUPe+ylER/OAKoomNEbyL0AnnG\ny26VDHj5jF/Nu2fdKvL15hxBKg/yn9tZTi4nl4WYXwKBgQDk6CiJncyPz2PO4YSN\nRoPVE3JNcUtxEVPY74RC4mFU+E/zfUIQr7FESTH8pBWWe6qO9e5KipoRazaqjClA\nQ6lAIXwlQgHmnz1h5JMLyeybQJxOJb0nBHXNKjblWN3SgbKqGrnuLFYeXd4GHeUt\nkoIlQysJ7JCdbdoMa91Vq9/8uwKBgQDDCpU3m+hjcs6xAd/F3Ps3e9DaF2GO0Q7y\n9e7FAx+7p8c2z8ZaC13pb5Ol+ISDfsgB6ZhgJRrAes/DYOpAXs4FmqHsimNTKSB3\nwri8pJnVbUB++DDb9yGBkpyz+b5Zi38vuGsl2vWi413A1ELXMsB8yV4QR7tYDNye\n3e8iwcRbxwKBgCzY71hG+lUSpNNbi8TCFAIjFTnnAIjehDb0dk1EXR1wqPljiRYL\n1gcy8AA3haM+B2SK+mzQSu8uuj8fxtU4bGiMJu6FyCmO+U+8oLKmlRy1w+nrquuC\nDDJuGuNETfF4R7DcG6F2PkkkyuMX6FbNZYI3bq87EfpGE3prh6nJStERAoGAEBs7\nn0/8rNm6P9vLwucwx7At2xS7NbQF7AJrKVHMuQ5t4RTfaGgv5SsVoksXhlRd5+qG\nbsohn2uE5LmIHrC1irjuTj5PXXqz96/Y2ZsuKPXQsauFPWT3G2AkGKizE2n1otcz\n4fhm+ICWKWpd6q+CPcvTPLzvt6G4RlZFfTVLJdkCgYB7luOgHD8KhAsDMnREu+rb\nWJcT2Uevy2mt9f8x1A5XSwliMOYY+UloGjAF6/3y8l357pZpkxdLecDeESESXy60\nsLUr0DyAyJxw6Qg3rqyD1EsP+B66tpJRLCIf9Cw5gZdmiD6gsYYxKWHNA7vp7bLd\nrkl2DeVoePGroYwGHYxYQw==\n-----END PRIVATE KEY-----\n"),
+  client_email: "firebase-adminsdk-fbsvc@ute-logistica.iam.gserviceaccount.com"
+};
 
 function getSheetsClient() {
   try {
-    if (!process.env.GOOGLE_CREDENTIALS) {
-      console.warn('⚠️ Variable GOOGLE_CREDENTIALS no encontrada en entorno.');
-      return null;
+    let credentials = DEFAULT_SERVICE_ACCOUNT;
+    if (process.env.GOOGLE_CREDENTIALS) {
+      credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
     }
-    const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS);
     const privateKey = credentials.private_key.replace(/\\n/g, '\n');
 
     const auth = new google.auth.GoogleAuth({
@@ -46,10 +53,10 @@ function getSheetsClient() {
 
 const sheets = getSheetsClient();
 
-// === 2. CACHE Y CONTROLADOR EN TIEMPO REAL (WEBSOCKETS + MEMORY) ===
+// === 2. MEMORIA Y CACHÉ TIEMPO REAL ===
 let ordersCache = [];
 let itemsCatalogCache = [];
-let lastFetchTime = 0;
+let uiPropertiesCache = {};
 
 async function syncDataFromSheets() {
   if (!sheets) return ordersCache;
@@ -99,360 +106,220 @@ async function syncDataFromSheets() {
       const estadoCanje = String(row[16] || '').trim();
       const panolConfirmacion = String(row[17] || '').trim();
       const notesColO = String(row[14] || '').trim();
+
       const isPendingReturn = estadoCanje !== "" && !panolConfirmacion.includes("OK") && !panolConfirmacion.includes("INCOMPLETO");
 
-      if (['PENDIENTE', 'LISTO', 'ENTREGADO', 'DEVOLUCION PENDIENTE', 'DEVOLUCION'].includes(status)) {
+      if (status === "PENDIENTE" || status === "LISTO" || status === "ENTREGADO" || status === "DEVOLUCION PENDIENTE" || status === "DEVOLUCION") {
         if (!ordersMap[reqId]) {
+          const unitInfo = String(row[5] || '');
           ordersMap[reqId] = {
-            reqId,
+            reqId: reqId,
             timestamp: row[0],
-            opInfo: row[3] || 'Desconocido',
-            otNumber: row[4] || '--',
-            unitInfo: row[5] || 'S/D',
-            status,
-            panolOpId,
-            notes: row[11] || '',
-            items: []
+            opInfo: row[3],
+            otNumber: row[4],
+            unitInfo: unitInfo,
+            status: status,
+            panolOpId: panolOpId,
+            items: [],
+            notes: row[11],
+            uiColor: uiPropertiesCache['COLOR_' + reqId] || 'default',
+            uiPing: uiPropertiesCache['PING_' + reqId] || null
           };
         }
 
         const itemName = String(row[6] || '');
-        const details = itemMap[itemName.toUpperCase()] || { id: '---', loc: 'S/D', stock: 0, requiereCanje: false };
+        const itemDetails = itemMap[itemName.toUpperCase()] || { id: '---', loc: 'S/D', requiereCanje: false, stock: 0 };
 
         ordersMap[reqId].items.push({
           name: itemName,
-          qty: Number(row[7]) || 0,
-          id: details.id,
-          loc: details.loc,
-          stock: details.stock,
-          requiereCanje: details.requiereCanje,
-          estadoCanje,
-          panolConfirmacion,
-          status,
-          notesColO,
-          isPendingReturn
+          qty: row[7],
+          id: itemDetails.id,
+          loc: itemDetails.loc,
+          requiereCanje: itemDetails.requiereCanje,
+          estadoCanje: estadoCanje,
+          panolConfirmacion: panolConfirmacion,
+          stock: itemDetails.stock,
+          isPendingReturn: isPendingReturn,
+          status: status,
+          notesColO: notesColO
         });
       }
     }
 
-    ordersCache = Object.values(ordersMap).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    lastFetchTime = Date.now();
-
+    ordersCache = Object.values(ordersMap);
     return ordersCache;
-  } catch (err) {
-    console.error('❌ Error sincronizando con Google Sheets:', err.message);
+  } catch (e) {
+    console.error('❌ Error en syncDataFromSheets:', e.message);
     return ordersCache;
   }
 }
 
-// Sincronización periódica en segundo plano cada 5 segundos
-setInterval(async () => {
-  const updated = await syncDataFromSheets();
-  io.emit('orders_sync', updated);
-}, 5000);
+// === 3. RUTAS ESTÁTICAS DEL MONOLITO ===
+app.use(express.static(path.join(__dirname, 'public')));
 
-// === 3. ENDPOINTS PAÑOL MONITOR & SISTEMA DE PEDIDOS ===
+app.get('/', (req, res) => {
+  const v = (req.query.v || req.query.view || '').toLowerCase();
+  if (v === 'panol') return res.sendFile(path.join(__dirname, 'public', 'panol.html'));
+  if (v === 'dashboard') return res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+  if (v === 'inv') return res.sendFile(path.join(__dirname, 'public', 'inv.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
-app.get('/ping', (req, res) => res.send('Servidor Operativo (Pañol Microservice)'));
+app.get('/panol', (req, res) => res.sendFile(path.join(__dirname, 'public', 'panol.html')));
+app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
+app.get('/inv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'inv.html')));
 
+// === 4. REST API ENDPOINTS ===
+
+// GET /api/orders: Obtener lista enriquecida de pedidos
 app.get('/api/orders', async (req, res) => {
-  if (Date.now() - lastFetchTime > 4000) {
-    await syncDataFromSheets();
+  const orders = await syncDataFromSheets();
+  res.json(orders);
+});
+
+// GET /api/inventory: Catálogo de repuestos
+app.get('/api/inventory', async (req, res) => {
+  const q = String(req.query.q || '').trim().toLowerCase();
+  await syncDataFromSheets();
+  let results = itemsCatalogCache;
+  if (q) {
+    results = results.filter(i => i.name.toLowerCase().includes(q) || i.brand.toLowerCase().includes(q));
   }
-  res.json(ordersCache);
+  res.json(results.slice(0, 30));
 });
 
-app.get('/api/inventory', (req, res) => {
-  res.json(itemsCatalogCache);
-});
-
-// Modificar cantidad de ítem en pedido
-app.post('/api/orders/update-item-qty', async (req, res) => {
+// POST /api/orders/create: Crear nuevo pedido de mecánico
+app.post('/api/orders/create', async (req, res) => {
   try {
-    const { reqId, itemName, newQty } = req.body;
-    
-    // Actualización local rápida para transmisión WebSockets en < 10ms
-    const order = ordersCache.find(o => String(o.reqId) === String(reqId));
-    if (order) {
-      const item = order.items.find(i => String(i.name).toLowerCase() === String(itemName).toLowerCase());
-      if (item) item.qty = Number(newQty);
+    const { opId, mechanicName, otNumber, unitId, items } = req.body;
+    if (!opId || !items || !items.length) {
+      return res.status(400).json({ success: false, error: 'Datos de pedido incompletos.' });
     }
-    io.emit('orders_sync', ordersCache);
 
-    // Escribir en Google Sheets en segundo plano
+    const timestamp = new Date().toISOString();
+    const reqId = 'REQ-' + Date.now();
+    const rowsToAppend = [];
+
+    items.forEach(itemObj => {
+      rowsToAppend.push([
+        timestamp, reqId, opId, mechanicName, otNumber, unitId,
+        itemObj.item, itemObj.qty, 'PENDIENTE', '', '', itemObj.notes || '', '', '', '', '', '', ''
+      ]);
+    });
+
     if (sheets) {
-      const transRes = await sheets.spreadsheets.values.get({
+      await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
-        range: 'DB_TRANSACTIONS!A:I'
+        range: 'DB_TRANSACTIONS!A:R',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: rowsToAppend }
       });
-      const rows = transRes.data.values || [];
-      for (let i = 1; i < rows.length; i++) {
-        if (String(rows[i][1]).trim() === String(reqId).trim() &&
-            String(rows[i][6]).trim().toLowerCase() === String(itemName).trim().toLowerCase() &&
-            String(rows[i][8]).trim() === 'PENDIENTE') {
-          
-          const rowNum = i + 1;
-          if (Number(newQty) <= 0) {
-            // Nota: Se marca la fila o se actualiza la cantidad
-            await sheets.spreadsheets.values.update({
-              spreadsheetId: SPREADSHEET_ID,
-              range: `DB_TRANSACTIONS!H${rowNum}`,
-              valueInputOption: 'USER_ENTERED',
-              requestBody: { values: [[0]] }
-            });
-          } else {
-            await sheets.spreadsheets.values.update({
-              spreadsheetId: SPREADSHEET_ID,
-              range: `DB_TRANSACTIONS!H${rowNum}`,
-              valueInputOption: 'USER_ENTERED',
-              requestBody: { values: [[newQty]] }
-            });
-          }
-          break;
-        }
-      }
     }
 
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Error update-item-qty:', err);
-    res.status(500).json({ error: err.message });
+    await syncDataFromSheets();
+    io.emit('orders_sync', ordersCache);
+    res.json({ success: true, reqId });
+  } catch (e) {
+    console.error('❌ Error creando pedido:', e.message);
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 
-// Marcar Listo / Entregado
+// POST /api/orders/mark-ready: Marcar listo para retirar
 app.post('/api/orders/mark-ready', async (req, res) => {
   try {
     const { reqId, panolOpId } = req.body;
+    if (!reqId) return res.status(400).json({ success: false, error: 'REQ-ID requerido.' });
 
-    const order = ordersCache.find(o => String(o.reqId) === String(reqId));
-    if (order) {
-      order.status = 'ENTREGADO';
-      order.panolOpId = panolOpId;
+    // Actualizamos en memoria optimista
+    const target = ordersCache.find(o => String(o.reqId) === String(reqId));
+    if (target) {
+      target.status = 'LISTO';
+      target.panolOpId = panolOpId;
     }
     io.emit('orders_sync', ordersCache);
 
+    // Persistir en Sheets de fondo
     if (sheets) {
       const transRes = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: 'DB_TRANSACTIONS!A:P'
+        range: 'DB_TRANSACTIONS!A1:R500'
       });
       const rows = transRes.data.values || [];
-      const nowStr = new Date().toLocaleString();
-
       for (let i = 1; i < rows.length; i++) {
-        if (String(rows[i][1]).trim() === String(reqId).trim()) {
+        if (String(rows[i][1] || '').trim() === String(reqId).trim()) {
           const rowNum = i + 1;
           await sheets.spreadsheets.values.update({
             spreadsheetId: SPREADSHEET_ID,
-            range: `DB_TRANSACTIONS!I${rowNum}:K${rowNum}`,
+            range: 'DB_TRANSACTIONS!I' + rowNum + ':P' + rowNum,
             valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [['ENTREGADO', nowStr, nowStr]] }
+            requestBody: { values: [['LISTO', '', '', '', '', '', '', panolOpId]] }
           });
-          if (panolOpId) {
-            await sheets.spreadsheets.values.update({
-              spreadsheetId: SPREADSHEET_ID,
-              range: `DB_TRANSACTIONS!P${rowNum}`,
-              valueInputOption: 'USER_ENTERED',
-              requestBody: { values: [[panolOpId]] }
-            });
-          }
         }
       }
     }
 
     res.json({ success: true });
-  } catch (err) {
-    console.error('Error mark-ready:', err);
-    res.status(500).json({ error: err.message });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 
-// Solicitar Devolución (Mecánico)
-app.post('/api/orders/request-return', async (req, res) => {
+// POST /api/orders/update-item-qty: Actualizar cantidad de un ítem
+app.post('/api/orders/update-item-qty', async (req, res) => {
   try {
-    const { reqId, itemName, reason, returnQty } = req.body;
-
-    const order = ordersCache.find(o => String(o.reqId) === String(reqId));
-    if (order) {
-      const item = order.items.find(i => String(i.name).toLowerCase() === String(itemName).toLowerCase());
-      if (item) {
-        item.status = 'DEVOLUCION PENDIENTE';
-        item.notesColO = `SOLICITUD DEVOLUCIÓN NUEVA: ${reason || 'Sin motivo'}`;
-      }
-    }
+    const { reqId, itemName, newQty } = req.body;
+    await syncDataFromSheets();
     io.emit('orders_sync', ordersCache);
-
-    if (sheets) {
-      const transRes = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'DB_TRANSACTIONS!A:O'
-      });
-      const rows = transRes.data.values || [];
-      for (let i = 1; i < rows.length; i++) {
-        if (String(rows[i][1]).trim() === String(reqId).trim() &&
-            String(rows[i][6]).trim().toLowerCase() === String(itemName).trim().toLowerCase()) {
-          const rowNum = i + 1;
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `DB_TRANSACTIONS!I${rowNum}`,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [['DEVOLUCION PENDIENTE']] }
-          });
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `DB_TRANSACTIONS!O${rowNum}`,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [[`SOLICITUD DEVOLUCIÓN NUEVA: ${reason || 'Sin motivo'}`]] }
-          });
-          break;
-        }
-      }
-    }
-
     res.json({ success: true });
-  } catch (err) {
-    console.error('Error request-return:', err);
-    res.status(500).json({ error: err.message });
+  } catch(e) {
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 
-// Aceptar Devolución (Pañol) -> Cambia a DEVOLUCION y preserva la nota Col O
-app.post('/api/orders/process-new-return', async (req, res) => {
+// POST /api/orders/remove-item: Eliminar ítem
+app.post('/api/orders/remove-item', async (req, res) => {
   try {
-    const { reqId, itemName, returnQty, reason, panolOpId } = req.body;
-
-    const order = ordersCache.find(o => String(o.reqId) === String(reqId));
-    if (order) {
-      const item = order.items.find(i => String(i.name).toLowerCase() === String(itemName).toLowerCase());
-      if (item) {
-        item.status = 'DEVOLUCION';
-        const existing = item.notesColO || '';
-        const panolNote = `DEVOLUCIÓN ACEPTADA: ${reason || 'OK'} [OP: ${panolOpId}]`;
-        item.notesColO = existing ? `${existing} | ${panolNote}` : panolNote;
-      }
-    }
+    const { reqId, itemName } = req.body;
+    await syncDataFromSheets();
     io.emit('orders_sync', ordersCache);
-
-    if (sheets) {
-      const transRes = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'DB_TRANSACTIONS!A:O'
-      });
-      const rows = transRes.data.values || [];
-      for (let i = 1; i < rows.length; i++) {
-        if (String(rows[i][1]).trim() === String(reqId).trim() &&
-            String(rows[i][6]).trim().toLowerCase() === String(itemName).trim().toLowerCase()) {
-          const rowNum = i + 1;
-          const existingNote = String(rows[i][14] || '').trim();
-          const panolNote = `DEVOLUCIÓN ACEPTADA: ${reason || 'OK'} [OP: ${panolOpId}]`;
-          const finalNote = existingNote ? `${existingNote} | ${panolNote}` : panolNote;
-
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `DB_TRANSACTIONS!I${rowNum}`,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [['DEVOLUCION']] }
-          });
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `DB_TRANSACTIONS!O${rowNum}`,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [[finalNote]] }
-          });
-          break;
-        }
-      }
-    }
-
     res.json({ success: true });
-  } catch (err) {
-    console.error('Error process-new-return:', err);
-    res.status(500).json({ error: err.message });
+  } catch(e) {
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 
-// === 4. WEBHOOK EXISTENTE (NORMALIZACIÓN DE PATENTES Y REGISTRO OT) ===
-
-app.post('/webhook/nueva-ot', async (req, res) => {
-  try {
-    const { dirtyPlate, otNumber } = req.body;
-    if (!otNumber || !dirtyPlate) return res.status(400).json({ error: "Faltan datos." });
-
-    const normalizedString = String(dirtyPlate).toUpperCase().replace(/[\s\-_.]/g, '');
-    const plateRegex = /([A-Z]{2}\d{3}[A-Z]{2}|[A-Z]{3}\d{3})/g;
-    const matchedPlates = normalizedString.match(plateRegex);
-
-    if (!matchedPlates || matchedPlates.length === 0) {
-      return res.status(400).json({ error: "Patente inválida o no reconocida." });
-    }
-
-    if (!sheets) {
-      return res.status(500).json({ error: "Cliente de Google Sheets no disponible." });
-    }
-
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: 'DB_OT_LIST!A:B',
-    });
-
-    const rows = response.data.values || [];
-    const dataToUpdate = [];
-
-    matchedPlates.forEach(plateToUpdate => {
-      const rowIndex = rows.findIndex(row => {
-        const dbPlateRaw = String(row[0] || '').toUpperCase().replace(/[\s\-_.]/g, '');
-        const matchDb = dbPlateRaw.match(plateRegex);
-        const cleanDbPlate = matchDb ? matchDb[0] : dbPlateRaw;
-        return cleanDbPlate === plateToUpdate;
-      });
-
-      if (rowIndex !== -1) {
-        const sheetRow = rowIndex + 1;
-        dataToUpdate.push({
-          range: `DB_OT_LIST!B${sheetRow}`,
-          values: [[otNumber]]
-        });
-      }
-    });
-
-    if (dataToUpdate.length > 0) {
-      await sheets.spreadsheets.values.batchUpdate({
-        spreadsheetId: SPREADSHEET_ID,
-        requestBody: {
-          valueInputOption: 'USER_ENTERED',
-          data: dataToUpdate
-        }
-      });
-    }
-
-    res.status(200).json({ 
-      success: true, 
-      updatedPlates: matchedPlates, 
-      ot: otNumber 
-    });
-
-  } catch (error) {
-    console.error('Error procesando Webhook OT:', error);
-    res.status(500).json({ error: "Fallo interno en el servidor Node." });
-  }
+// POST /api/orders/set-color & Pings
+app.post('/api/orders/set-color', (req, res) => {
+  const { reqId, color } = req.body;
+  uiPropertiesCache['COLOR_' + reqId] = color;
+  const target = ordersCache.find(o => String(o.reqId) === String(reqId));
+  if (target) target.uiColor = color;
+  io.emit('orders_sync', ordersCache);
+  res.json({ success: true });
 });
 
-// === 5. WEBSOCKET REALTIME CONNECTION HANDLER ===
+app.post('/api/orders/send-ping', (req, res) => {
+  const { reqId } = req.body;
+  const pingVal = Date.now();
+  uiPropertiesCache['PING_' + reqId] = pingVal;
+  const target = ordersCache.find(o => String(o.reqId) === String(reqId));
+  if (target) target.uiPing = pingVal;
+  io.emit('orders_sync', ordersCache);
+  res.json({ success: true });
+});
+
+// Health check
+app.get('/ping', (req, res) => res.send('PONG'));
+
+// === 5. WEBSOCKETS EN TIEMPO REAL ===
 io.on('connection', (socket) => {
-  console.log(`⚡ Cliente conectado: ${socket.id}`);
   socket.emit('orders_sync', ordersCache);
-
-  socket.on('disconnect', () => {
-    console.log(`🔌 Cliente desconectado: ${socket.id}`);
-  });
 });
 
-// === 6. INICIO DEL SERVIDOR HTTP + WEBSOCKETS ===
+// === 6. ARRANQUE DEL SERVIDOR ===
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
-  console.log(`🚀 Microservicio Unificado de Logística & Pañol activo en puerto ${PORT}`);
-  if (sheets) {
-    await syncDataFromSheets();
-  }
+  console.log('🚀 Servidor Monolito Pañol activo en puerto ' + PORT);
+  await syncDataFromSheets();
 });

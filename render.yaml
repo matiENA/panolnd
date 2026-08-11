@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: panol-monolith-service
+    env: node
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: SPREADSHEET_ID
+        value: 1grLJZIYdWLRtjxK0kXobcaxj-1nZQaNnz23NU4oUDko
+      - key: NODE_ENV
+        value: production

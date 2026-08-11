@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Control de Stock</title>
+    
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    
+    <script src="/socket.io/socket.io.min.js"></script>
+    <script src="/js/client-shim.js"></script>
+
+    <style>
+      :root {
+        --bg: #0d1117;
+        --card: #161b22;
+        --card-elevated: #1c2128;
+        --border: #30363d;
+        --text: #c9d1d9;
+        --text-bright: #ffffff;
+        --text-muted: #8b949e;
+        --accent: #365BA5;
+        --accent-light: #4a7fd4;
+        --success: #238636;
+        --success-bg: rgba(35, 134, 54, 0.15);
+        --danger: #da3633;
+        --danger-bg: rgba(218, 54, 51, 0.15);
+        --warning: #d29922;
+        --warning-bg: rgba(210, 153, 34, 0.15);
+        --overlay: rgba(0,0,0,0.8);
+        --touch-min: 48px;
+        --touch-comfortable: 56px;
+      }
+
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+      body {
+        background-color: var(--bg);
+        color: var(--text);
+        font-family: 'Inter', sans-serif;
+        margin: 0; padding: 0;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+        min-height: 100vh;
+      }
+
+      #login-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: var(--bg);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 9999; transition: opacity 0.3s ease; padding: 20px;
+      }
+
+      .login-card {
+        background: var(--card); border: 1px solid var(--border);
+        padding: 40px 32px; border-radius: 20px; text-align: center;
+        width: 100%; max-width: 340px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      }
+
+      .login-icon { 
+        margin-bottom: 24px; color: var(--accent); background: rgba(54, 91, 165, 0.1);
+        width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        margin-left: auto; margin-right: auto;
+      }
+
+      .login-title { margin: 0 0 8px; font-size: 1.5rem; font-weight: 800; color: var(--text-bright); }
+      .login-subtitle { margin: 0 0 24px; font-size: 0.9rem; color: var(--text-muted); }
+
+      .login-input {
+        width: 100%; padding: 16px; margin-bottom: 16px;
+        background: var(--bg); border: 2px solid var(--border);
+        color: white; border-radius: 12px; font-size: 1.5rem;
+        text-align: center; letter-spacing: 8px; font-weight: 700;
+      }
+      .login-input:focus { border-color: var(--accent); outline: none; background: #0a0d12; }
+      .login-input::placeholder { letter-spacing: 4px; color: var(--text-muted); }
+
+      .btn-login {
+        width: 100%; padding: 16px; background: var(--accent);
+        color: white; border: none; border-radius: 12px;
+        font-weight: 800; font-size: 1rem; cursor: pointer;
+        min-height: var(--touch-comfortable); transition: all 0.2s;
+      }
+      .btn-login:hover { background: var(--accent-light); }
+
+      .header {
+        position: sticky; top: 0; background: rgba(13, 17, 23, 0.97);
+        backdrop-filter: blur(12px); padding: 12px 16px; border-bottom: 1px solid var(--border);
+        z-index: 100; display: flex; flex-direction: column; gap: 12px;
+      }
+
+      .header-top { display: flex; justify-content: space-between; align-items: center; }
+      .header-left { display: flex; align-items: center; gap: 12px; }
+
+      .app-title { font-size: 1.1rem; font-weight: 800; color: var(--text-bright); display: flex; align-items: center; gap: 8px; }
+      .user-badge { font-size: 0.75rem; color: var(--accent); background: rgba(54, 91, 165, 0.15); border: 1px solid rgba(54, 91, 165, 0.3); padding: 6px 10px; border-radius: 8px; font-weight: 600; }
+
+      .header-actions { display: flex; gap: 8px; }
+      .icon-btn { background: var(--card); border: 1px solid var(--border); color: var(--text); width: var(--touch-min); height: var(--touch-min); border-radius: 12px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; position: relative; }
+
+      .search-wrapper { position: relative; width: 100%; }
+      .search-input { width: 100%; background: var(--card); border: 1px solid var(--border); color: var(--text-bright); padding: 14px 44px 14px 44px; border-radius: 12px; font-size: 1rem; }
+      .search-input:focus { outline: none; border-color: var(--accent); background: var(--card-elevated); }
+
+      .grid-container { display: grid; grid-template-columns: 1fr; gap: 12px; padding: 12px; padding-bottom: 100px; max-width: 1200px; margin: 0 auto; }
+      @media (min-width: 600px) { .grid-container { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; padding: 16px; } }
+
+      .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; transition: all 0.2s; }
+      .card-header { display: flex; justify-content: space-between; align-items: flex-start; padding: 14px 14px 10px; border-bottom: 1px solid var(--border); }
+      .card-meta { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+      .card-brand { font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px; }
+      .card-title { font-weight: 700; color: var(--text-bright); line-height: 1.3; font-size: 1rem; word-break: break-word; }
+
+      .card-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+      .field-group { display: flex; gap: 12px; }
+      .field { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+      .field-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+      .field-input-wrapper { display: flex; gap: 8px; align-items: center; }
+
+      .field-input { flex: 1; background: var(--bg); border: 2px solid var(--border); color: var(--text-bright); padding: 12px; border-radius: 10px; font-size: 1rem; font-weight: 600; transition: all 0.2s; min-height: var(--touch-min); }
+      .field-input.stock-field { text-align: center; font-size: 1.3rem; font-weight: 800; max-width: 100px; }
+
+      .quick-actions { display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+      .quick-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; color: var(--text-muted); font-size: 0.85rem; font-weight: 700; cursor: pointer; transition: all 0.15s; min-height: 48px; }
+
+      .loading-state { grid-column: 1 / -1; text-align: center; padding: 60px 20px; color: var(--text-muted); }
+      .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--card-elevated); border: 1px solid var(--border); padding: 14px 20px; border-radius: 12px; font-weight: 600; display: flex; align-items: center; gap: 10px; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.4); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+      .toast.show { transform: translateX(-50%) translateY(0); }
+    </style>
+  </head>
+  <body>
+    <div id="login-overlay">
+      <div class="login-card">
+        <div class="login-icon"><i data-lucide="package-search" size="36"></i></div>
+        <h2 class="login-title">Inventario</h2>
+        <p class="login-subtitle">Ingresa tu código de acceso</p>
+        <input type="tel" id="login-key" class="login-input" placeholder="••••" maxlength="4" inputmode="numeric" pattern="[0-9]*" onkeydown="handleLoginKey(event)">
+        <button class="btn-login" id="loginBtn" onclick="attemptLogin()">INGRESAR</button>
+        <div id="login-msg" class="login-msg"></div>
+      </div>
+    </div>
+
+    <div id="app-content" style="display:none;">
+      <div class="header">
+        <div class="header-top">
+          <div class="header-left">
+            <div class="app-title"><i data-lucide="package" size="20"></i> Stock</div>
+            <div id="userBadge" class="user-badge" style="display:none;"></div>
+          </div>
+        </div>
+        <div class="search-wrapper">
+          <input type="text" id="searchInput" class="search-input" placeholder="Buscar repuesto, marca..." oninput="handleSearch()">
+        </div>
+      </div>
+
+      <div id="content" class="grid-container">
+        <div class="loading-state"><div class="spinner"></div><div>Cargando inventario...</div></div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+      let currentUser = "";
+      let allItems = [];
+      let searchTimer;
+
+      window.onload = function() { lucide.createIcons(); document.getElementById('login-key').focus(); };
+
+      function handleLoginKey(e) { if (e.key === 'Enter') attemptLogin(); }
+
+      function attemptLogin() {
+        const keyInput = document.getElementById('login-key');
+        const key = keyInput.value.trim();
+        if (!key) return;
+        currentUser = "Operador-" + key;
+        unlockApp(currentUser);
+      }
+
+      function unlockApp(userName) {
+        document.getElementById('userBadge').textContent = userName;
+        document.getElementById('userBadge').style.display = 'block';
+        const overlay = document.getElementById('login-overlay');
+        overlay.style.opacity = '0';
+        setTimeout(() => {
+          overlay.style.display = 'none';
+          document.getElementById('app-content').style.display = 'block';
+          lucide.createIcons(); loadItems();
+        }, 300);
+      }
+
+      function handleSearch() {
+        clearTimeout(searchTimer);
+        const query = document.getElementById('searchInput').value;
+        searchTimer = setTimeout(() => loadItems(query), 300);
+      }
+
+      function loadItems(query = "") {
+        const container = document.getElementById('content');
+        container.innerHTML = '<div class="loading-state"><div class="spinner"></div><div>Cargando...</div></div>';
+        google.script.run
+          .withSuccessHandler((items) => { allItems = items || []; renderCards(allItems); })
+          .getInventoryItems(query);
+      }
+
+      function renderCards(items) {
+        const container = document.getElementById('content');
+        if (!items || items.length === 0) {
+          container.innerHTML = `<div class="loading-state">Sin resultados.</div>`;
+          return;
+        }
+
+        container.innerHTML = items.map(item => `
+          <div class="card" id="card-${item.id}">
+            <div class="card-header">
+              <div class="card-meta">
+                <div class="card-brand">${item.brand || 'Sin marca'}</div>
+                <div class="card-title">${item.name}</div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="field-group">
+                <div class="field">
+                  <div class="field-label">Ubicación</div>
+                  <input type="text" class="field-input" value="${item.loc || 'S/D'}" readonly>
+                </div>
+                <div class="field" style="max-width:130px;">
+                  <div class="field-label">Stock</div>
+                  <input type="number" class="field-input stock-field" value="${item.stock || 0}" readonly>
+                </div>
+              </div>
+            </div>
+          </div>`).join('');
+        lucide.createIcons();
+      }
+    </script>
+  </body>
+</html>
