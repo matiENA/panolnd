@@ -265,7 +265,7 @@ app.post('/api/rpc', async (req, res) => {
       io.emit('orders_sync', ordersCache);
       result = { success: true, reqId: reqId };
     }
-    else if (action === 'getPendingOrdersEnriched' || action === 'getPendingOrders') {
+    else if (action === 'getPendingOrdersEnriched' || action === 'getPendingOrders' || action === 'getMechanicOrders') {
       result = await syncDataFromSheets();
     }
     else if (action === 'getInventoryItems') {

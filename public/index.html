@@ -545,26 +545,17 @@
         </div>
 
         <div id="view-list" class="card hidden">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-                <h3 style="margin:0; font-size:1.1rem;">📦 Mis Pedidos</h3>
-                <div style="display:flex; gap:8px; align-items:center;">
-                    <button id="btnUserScope" onclick="toggleUserScopeMode()" style="background:#e8f0fe; border:1px solid #365BA5; color:#365BA5; font-size:0.8rem; font-weight:800; padding:8px 12px; border-radius:6px; cursor:pointer;" title="Alternar entre ver únicamente tus pedidos o la lista unificada del taller">
-                        👤 MIS PEDIDOS
-                    </button>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0; font-size:1.1rem;">Mis Pedidos</h3>
+                <div style="display:flex; gap:10px;">
                     <button id="btnHistory" onclick="toggleHistoryMode()" style="background:transparent; border:1px solid #d1d5db; color:#6b7280; font-size:0.8rem; font-weight:700; padding:8px 12px; border-radius:6px; cursor:pointer;">
                         📜 HISTORIAL
                     </button>
                     <button onclick="refreshOrders()" style="background:none; border:none; color:var(--blue); font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:4px;">
-                        <span id="refreshIcon">🔄</span>
+                        <span id="refreshIcon">🔄</span> Actualizar
                     </button>
                 </div>
             </div>
-
-            <!-- BUSCADOR DE ARTÍCULOS Y OTS EN MIS PEDIDOS -->
-            <div style="margin-bottom:14px;">
-                <input type="text" id="orderSearchInput" placeholder="🔍 Buscar repuesto, artículo u OT..." oninput="applyOrderFilters()" style="width:100%; padding:10px 14px; border-radius:8px; border:2px solid #e0e0e0; font-size:0.85rem; outline:none; box-sizing:border-box; font-family:inherit;">
-            </div>
-
             <div id="orders-container">Cargando...</div>
         </div>
 
@@ -1381,25 +1372,6 @@ function executeSubmit() {
         }).getMechanicOrders(opId);
       }
 
-      let userScopeOnly = true;
-
-      function toggleUserScopeMode() {
-          userScopeOnly = !userScopeOnly;
-          const btn = document.getElementById('btnUserScope');
-          if (userScopeOnly) {
-              btn.style.background = "#e8f0fe";
-              btn.style.color = "#365BA5";
-              btn.style.borderColor = "#365BA5";
-              btn.innerText = "👤 MIS PEDIDOS";
-          } else {
-              btn.style.background = "#f3f4f6";
-              btn.style.color = "#374151";
-              btn.style.borderColor = "#9ca3af";
-              btn.innerText = "🌐 TODOS (TALLER)";
-          }
-          applyOrderFilters();
-      }
-
       function toggleHistoryMode() {
           showHistory = !showHistory; 
           const btn = document.getElementById('btnHistory');
@@ -1408,54 +1380,23 @@ function executeSubmit() {
           } else {
               btn.style.background = "transparent"; btn.style.color = "#6b7280"; btn.innerText = "📜 HISTORIAL";
           }
-          applyOrderFilters();
-      }
-
-      function applyOrderFilters() {
           renderOrders(allLoadedOrders);
       }
 
-      function renderOrders(orders) {
+function renderOrders(orders) {
         const container = document.getElementById('orders-container');
+        if (!Array.isArray(orders)) {
+            container.innerHTML = `<div style='text-align:center; padding:30px 20px; color:#999;'>Cargando datos...</div>`;
+            return;
+        }
         const searchInput = document.getElementById('orderSearchInput');
         const searchTerm = (searchInput ? searchInput.value : '').toLowerCase().trim();
-        const currentOpId = String(document.getElementById('activeOpId')?.value || '').trim();
-        const currentMechName = String(document.getElementById('activeMechName')?.value || '').toLowerCase().trim();
-
-        let filtered = (orders || []).slice();
-
-        // 1. Delimitación de Operaciones por Usuario (Mis Pedidos vs Vista Unificada del Taller)
-        if (userScopeOnly && (currentOpId || currentMechName)) {
-            filtered = filtered.filter(o => {
-                const rowOpId = String(o.opId || '').trim();
-                const rowOpInfo = String(o.opInfo || '').toLowerCase();
-                const matchOpId = currentOpId && (rowOpId === currentOpId || rowOpInfo.includes(currentOpId));
-                const matchOpName = currentMechName && rowOpInfo.includes(currentMechName);
-                return matchOpId || matchOpName;
-            });
-        }
-
-        // 2. Filtro Activos vs Historial
-        filtered = filtered.filter(o => {
             if(showHistory) return o.status === "ENTREGADO" || o.status === "DEVOLUCION";
             else return o.status === "PENDIENTE" || o.status === "LISTO";
         });
 
-        // 3. Buscador de Artículos, OTs y Unidades
-        if (searchTerm) {
-            filtered = filtered.filter(o => {
-                const matchOt = String(o.otNumber || '').toLowerCase().includes(searchTerm);
-                const matchUnit = String(o.unitInfo || '').toLowerCase().includes(searchTerm);
-                const matchMech = String(o.opInfo || '').toLowerCase().includes(searchTerm);
-                const matchItems = (o.items || []).some(i => String(i.name || '').toLowerCase().includes(searchTerm));
-                return matchOt || matchUnit || matchMech || matchItems;
-            });
-        }
-
         if (!filtered || filtered.length === 0) {
-          const msg = showHistory 
-            ? "📜 Sin historial reciente que coincida." 
-            : (userScopeOnly ? "✅ No tenés pedidos pendientes." : "✅ Sin pedidos pendientes en el taller.");
+          const msg = showHistory ? "📜 Sin historial reciente." : "✅ Sin pedidos pendientes.";
           container.innerHTML = `<div style='text-align:center; padding:40px 20px; color:#999; font-weight:500;'>${msg}</div>`;
           return;
         }
@@ -1469,6 +1410,11 @@ function executeSubmit() {
           if (o.status === "LISTO") {
             statusClass = "status-LISTO";
             statusBadge = `<span class="status-badge badge-LISTO">⚡ LISTO PARA RETIRAR</span>`;
+            /* === [DESHABILITADO] Botón YA LO TENGO (Reactibar si se requiere confirmación del mecánico) ===
+            action = `<button class="btn-action-primary" onclick="tryPickup('${o.reqId}')">
+                        <span>👍</span> YA LO TENGO
+                      </button>`;
+            ============================================================================================= */
             action = `<span style="font-size:0.8rem; color:#27ae60; font-weight:700;">Disponible en pañol</span>`;
           
           } else if (o.status === "ENTREGADO") {
@@ -1490,7 +1436,11 @@ function executeSubmit() {
 
           let bgStyle = (o.status === "ENTREGADO" || o.status === "DEVOLUCION") ? "background:#fafafa; border-left:4px solid #ccc;" : "";
 
-          let itemsHtml = (o.items || []).map(i => {
+          // === DISEÑO DE SERVICIO: AGRUPACIÓN DE ÍTEMS ===
+          // Iteramos la lista interna para renderizar todos los repuestos del pedido
+          // === DISEÑO DE SERVICIO: ITEMS CON ESTADOS INDIVIDUALES ===
+          let itemsHtml = o.items.map(i => {
+            // Si el ítem ya fue devuelto, lo tachamos sutilmente para dar "Cierre" visual
             const isReturned = i.status === "DEVOLUCION";
             const strikeStyle = isReturned ? "text-decoration: line-through; color: #a1a1aa;" : "color: var(--dark);";
             const devBadge = isReturned ? `<span style="margin-left:6px; font-size:0.7rem; color:#e74c3c;">(Devuelto)</span>` : "";
@@ -1502,14 +1452,11 @@ function executeSubmit() {
              </div>`;
           }).join('');
 
-          const mechTag = (!userScopeOnly && o.opInfo) ? `<div style="font-size:0.75rem; color:var(--blue); font-weight:700; margin-top:2px;">👤 ${o.opInfo}</div>` : '';
-
           html += `<div class="order-item ${statusClass}" style="${bgStyle}">
               <div style="flex-grow:1; margin-right:15px;">
                 ${statusBadge}
-                ${mechTag}
                 <div style="margin-bottom:8px;">${itemsHtml}</div>
-                <div style="font-size:0.8rem; color:#888;">OT ${o.otNumber || 'N/A'} ${o.unitInfo ? '• ' + o.unitInfo : ''}</div>
+                <div style="font-size:0.8rem; color:#888;">OT ${o.otNumber || 'N/A'}</div>
               </div>
               <div>${action}</div>
             </div>`;
