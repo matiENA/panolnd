@@ -5,6 +5,9 @@
   <meta charset="utf-8">
   <title>Taller App</title>
   
+  <script src="/socket.io/socket.io.min.js"></script>
+  <script src="/js/client-shim.js"></script>
+  
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -14,9 +17,6 @@
   <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2950/2950663.png">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   
-  <script src="/socket.io/socket.io.min.js"></script>
-  <script src="/js/client-shim.js"></script>
-
   <style>
     :root { 
       --dark: #0A0B0B; --blue: #365BA5; --light: #E2E5E9;       
@@ -73,7 +73,7 @@
 
     /* --- SEGMENTED DESTINATION CONTROL (NEW) --- */
     .dest-toggle-container {
-      display: none;
+      display: none; /* Hidden by default */
       background: #e2e5e9;
       padding: 4px;
       border-radius: 8px;
@@ -97,6 +97,7 @@
       border: 1px solid transparent;
     }
 
+    /* Active State Design */
     .dest-option.active {
       background: white;
       color: var(--blue);
@@ -104,8 +105,10 @@
       border-color: #d1d5db;
     }
 
+    /* Specific colors for visual distinction */
     .dest-option[data-type="UNIT"].active { color: var(--blue); border-left: 3px solid var(--blue); }
     .dest-option[data-type="SEMI"].active { color: var(--green); border-left: 3px solid var(--green); }
+
 
     /* --- BOX SELECTOR --- */
     .box-selector { display: flex; gap: 8px; overflow-x: auto; padding: 5px 0 15px 0; -webkit-overflow-scrolling: touch; }
@@ -215,6 +218,7 @@
     .badge-LISTO { background: #e8f5e9; color: var(--green); }
     .status-LISTO { border-left: 8px solid var(--green); background-color: #f0fdf4; box-shadow: 0 4px 12px rgba(39, 174, 96, 0.15); transform: scale(1.02); order: -1; z-index: 10; }
     
+    /* Consistent Action Buttons */
     .btn-action-primary { 
       background: var(--green); 
       color: white; 
@@ -251,6 +255,8 @@
     }
     .btn-action-secondary:hover { background: #fef2f2; }
     .btn-action-secondary:active { transform: scale(0.98); }
+    
+    .btn-pickup { background: var(--green); color: white; border: none; padding: 10px 16px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; cursor: pointer; box-shadow: 0 4px 8px rgba(39, 174, 96, 0.2); }
 
     /* MODAL */
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: 0.3s; backdrop-filter: blur(2px); }
@@ -265,18 +271,97 @@
     .btn-modal { flex: 1; padding: 14px; border-radius: 8px; border: none; font-weight: 800; cursor: pointer; font-size: 0.9rem; text-transform: uppercase; }
     .btn-confirm { background: var(--blue); color: white; }
     .btn-cancel { background: #e0e0e0; color: #555; }
+    #returnReasonInput { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; margin-top: 10px; outline: none; transition: 0.2s; }
+    #returnReasonInput:focus { border-color: var(--blue); }
 
+/* --- DEPENDENT SEARCH LAYOUT (UX/UI Prägnanz) --- */
 .search-dependency-layout {
-  display: flex; flex-direction: column; gap: 15px;
-  background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0; margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  margin-bottom: 15px;
 }
-.search-group { position: relative; display: flex; flex-direction: column; gap: 6px; }
-.search-label { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-.input-wrapper { position: relative; }
-.dropdown-arrow { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 12px; color: #888; pointer-events: none; }
-.autocomplete-results { position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; padding: 0; list-style: none; background: #ffffff; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); max-height: 200px; overflow-y: auto; z-index: 1000; }
-.autocomplete-results li { padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #f0f0f0; font-size: 0.9rem; font-weight: 500; color: var(--dark); }
-.autocomplete-results li:hover { background-color: #f3f4f6; color: var(--blue); }
+
+.search-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.search-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.input-wrapper {
+  position: relative;
+}
+
+/* Feedback Visual de Bloqueo (Poka-Yoke) */
+#itemInput:disabled {
+  background-color: #e2e5e9;
+  color: #888;
+  cursor: not-allowed;
+  border-color: transparent;
+}
+
+.dropdown-arrow {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #888;
+  pointer-events: none;
+}
+
+/* Rediseño de resultados para el dropdown */
+.autocomplete-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  padding: 0;
+  list-style: none;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.autocomplete-results li {
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--dark);
+}
+
+.autocomplete-results li:hover {
+  background-color: #f3f4f6;
+  color: var(--blue);
+}
+@keyframes modal-shake {
+        10%, 90% { transform: translate3d(-1px, 0, 0) scale(1); }
+        20%, 80% { transform: translate3d(2px, 0, 0) scale(1); }
+        30%, 50%, 70% { transform: translate3d(-4px, 0, 0) scale(1); }
+        40%, 60% { transform: translate3d(4px, 0, 0) scale(1); }
+    }
+    .modal-shake { animation: modal-shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+    
   </style>
 </head>
 <body>
@@ -287,10 +372,12 @@
         <div class="sheet-title">🔔 Mensajes <span id="sheetCount" style="background:var(--danger); color:white; padding:2px 6px; border-radius:10px; font-size:0.7rem;">0</span></div>
         <button class="btn-close-sheet" onclick="closeInbox()">×</button>
       </div>
-      <div id="inboxContent" class="sheet-content"></div>
+      <div id="inboxContent" class="sheet-content">
+      </div>
     </div>
 
     <div class="container">
+      
       <div id="login-section" class="card fade-in">
         <h3 style="margin-top:0; color:var(--dark)">Entrar</h3>
         <div class="input-group">
@@ -301,6 +388,7 @@
       </div>
 
       <div id="app-section" class="hidden fade-in">
+        
         <div class="user-header">
           <div class="user-info">
             <div>OPERARIO CONECTADO</div>
@@ -327,18 +415,30 @@
             <input type="hidden" id="activeOpId">
             <input type="hidden" id="activeMechName">
 
+<!-- Búsqueda por Patente -->
             <div class="input-group">
               <label>Unidad / Patente</label>
               <div class="autocomplete-container">
-                <input type="text" id="unitInput" placeholder="Escribe Patente o últimos caracteres ej. XD" autocomplete="off" onkeyup="filterUnitInput(this.value, 'unitInput', 'unitSuggestions', 'UNIT')" onblur="searchByField(this.value, 'UNIT')" required>
+                <input type="text" id="unitInput" 
+                       placeholder="Escribe Patente o últimos caracteres ej. XD" 
+                       autocomplete="off"
+                       onkeyup="filterUnitInput(this.value, 'unitInput', 'unitSuggestions', 'UNIT')"
+                       onblur="searchByField(this.value, 'UNIT')" 
+                       required>
                 <div id="unitSuggestions" class="suggestions-list"></div>
               </div>
             </div>
 
+            <!-- Búsqueda por N° de OT (Simetría UI) -->
             <div class="input-group">
               <label>OT ASIGNADA</label>
               <div class="autocomplete-container">
-                <input type="text" id="otInput" placeholder="Escribe el N° de OT..." autocomplete="off" onkeyup="filterUnitInput(this.value, 'otInput', 'otSuggestions', 'OT')" onblur="searchByField(this.value, 'OT')" required>
+                <input type="text" id="otInput" 
+                       placeholder="Escribe el N° de OT..." 
+                       autocomplete="off"
+                       onkeyup="filterUnitInput(this.value, 'otInput', 'otSuggestions', 'OT')"
+                       onblur="searchByField(this.value, 'OT')" 
+                       required>
                 <div id="otSuggestions" class="suggestions-list"></div>
               </div>
             </div>
@@ -351,7 +451,12 @@
                     <div class="input-group" style="margin-bottom:10px;">
                         <label style="font-size:0.7rem;">Patente / Interno (Semi)</label>
                         <div class="autocomplete-container">
-                            <input type="text" id="semiUnitInput" placeholder="Ej. 6040 / Terminación..." autocomplete="off" onkeyup="filterUnitInput(this.value, 'semiUnitInput', 'semiSuggestions', 'SEMI')" onblur="searchByField(this.value, 'SEMI')" style="font-size: 0.9rem; padding: 10px; background:white;">
+                            <input type="text" id="semiUnitInput" 
+                                   placeholder="Ej. 6040 / Terminación..." 
+                                   autocomplete="off"
+                                   onkeyup="filterUnitInput(this.value, 'semiUnitInput', 'semiSuggestions', 'SEMI')"
+                                   onblur="searchByField(this.value, 'SEMI')"
+                                   style="font-size: 0.9rem; padding: 10px; background:white;">
                             <div id="semiSuggestions" class="suggestions-list"></div>
                         </div>
                     </div>
@@ -364,27 +469,46 @@
             
             <hr style="border:0; border-top:1px solid #eee; margin: 15px 0;">
 
-            <div class="search-dependency-layout">
-              <div class="search-group" id="category-search-container">
-                <label for="category-select" class="search-label">1. Filtrar por Rubro (Opcional)</label>
-                <div class="input-wrapper">
-                  <input type="text" id="category-select" placeholder="Ej. Filtros, Herramientas..." autocomplete="off" />
-                  <span class="dropdown-arrow">▼</span>
-                </div>
-                <ul id="category-results" class="autocomplete-results hidden"></ul>
-              </div>
+<!-- ==========================================
+     SELECTOR BIDIRECCIONAL (RUBRO <-> REPUESTO)
+     ========================================== -->
+<div class="search-dependency-layout">
+  
+  <!-- PASO 1: Selector de Categoría -->
+  <div class="search-group" id="category-search-container">
+    <label for="category-select" class="search-label">1. Filtrar por Rubro (Opcional)</label>
+    <div class="input-wrapper">
+      <input 
+        type="text" 
+        id="category-select" 
+        placeholder="Ej. Filtros, Herramientas..." 
+        autocomplete="off"
+        style="transition: background-color 0.3s;"
+      />
+      <span class="dropdown-arrow">▼</span>
+    </div>
+    <ul id="category-results" class="autocomplete-results hidden"></ul>
+  </div>
 
-              <div class="search-group" id="function-search-container">
-                <label for="itemInput" class="search-label">2. Buscar Repuesto / Herramienta</label>
-                <div class="input-wrapper">
-                  <input type="text" id="itemInput" placeholder="Escribe el nombre del repuesto..." autocomplete="off" required />
-                  <span class="dropdown-arrow">▼</span>
-                </div>
-                <ul id="product-results" class="autocomplete-results hidden"></ul>
-              </div>
-            </div>
+  <!-- PASO 2: Selector de Producto (Principal) -->
+  <div class="search-group" id="function-search-container">
+    <label for="itemInput" class="search-label">2. Buscar Repuesto / Herramienta</label>
+    <div class="input-wrapper">
+      <input 
+        type="text" 
+        id="itemInput" 
+        placeholder="Escribe el nombre del repuesto..." 
+        autocomplete="off"
+        required
+      />
+      <span class="dropdown-arrow">▼</span>
+    </div>
+    <ul id="product-results" class="autocomplete-results hidden"></ul>
+  </div>
 
-            <hr style="border:0; border-top:1px solid #eee; margin: 15px 0;">
+</div>
+
+<hr style="border:0; border-top:1px solid #eee; margin: 15px 0;">
 
             <div class="input-group" style="margin-bottom: 5px;">
               <details id="notesDetails">
@@ -396,12 +520,20 @@
             </div>
 
             <div id="destToggle" class="dest-toggle-container">
-              <div id="optUnit" class="dest-option active" data-type="UNIT" onclick="setDestination('UNIT')">🚛 TRACTOR</div>
-              <div id="optSemi" class="dest-option" data-type="SEMI" onclick="setDestination('SEMI')">📦 SEMI</div>
+              <div id="optUnit" class="dest-option active" data-type="UNIT" onclick="setDestination('UNIT')">
+                🚛 TRACTOR
+              </div>
+              <div id="optSemi" class="dest-option" data-type="SEMI" onclick="setDestination('SEMI')">
+                📦 SEMI
+              </div>
             </div>
             
             <input type="hidden" id="currentItemDest" value="UNIT">
-            <button type="submit" class="btn-add">+ Agregar al Carrito</button>
+
+            <button type="submit" class="btn-add">
+              + Agregar al Carrito
+            </button>
+
           </form>
 
           <div id="cartSection" class="hidden" style="margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px;">
@@ -413,17 +545,29 @@
         </div>
 
         <div id="view-list" class="card hidden">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <h3 style="margin:0; font-size:1.1rem;">Mis Pedidos</h3>
-                <div style="display:flex; gap:10px;">
-                    <button id="btnHistory" onclick="toggleHistoryMode()" style="background:transparent; border:1px solid #d1d5db; color:#6b7280; font-size:0.8rem; font-weight:700; padding:8px 12px; border-radius:6px; cursor:pointer;">📜 HISTORIAL</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                <h3 style="margin:0; font-size:1.1rem;">📦 Mis Pedidos</h3>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <button id="btnUserScope" onclick="toggleUserScopeMode()" style="background:#e8f0fe; border:1px solid #365BA5; color:#365BA5; font-size:0.8rem; font-weight:800; padding:8px 12px; border-radius:6px; cursor:pointer;" title="Alternar entre ver únicamente tus pedidos o la lista unificada del taller">
+                        👤 MIS PEDIDOS
+                    </button>
+                    <button id="btnHistory" onclick="toggleHistoryMode()" style="background:transparent; border:1px solid #d1d5db; color:#6b7280; font-size:0.8rem; font-weight:700; padding:8px 12px; border-radius:6px; cursor:pointer;">
+                        📜 HISTORIAL
+                    </button>
                     <button onclick="refreshOrders()" style="background:none; border:none; color:var(--blue); font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:4px;">
-                        <span id="refreshIcon">🔄</span> Actualizar
+                        <span id="refreshIcon">🔄</span>
                     </button>
                 </div>
             </div>
+
+            <!-- BUSCADOR DE ARTÍCULOS Y OTS EN MIS PEDIDOS -->
+            <div style="margin-bottom:14px;">
+                <input type="text" id="orderSearchInput" placeholder="🔍 Buscar repuesto, artículo u OT..." oninput="applyOrderFilters()" style="width:100%; padding:10px 14px; border-radius:8px; border:2px solid #e0e0e0; font-size:0.85rem; outline:none; box-sizing:border-box; font-family:inherit;">
+            </div>
+
             <div id="orders-container">Cargando...</div>
         </div>
+
       </div>
     </div>
 
@@ -458,15 +602,21 @@
         if (savedOp) performLogin(savedOp);
       };
 
+      // ===========================================
+      // 1. MESSAGING / RECEIVER LOGIC
+      // ===========================================
       function updateBadge() {
         const count = serverMessages.length;
         const badge = document.getElementById('bellBadge');
         const sheetCount = document.getElementById('sheetCount');
-        if (badge) badge.innerText = count;
-        if (sheetCount) sheetCount.innerText = count;
-        if (badge) {
-          if (count > 0) badge.classList.add('show');
-          else badge.classList.remove('show');
+        
+        badge.innerText = count;
+        sheetCount.innerText = count;
+        
+        if (count > 0) {
+           badge.classList.add('show');
+        } else {
+           badge.classList.remove('show');
         }
       }
 
@@ -484,22 +634,31 @@
       function renderInbox() {
         const container = document.getElementById('inboxContent');
         container.innerHTML = "";
+        
         if (serverMessages.length === 0) {
            container.innerHTML = "<div style='text-align:center; color:#999; margin-top:50px;'>No tienes mensajes nuevos.</div>";
            return;
         }
+
         serverMessages.forEach(msg => {
            const div = document.createElement('div');
            div.id = `msg-${msg.id}`;
            div.className = 'notif-card';
+           
            div.innerHTML = `
               <div class="notif-header">
                  <span>${msg.unit}</span>
                  <span style="color:#365BA5;">De: Coordinación</span>
               </div>
               <div class="notif-body">${msg.body}</div>
-              <input type="text" class="response-input" id="response-${msg.id}" placeholder="Escribe tu respuesta..." onkeydown="if(event.key==='Enter') resolveNotif('${msg.id}')">
-              <button class="btn-resolve" onclick="resolveNotif('${msg.id}')">✓ ENVIAR RESPUESTA</button>
+              <input type="text" 
+                     class="response-input" 
+                     id="response-${msg.id}" 
+                     placeholder="Escribe tu respuesta..."
+                     onkeydown="if(event.key==='Enter') resolveNotif('${msg.id}')">
+              <button class="btn-resolve" onclick="resolveNotif('${msg.id}')">
+                 ✓ ENVIAR RESPUESTA
+              </button>
            `;
            container.appendChild(div);
         });
@@ -508,28 +667,34 @@
       function resolveNotif(id) {
         const inputEl = document.getElementById(`response-${id}`);
         const responseText = inputEl ? inputEl.value.trim() : '';
+        
         if(!responseText) {
            inputEl.style.borderColor = '#e74c3c';
            inputEl.placeholder = '⚠️ Escribe una respuesta...';
            inputEl.focus();
            return;
         }
+
         const card = document.getElementById(`msg-${id}`);
         if(card) {
            card.classList.add('swipe-out');
            setTimeout(() => card.remove(), 300);
         }
+
         serverMessages = serverMessages.filter(m => m.id !== id);
         updateBadge();
+        
         if(serverMessages.length === 0) setTimeout(closeInbox, 400);
+
         google.script.run.resolveFeedback(id, responseText);
       }
 
       function pollMessages() {
          const opId = document.getElementById('activeOpId').value;
          if(!opId) return;
+
          google.script.run.withSuccessHandler(msgs => {
-            serverMessages = msgs || [];
+            serverMessages = msgs;
             updateBadge();
             if(document.getElementById('smartSheet').classList.contains('open')) {
                 renderInbox();
@@ -537,6 +702,9 @@
          }).pollInbox(opId);
       }
 
+      // ===========================================
+      // 2. CORE APP LOGIC (Orders, Cart, Login)
+      // ===========================================
       function performLogin(autoId = null) {
         const id = autoId || document.getElementById('loginOpInput').value;
         const btn = document.querySelector('#login-section button');
@@ -544,11 +712,11 @@
         btn.textContent = "Verificando..."; btn.disabled = true;
         
         google.script.run.withSuccessHandler(config => {
-          if(config && config.success) {
+          if(config.success) {
             localStorage.setItem('mechanic_op', id);
             initApp(id, config);
           } else {
-            showModal("No Encontrado", (config ? config.error : "Error de verificación"), "❌");
+            showModal("No Encontrado", config.error, "❌");
             btn.textContent = "Ingresar"; btn.disabled = false;
           }
         }).getMechanicConfig(id);
@@ -561,58 +729,125 @@
         document.getElementById('activeOpId').value = id;
         document.getElementById('activeMechName').value = config.name;
         renderBoxSelector(config.boxes);
+        
         startAutoUpdate();
+        
         fetchCatalog();
         fetchUnitCatalog(); 
       }
 
       function fetchCatalog() {
         google.script.run.withSuccessHandler(items => {
-          dbItems = items || [];
+          dbItems = items;
         }).getItemCatalog();
       }
 
       function fetchUnitCatalog() {
         google.script.run.withSuccessHandler(list => {
-          dbUnitList = list || [];
+          dbUnitList = list;
+          console.log("🚛 Fleet loaded:", dbUnitList.length);
         }).getUnitCatalog();
       }
 
       function startAutoUpdate() {
         refreshOrders(); 
         pollMessages();
+
         if (heartbeatTimer) clearInterval(heartbeatTimer);
         if (msgTimer) clearInterval(msgTimer);
+        
         heartbeatTimer = setInterval(refreshOrders, 10000);
         msgTimer = setInterval(pollMessages, 15000);
       }
 
+      // --- ITEM AUTOCOMPLETE ---
+      function filterItems(query) {
+        const list = document.getElementById('suggestions');
+        list.innerHTML = ""; 
+        if (!query || query.length < 2) { list.style.display = "none"; return; }
+        const matches = dbItems.filter(item => item.toLowerCase().includes(query.toLowerCase())).slice(0, 10);
+        if (matches.length === 0) { list.style.display = "none"; return; }
+        matches.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'suggestion-item';
+          const regex = new RegExp(`(${query})`, 'gi');
+          div.innerHTML = item.replace(regex, '<strong>$1</strong>');
+          div.onclick = () => selectItem(item);
+          list.appendChild(div);
+        });
+        list.style.display = "block";
+      }
+
+      function selectItem(name) {
+        document.getElementById('itemInput').value = name;
+        document.getElementById('suggestions').style.display = "none";
+      }
+
+      // --- UNIT AUTOCOMPLETE LOGIC ---
       function filterUnitInput(query, inputId, listId, type) {
         const list = document.getElementById(listId);
         list.innerHTML = ""; 
+        
         if (!query || query.length < 2) { list.style.display = "none"; return; }
+        
         const q = query.toUpperCase();
-        const matches = dbUnitList.filter(plate => plate.endsWith(q) || plate.startsWith(q) || plate.includes(q)).slice(0, 8); 
+
+        const matches = dbUnitList.filter(plate => {
+            return plate.endsWith(q) || plate.startsWith(q) || plate.includes(q);
+        }).sort((a, b) => {
+            const aEnds = a.endsWith(q);
+            const bEnds = b.endsWith(q);
+            if (aEnds && !bEnds) return -1;
+            if (!aEnds && bEnds) return 1;
+            return 0;
+        }).slice(0, 8); 
+
         if (matches.length === 0) { list.style.display = "none"; return; }
+
         matches.forEach(plate => {
           const div = document.createElement('div');
           div.className = 'suggestion-item';
-          div.innerText = plate;
+          
+          if (plate.endsWith(q)) {
+             const prefix = plate.substring(0, plate.length - q.length);
+             div.innerHTML = `${prefix}<strong>${q}</strong>`;
+          } else {
+             div.innerText = plate;
+          }
+
           div.onclick = () => {
              const input = document.getElementById(inputId);
              input.value = plate;
              list.style.display = "none";
              searchByField(plate, type); 
           };
+          
           list.appendChild(div);
         });
+
         list.style.display = "block";
       }
 
+      document.addEventListener('click', function(e) {
+ 
+        const uInput = document.getElementById('unitInput');
+        if (uInput && !uInput.parentElement.contains(e.target)) {
+             document.getElementById('unitSuggestions').style.display = "none";
+        }
+
+        const sInput = document.getElementById('semiUnitInput');
+        if (sInput && !sInput.parentElement.contains(e.target)) {
+             document.getElementById('semiSuggestions').style.display = "none";
+        }
+      });
+
+      // --- DESTINATION TOGGLE LOGIC (NEW) ---
       function setDestination(type) {
         document.querySelectorAll('.dest-option').forEach(el => el.classList.remove('active'));
+        
         if (type === 'UNIT') document.getElementById('optUnit').classList.add('active');
         else document.getElementById('optSemi').classList.add('active');
+
         document.getElementById('currentItemDest').value = type;
       }
 
@@ -620,9 +855,16 @@
           const toggle = document.getElementById('destToggle');
           const optUnit = document.getElementById('optUnit');
           const optSemi = document.getElementById('optSemi');
-          optUnit.innerText = unitPlate ? `🚛 ${unitPlate}` : '🚛 TRACTOR';
-          optSemi.innerText = semiPlate ? `📦 ${semiPlate}` : '📦 SEMI';
+          
+          const uLabel = unitPlate ? `🚛 ${unitPlate}` : '🚛 TRACTOR';
+          const sLabel = semiPlate ? `📦 ${semiPlate}` : '📦 SEMI';
+
+          optUnit.innerText = uLabel;
+          optSemi.innerText = sLabel;
+
+          // Logic: Check input value as fallback if metadata not fully propagated
           const manualSemiVal = document.getElementById('semiUnitInput').value;
+
           if(semiPlate || (manualSemiVal && manualSemiVal.length > 2)) {
             toggle.classList.add('show');
           } else {
@@ -631,11 +873,13 @@
           }
       }
 
+      // --- BOX SELECTOR ---
       function renderBoxSelector(boxes) {
         const container = document.getElementById('location-container');
         if (!boxes || boxes.length === 0) { container.innerHTML = ""; currentBox = ""; return; }
         currentBox = boxes[0];
-        let html = `<div style="font-size:0.7rem; font-weight:700; color:#888; text-transform:uppercase;">📍 Tu Ubicación:</div><div class="box-selector">`;
+        let html = `<div style="font-size:0.7rem; font-weight:700; color:#888; text-transform:uppercase;">📍 Tu Ubicación:</div>
+                    <div class="box-selector">`;
         boxes.forEach((box, index) => {
            const activeClass = index === 0 ? 'active' : '';
            html += `<div class="box-chip ${activeClass}" onclick="selectBox(this, '${box}')">Box ${box}</div>`;
@@ -650,6 +894,7 @@
         currentBox = boxName;
       }
 
+      // --- LOGOUT ---
       function logout() {
           showModal("Cerrar Sesión", "¿Quieres salir?", "👋", true, () => {
             if (heartbeatTimer) clearInterval(heartbeatTimer);
@@ -672,72 +917,187 @@
           });
       }
 
-      function searchByField(val, type) {
+      // --- SEARCH & POPULATE ---
+function searchByField(val, type) {
+          // 1. Validaciones iniciales
           if (!val || val.length < 3 || isPopulating) return;
+
           const unitInput = document.getElementById('unitInput');
           const otInput = document.getElementById('otInput');
           const semiUnitInput = document.getElementById('semiUnitInput');
           const semiOtInput = document.getElementById('semiOtInput'); 
           const detailsEl = document.getElementById('semiDetails');
 
+          // 2. UX: Feedback inmediato de búsqueda (Espejo bidireccional)
+          if (type === 'UNIT') otInput.placeholder = "Buscando...";
+          if (type === 'OT') unitInput.placeholder = "Buscando...";
+          if (type === 'SEMI') semiOtInput.placeholder = "Buscando...";
+          if (type === 'SEMI_OT') semiUnitInput.placeholder = "Buscando...";
+
+          // 3. Petición al Servidor
           google.script.run.withSuccessHandler(res => {
               if (res && res.success) {
                   isPopulating = true;
+                  
+                  // --- Lógica del TRACTOR (Unidad / OT) ---
                   if (res.unit || res.ot) {
                       if (res.unit) unitInput.value = res.unit;
                       if (res.ot) otInput.value = res.ot;
+                      
+                      otInput.style.color = res.ot ? "#238636" : "#555";
+                      
+                      // Ley de Cierre: Resaltamos visualmente el campo que el sistema completó por el usuario
+                      if (type === 'UNIT' && res.ot) flashField(otInput, "#e6fffa");
+                      if (type === 'OT' && res.unit) flashField(unitInput, "#e6fffa");
                   }
+
+                  // --- Lógica del SEMI (Unidad / OT) ---
                   if (res.semi || res.semiOt) {
                       if (res.semi) semiUnitInput.value = res.semi;
-                      if (res.semiOt) semiOtInput.value = res.semiOt;
-                      if(!detailsEl.open) detailsEl.open = true;
+                      
+                      if(res.semiOt) {
+                          semiOtInput.value = res.semiOt;
+                          semiOtInput.style.backgroundColor = "#f0fdf4";
+                      } else {
+                          semiOtInput.value = "";
+                          semiOtInput.style.backgroundColor = "white";
+                      }
+
+                      // Ley de Cierre para el Semi
+                      if (type === 'SEMI' && res.semiOt) flashField(semiOtInput, "#e6fffa");
+                      if (type === 'SEMI_OT' && res.semi) flashField(semiUnitInput, "#e6fffa");
+
+                      // Animación del contenedor de detalles
+                      if(!detailsEl.open) {
+                          detailsEl.open = true;
+                          detailsEl.style.borderColor = "#238636"; 
+                          setTimeout(() => detailsEl.style.borderColor = "#e0e0e0", 1000);
+                      }
+                      
+                      // Check toggle on DB find
                       updateDestToggle(res.unit, res.semi);
+
                   } else {
+                      // No semi in DB, but check if user manually typed one?
                       updateDestToggle(res.unit, null);
                   }
+
                   isPopulating = false;
+              } else {
+                  // 4. UX: Manejo de fallos bidireccional (Poka-Yoke)
+                  if (type === 'UNIT') { otInput.placeholder = "SIN DATOS"; otInput.value = ""; }
+                  if (type === 'OT') { unitInput.placeholder = "SIN DATOS"; unitInput.value = ""; }
+                  if (type === 'SEMI') { semiOtInput.placeholder = "SIN DATOS"; semiOtInput.value = ""; }
+                  if (type === 'SEMI_OT') { semiUnitInput.placeholder = "SIN DATOS"; semiUnitInput.value = ""; }
+                  
+                  // Even if not found in DB, check if we need to show toggle based on inputs
+                  updateDestToggle(unitInput.value, semiUnitInput.value);
               }
-          }).findUnitOrOt(val, type);
+          }).findUnitOrOt(val, type); // Pasamos 'type' para que el backend sepa qué columna priorizar en la búsqueda
+          
+          // Immediate check for manual entry before DB returns
+          updateDestToggle(unitInput.value, semiUnitInput.value);
       }
 
-      function addToCart(e) {
-        if (e && e.preventDefault) e.preventDefault(); 
-        const itemVal = document.getElementById('itemInput').value;
-        const otVal = document.getElementById('otInput').value; 
-        const noteVal = document.getElementById('notesInput').value;
-        if (!otVal || otVal.includes("SIN")) return showModal("Falta OT", "La unidad/OT no es válida.", "⚠️");
-        if (!itemVal) return;
-        const destType = document.getElementById('currentItemDest').value;
-        let finalItemName = itemVal;
-        if (destType === 'SEMI') {
-          const semiPlate = document.getElementById('semiUnitInput').value;
-          finalItemName = `${itemVal} [PARA SEMI: ${semiPlate}]`;
+      
+      function flashField(el, color) {
+          const original = el.style.backgroundColor;
+          el.style.backgroundColor = color;
+          setTimeout(() => el.style.backgroundColor = original || 'white', 600);
+      }
+
+        function addToCart(e) {
+          if (e && e.preventDefault) e.preventDefault(); 
+          
+          const itemVal = document.getElementById('itemInput').value;
+          const otVal = document.getElementById('otInput').value; 
+          const noteVal = document.getElementById('notesInput').value;
+
+          if (!otVal || otVal.includes("SIN")) return showModal("Falta OT", "La unidad/OT no es válida.", "⚠️");
+          if (!itemVal) return;
+
+          const destType = document.getElementById('currentItemDest').value;
+          let finalItemName = itemVal;
+          let destLabel = "TRACTOR"; 
+
+          if (destType === 'SEMI') {
+            const semiPlate = document.getElementById('semiUnitInput').value;
+            finalItemName = `${itemVal} [PARA SEMI: ${semiPlate}]`;
+            destLabel = "SEMI";
+          }
+
+          // === DISEÑO DE SERVICIO: DETECCIÓN DE CANJE ===
+          // Buscamos si el ítem seleccionado requiere canje según la DB
+          const foundItem = dbItems.find(i => (i.name || i) === itemVal);
+          const reqCanje = foundItem ? (foundItem.requiereCanje === true || String(foundItem.requiereCanje).toUpperCase() === 'TRUE') : false;
+
+          cartItems.push({ 
+              item: finalItemName,
+              displayItem: itemVal,
+              qty: 1, 
+              notes: noteVal,
+              destination: destType,
+              requiereCanje: reqCanje // Inyectamos la bandera de seguridad
+          });
+          
+          // Limpieza de datos temporales
+          document.getElementById('itemInput').value = "";
+          document.getElementById('notesInput').value = "";
+          document.getElementById('notesDetails').removeAttribute('open');
+          
+          const catSelect = document.getElementById('category-select');
+          const itemInp = document.getElementById('itemInput');
+          
+         // Dentro de addToCart, en el reseteo de UI:
+          if (catSelect) catSelect.value = ""; 
+          if (itemInp) {
+            // Ya NO deshabilitamos el campo
+            itemInp.disabled = false;
+            itemInp.removeAttribute('disabled');
+            itemInp.placeholder = "Escribe el nombre del repuesto...";
+          }
+          
+          if (typeof isCategoryValid !== 'undefined') isCategoryValid = false;
+          if (typeof isItemValid !== 'undefined') isItemValid = false;
+          if (typeof currentFilteredProducts !== 'undefined') currentFilteredProducts = [];
+          if (typeof setDestination === 'function') setDestination('UNIT');
+
+          if (typeof renderCart === 'function') renderCart();
         }
-        const foundItem = dbItems.find(i => (i.name || i) === itemVal);
-        const reqCanje = foundItem ? (foundItem.requiereCanje === true || String(foundItem.requiereCanje).toUpperCase() === 'TRUE') : false;
-        cartItems.push({ item: finalItemName, displayItem: itemVal, qty: 1, notes: noteVal, destination: destType, requiereCanje: reqCanje });
-        document.getElementById('itemInput').value = "";
-        document.getElementById('notesInput').value = "";
-        renderCart();
-      }
-
       function renderCart() {
         const container = document.getElementById('cartContainer');
         const section = document.getElementById('cartSection');
+        const unitInput = document.getElementById('unitInput');
+        
         container.innerHTML = "";
+
         if(cartItems.length === 0) {
           section.classList.add('hidden');
+          unitInput.readOnly = false; 
+          unitInput.style.backgroundColor = "#fdfdfd";
           document.getElementById('submitBtn').innerText = "CONFIRMAR PEDIDO";
         } else {
           section.classList.remove('hidden');
+          unitInput.readOnly = true; 
+          unitInput.style.backgroundColor = "#f3f4f6";
+          
           const totalItems = cartItems.reduce((sum, i) => sum + parseInt(i.qty), 0);
           document.getElementById('submitBtn').innerText = `CONFIRMAR (${totalItems}) ITEMS`;
+          
           cartItems.forEach((obj, index) => {
             const div = document.createElement('div');
             div.className = 'cart-item';
+            
+            // Badge Logic
+            const badgeHtml = obj.destination === 'SEMI' 
+                ? `<span style="background:#e8f5e9; color:#1e8449; font-size:0.65rem; padding:2px 6px; border-radius:4px; border:1px solid #1e8449; font-weight:800; margin-left:5px;">SEMI</span>`
+                : `<span style="background:#ebf8ff; color:#365BA5; font-size:0.65rem; padding:2px 6px; border-radius:4px; border:1px solid #365BA5; font-weight:800; margin-left:5px;">TRACTOR</span>`;
+
             div.innerHTML = `
               <div class="cart-item-text">
-                <div class="cart-item-info">${obj.displayItem || obj.item}</div>
+                <div class="cart-item-info">
+                    ${obj.displayItem || obj.item} ${badgeHtml}
+                </div>
                 <div style="font-size:0.75rem; color:#888;">${obj.notes || ''}</div>
               </div>
               <div class="qty-selector">
@@ -763,38 +1123,220 @@
         renderCart();
       }
 
-      function submitBatchOrder() {
-          if(document.getElementById('itemInput').value) addToCart({ preventDefault: () => {} });
-          if(cartItems.length === 0) return showModal("Vacío", "Agrega al menos un repuesto.", "⚠️");
-          executeSubmit();
-      }
+// 1. EL INTERCEPTOR
+function submitBatchOrder() {
+    if(document.getElementById('itemInput').value) addToCart({ preventDefault: () => {} });
+    if(cartItems.length === 0) return showModal("Vacío", "Agrega al menos un repuesto.", "⚠️");
 
-      function executeSubmit() {
-          const btn = document.getElementById('submitBtn');
-          btn.disabled = true; btn.textContent = "ENVIANDO...";
-          const baseName = document.getElementById('activeMechName').value;
-          const finalName = currentBox ? `${baseName} [Box ${currentBox}]` : baseName;
-          let finalUnit = document.getElementById('unitInput').value;
-          let finalOt = document.getElementById('otInput').value;
-          const payload = {
-            opId: document.getElementById('activeOpId').value,
-            mechanicName: finalName,
-            otNumber: finalOt, 
-            unitId: finalUnit, 
-            items: cartItems.map(i => ({ item: i.item, qty: i.qty, notes: i.notes }))
-          };
-          google.script.run.withSuccessHandler((res) => {
-                btn.disabled = false;
-                if(res && res.success) {
-                  showModal("Pedido Enviado", "Tu pedido fue registrado.", "✅");
-                  cartItems = []; renderCart();
-                  switchTab('list');
+    // Filtramos cuáles piezas del carrito son de recambio obligatorio
+    const itemsCanje = cartItems.filter(i => i.requiereCanje);
+    
+    if (itemsCanje.length > 0) {
+        promptCanje(itemsCanje); // Frenamos el flujo y exigimos justificación
+    } else {
+        executeSubmit(); // Flujo normal sin fricciones
+    }
+}
+
+// 2. LA INTERFAZ DE FRICCIÓN ADAPTATIVA (Gestalt: Región Común)
+function promptCanje(itemsCanje) {
+    let html = `
+    <div style="text-align:left; font-size:0.85rem; color:#555; margin-bottom:15px; font-weight:600;">
+      Por protocolo, estos repuestos requieren la devolución de la pieza dañada a Pañol.
+    </div>
+    <div id="canjeErrors" style="color:var(--danger); font-size:0.8rem; margin-bottom:10px; font-weight:800; display:none;">
+      ⚠️ Justifica las piezas faltantes.
+    </div>`;
+
+    itemsCanje.forEach((item, idx) => {
+        const safeId = `canje_${idx}`;
+        const qty = parseInt(item.qty, 10);
+
+        html += `
+          <div style="background: rgba(245, 158, 11, 0.05); border: 1px solid var(--orange); padding: 12px; border-radius: 8px; margin-bottom: 10px; text-align:left;">
+            <div style="font-weight: 800; color: var(--dark); margin-bottom: 8px; font-size:0.9rem;">
+              🔸 ${item.displayItem} (Cant: ${qty})
+            </div>`;
+        
+        // DISEÑO DE SERVICIO: Adaptación de UI según Cantidad
+        if (qty === 1) {
+            html += `
+            <div style="display: flex; gap: 10px; margin-bottom:5px;">
+              <label style="flex: 1; cursor: pointer; display:flex; align-items:center; gap:6px;">
+                <input type="radio" name="${safeId}" value="OK" onchange="toggleMotivo('${safeId}', 1)" checked>
+                <span style="font-size: 0.85rem; color:var(--dark); font-weight:700;">Lo tengo</span>
+              </label>
+              <label style="flex: 1; cursor: pointer; display:flex; align-items:center; gap:6px;">
+                <input type="radio" name="${safeId}" value="FALTA" onchange="toggleMotivo('${safeId}', 1)">
+                <span style="font-size: 0.85rem; color:var(--dark); font-weight:700;">No lo tengo</span>
+              </label>
+            </div>`;
+        } else {
+            // Dropdown de cantidad (Poka-Yoke: no permite más del máximo)
+            let optionsHtml = '';
+            for(let i = qty; i >= 0; i--) {
+                optionsHtml += `<option value="${i}">${i}</option>`;
+            }
+            html += `
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom:5px;">
+              <label style="font-size: 0.85rem; color:var(--dark); font-weight:700;">¿Cuántas entregas?</label>
+              <select id="select_${safeId}" style="padding:6px 12px; border-radius:6px; border:2px solid var(--border); font-weight:800; outline:none; background:white; color:var(--blue);" onchange="toggleMotivo('${safeId}', ${qty})">
+                ${optionsHtml}
+              </select>
+            </div>`;
+        }
+        
+        html += `
+            <input type="text" id="motivo_${safeId}" placeholder="¿Por qué no entregas todo?" style="display: none; width: 100%; border: 2px solid #e0e0e0; padding: 10px; border-radius: 6px; font-size: 0.85rem; outline:none; box-sizing:border-box; margin-top:8px;">
+          </div>
+        `;
+    });
+
+    document.getElementById('modalTitle').innerText = "♻️ Canje Obligatorio";
+    document.getElementById('modalBody').innerHTML = html;
+    document.getElementById('modalIcon').innerText = "📦";
+    
+    const btnCancel = document.getElementById('modalBtnCancel');
+    const btnConfirm = document.getElementById('modalBtnConfirm');
+    
+    btnCancel.style.display = "block";
+    btnConfirm.innerText = "CONFIRMAR PEDIDO";
+    
+    const newConfirm = btnConfirm.cloneNode(true);
+    btnConfirm.parentNode.replaceChild(newConfirm, btnConfirm);
+    
+    newConfirm.onclick = () => {
+        let allValid = true;
+        
+        itemsCanje.forEach((item, idx) => {
+            const safeId = `canje_${idx}`;
+            const qty = parseInt(item.qty, 10);
+            let returnedCount = 0;
+
+            // 1. Extraemos cuántos devuelve realmente
+            if (qty === 1) {
+                const radioVal = document.querySelector(`input[name="${safeId}"]:checked`).value;
+                returnedCount = (radioVal === 'OK') ? 1 : 0;
+            } else {
+                returnedCount = parseInt(document.getElementById(`select_${safeId}`).value, 10);
+            }
+
+            // 2. Procesamos el estado
+            if (returnedCount === qty) {
+                item.canjeStatus = 'OK';
+            } else {
+                const inputEl = document.getElementById(`motivo_${safeId}`);
+                const reason = inputEl.value.trim();
+                const missingCount = qty - returnedCount;
+
+                if (!reason) {
+                    allValid = false;
+                    inputEl.style.borderColor = 'var(--danger)';
                 } else {
-                  showModal("Error", (res ? res.error : "Error de red"), "⛔");
+                    // Formateamos el string mixto para no romper la columna Q ni el Dashboard
+                    if (returnedCount === 0) {
+                        item.canjeStatus = `FALTA: ${reason}`;
+                    } else {
+                        item.canjeStatus = `FALTA PARCIAL (${returnedCount} entregada/s): ${reason}`;
+                    }
                 }
-            }).createOrder(payload);
-      }
+            }
+        });
 
+        if (!allValid) {
+            document.getElementById('canjeErrors').style.display = 'block';
+            const modalWin = document.querySelector('.modal-window');
+            modalWin.classList.remove('modal-shake');
+            void modalWin.offsetWidth;
+            modalWin.classList.add('modal-shake');
+        } else {
+            closeModal();
+            executeSubmit();
+        }
+    };
+    
+    document.getElementById('customModal').classList.add('open');
+}
+
+// Helper Dinámico Adaptativo
+function toggleMotivo(safeId, maxQty) {
+    const inputEl = document.getElementById(`motivo_${safeId}`);
+    let isMissing = false;
+    let missingCount = 1;
+
+    if (maxQty === 1) {
+        const radioVal = document.querySelector(`input[name="${safeId}"]:checked`).value;
+        isMissing = (radioVal === 'FALTA');
+    } else {
+        const selectVal = parseInt(document.getElementById(`select_${safeId}`).value, 10);
+        isMissing = (selectVal < maxQty);
+        missingCount = maxQty - selectVal;
+    }
+
+    if (isMissing) {
+        inputEl.style.display = 'block';
+        // UX: El placeholder cambia dinámicamente según cuántas falten
+        inputEl.placeholder = maxQty > 1 ? `Motivo de las ${missingCount} faltantes...` : "¿Por qué no la tienes?";
+        inputEl.focus();
+    } else {
+        inputEl.style.display = 'none';
+        inputEl.style.borderColor = '#e0e0e0';
+    }
+}
+
+
+// 3. EL EJECUTOR (Envío al Backend)
+function executeSubmit() {
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true; btn.textContent = "ENVIANDO...";
+
+    const baseName = document.getElementById('activeMechName').value;
+    const finalName = currentBox ? `${baseName} [Box ${currentBox}]` : baseName;
+
+    let finalUnit = document.getElementById('unitInput').value;
+    let finalOt = document.getElementById('otInput').value;
+    const semiUnit = document.getElementById('semiUnitInput').value.trim();
+    const semiOt = document.getElementById('semiOtInput').value.trim();
+
+    if (semiUnit || semiOt) {
+         finalUnit = `${finalUnit} + [${semiUnit || '?'}]`;
+         finalOt = `${finalOt} + [${semiOt || '?'}]`;
+    }
+
+    const cleanItems = cartItems.map(i => ({
+        item: i.item,
+        qty: i.qty,
+        notes: i.notes,
+        canjeStatus: i.canjeStatus || null // <-- MANDAMOS EL ESTADO A LA BASE DE DATOS
+    }));
+
+    const payload = {
+      opId: document.getElementById('activeOpId').value,
+      mechanicName: finalName,
+      otNumber: finalOt, 
+      unitId: finalUnit, 
+      items: cleanItems
+    };
+
+    google.script.run.withSuccessHandler((res) => {
+          btn.disabled = false;
+          if(res.success) {
+            showModal("Pedido Enviado", "Tu pedido fue registrado.", "✅");
+            cartItems = []; renderCart();
+            document.getElementById('unitInput').value = "";
+            document.getElementById('otInput').value = "";
+            document.getElementById('semiUnitInput').value = "";
+            document.getElementById('semiOtInput').value = "";
+            document.getElementById('semiDetails').removeAttribute('open');
+            document.getElementById('notesDetails').removeAttribute('open'); 
+            
+            updateDestToggle(null, null);
+            switchTab('list');
+          } else {
+            showModal("Error", res.error, "⛔");
+          }
+      }).submitBatchRequest(payload);
+}
       function switchTab(view) {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-btn')[view === 'form' ? 0 : 1].classList.add('active');
@@ -803,42 +1345,416 @@
         if (view === 'list') refreshOrders();
       }
 
+      // --- MODAL UTILS ---
       function showModal(title, msg, icon, isConfirm = false, callback = null) {
         document.getElementById('modalTitle').innerText = title;
         document.getElementById('modalBody').innerHTML = msg;
         document.getElementById('modalIcon').innerText = icon;
         const btnCancel = document.getElementById('modalBtnCancel');
         const btnConfirm = document.getElementById('modalBtnConfirm');
+        
         btnCancel.style.display = isConfirm ? "block" : "none";
         btnConfirm.innerText = isConfirm ? "CONFIRMAR" : "ENTENDIDO";
+        
         const newConfirm = btnConfirm.cloneNode(true);
         btnConfirm.parentNode.replaceChild(newConfirm, btnConfirm);
-        newConfirm.onclick = () => { closeModal(); if(callback) callback(); };
+        
+        newConfirm.onclick = () => { 
+           closeModal(); 
+           if(callback) callback(); 
+        };
+        
         document.getElementById('customModal').classList.add('open');
       }
       function closeModal() { document.getElementById('customModal').classList.remove('open'); }
 
+      // --- ORDER HISTORY ---
       function refreshOrders() {
         const opId = document.getElementById('activeOpId').value;
+        const icon = document.getElementById('refreshIcon');
+        if(icon) icon.classList.add('spinning');
+        
         if(opId) google.script.run.withSuccessHandler(orders => {
-            allLoadedOrders = orders || []; 
-            renderOrders(allLoadedOrders); 
-        }).getPendingOrdersEnriched();
+            allLoadedOrders = orders; 
+            renderOrders(orders); 
+            if(icon) icon.classList.remove('spinning');
+        }).getMechanicOrders(opId);
+      }
+
+      let userScopeOnly = true;
+
+      function toggleUserScopeMode() {
+          userScopeOnly = !userScopeOnly;
+          const btn = document.getElementById('btnUserScope');
+          if (userScopeOnly) {
+              btn.style.background = "#e8f0fe";
+              btn.style.color = "#365BA5";
+              btn.style.borderColor = "#365BA5";
+              btn.innerText = "👤 MIS PEDIDOS";
+          } else {
+              btn.style.background = "#f3f4f6";
+              btn.style.color = "#374151";
+              btn.style.borderColor = "#9ca3af";
+              btn.innerText = "🌐 TODOS (TALLER)";
+          }
+          applyOrderFilters();
+      }
+
+      function toggleHistoryMode() {
+          showHistory = !showHistory; 
+          const btn = document.getElementById('btnHistory');
+          if(showHistory) {
+              btn.style.background = "#e5e7eb"; btn.style.color = "#374151"; btn.innerText = "⚡ VER ACTIVOS";
+          } else {
+              btn.style.background = "transparent"; btn.style.color = "#6b7280"; btn.innerText = "📜 HISTORIAL";
+          }
+          applyOrderFilters();
+      }
+
+      function applyOrderFilters() {
+          renderOrders(allLoadedOrders);
       }
 
       function renderOrders(orders) {
         const container = document.getElementById('orders-container');
-        if (!orders || orders.length === 0) {
-          container.innerHTML = "<div style='text-align:center; padding:40px 20px; color:#999; font-weight:500;'>✅ Sin pedidos activos.</div>";
+        const searchInput = document.getElementById('orderSearchInput');
+        const searchTerm = (searchInput ? searchInput.value : '').toLowerCase().trim();
+        const currentOpId = String(document.getElementById('activeOpId')?.value || '').trim();
+        const currentMechName = String(document.getElementById('activeMechName')?.value || '').toLowerCase().trim();
+
+        let filtered = (orders || []).slice();
+
+        // 1. Delimitación de Operaciones por Usuario (Mis Pedidos vs Vista Unificada del Taller)
+        if (userScopeOnly && (currentOpId || currentMechName)) {
+            filtered = filtered.filter(o => {
+                const rowOpId = String(o.opId || '').trim();
+                const rowOpInfo = String(o.opInfo || '').toLowerCase();
+                const matchOpId = currentOpId && (rowOpId === currentOpId || rowOpInfo.includes(currentOpId));
+                const matchOpName = currentMechName && rowOpInfo.includes(currentMechName);
+                return matchOpId || matchOpName;
+            });
+        }
+
+        // 2. Filtro Activos vs Historial
+        filtered = filtered.filter(o => {
+            if(showHistory) return o.status === "ENTREGADO" || o.status === "DEVOLUCION";
+            else return o.status === "PENDIENTE" || o.status === "LISTO";
+        });
+
+        // 3. Buscador de Artículos, OTs y Unidades
+        if (searchTerm) {
+            filtered = filtered.filter(o => {
+                const matchOt = String(o.otNumber || '').toLowerCase().includes(searchTerm);
+                const matchUnit = String(o.unitInfo || '').toLowerCase().includes(searchTerm);
+                const matchMech = String(o.opInfo || '').toLowerCase().includes(searchTerm);
+                const matchItems = (o.items || []).some(i => String(i.name || '').toLowerCase().includes(searchTerm));
+                return matchOt || matchUnit || matchMech || matchItems;
+            });
+        }
+
+        if (!filtered || filtered.length === 0) {
+          const msg = showHistory 
+            ? "📜 Sin historial reciente que coincida." 
+            : (userScopeOnly ? "✅ No tenés pedidos pendientes." : "✅ Sin pedidos pendientes en el taller.");
+          container.innerHTML = `<div style='text-align:center; padding:40px 20px; color:#999; font-weight:500;'>${msg}</div>`;
           return;
         }
+        
         let html = "";
-        orders.forEach(o => {
-          let itemsHtml = (o.items || []).map(i => `<div>• ${i.name} <b>x${i.qty}</b></div>`).join('');
-          html += `<div class="order-item"><div><b>OT ${o.otNumber || 'N/A'}</b> (${o.unitInfo})<div>${itemsHtml}</div></div><div>${o.status}</div></div>`;
+        filtered.forEach(o => {
+          let action = "";
+          let statusBadge = "";
+          let statusClass = "status-PENDIENTE";
+          
+          if (o.status === "LISTO") {
+            statusClass = "status-LISTO";
+            statusBadge = `<span class="status-badge badge-LISTO">⚡ LISTO PARA RETIRAR</span>`;
+            action = `<span style="font-size:0.8rem; color:#27ae60; font-weight:700;">Disponible en pañol</span>`;
+          
+          } else if (o.status === "ENTREGADO") {
+             statusClass = ""; 
+             statusBadge = `<span class="status-badge" style="background:#f3f4f6; color:#555;">✅ RECIBIDO</span>`;
+             action = `<button class="btn-action-secondary" onclick="tryReturn('${o.reqId}')">
+                         <span>↩️</span> DEVOLVER
+                       </button>`;
+          
+          } else if (o.status === "DEVOLUCION") {
+             statusClass = "";
+             statusBadge = `<span class="status-badge" style="background:#fff5f5; color:#e74c3c;">↩️ DEVOLUCIÓN EN CURSO</span>`;
+             action = `<span style="font-size:0.75rem; color:#e74c3c; font-weight:600;">Stock restaurado</span>`;
+          
+          } else {
+            statusBadge = `<span class="status-badge badge-PENDIENTE">⏳ EN PREPARACIÓN</span>`;
+            action = `<span style="font-size:0.8rem; color:#aaa; font-weight:500;">Esperando a Pañol...</span>`;
+          }
+
+          let bgStyle = (o.status === "ENTREGADO" || o.status === "DEVOLUCION") ? "background:#fafafa; border-left:4px solid #ccc;" : "";
+
+          let itemsHtml = (o.items || []).map(i => {
+            const isReturned = i.status === "DEVOLUCION";
+            const strikeStyle = isReturned ? "text-decoration: line-through; color: #a1a1aa;" : "color: var(--dark);";
+            const devBadge = isReturned ? `<span style="margin-left:6px; font-size:0.7rem; color:#e74c3c;">(Devuelto)</span>` : "";
+            
+            return `<div style="font-weight:800; font-size:1.05rem; margin-top:6px; ${strikeStyle}">
+               • ${i.name} 
+               <span style="margin-left:6px; background:#e2e5e9; padding:2px 6px; border-radius:4px; font-size:0.8rem; text-decoration:none !important; color:#555;">x${i.qty}</span>
+               ${devBadge}
+             </div>`;
+          }).join('');
+
+          const mechTag = (!userScopeOnly && o.opInfo) ? `<div style="font-size:0.75rem; color:var(--blue); font-weight:700; margin-top:2px;">👤 ${o.opInfo}</div>` : '';
+
+          html += `<div class="order-item ${statusClass}" style="${bgStyle}">
+              <div style="flex-grow:1; margin-right:15px;">
+                ${statusBadge}
+                ${mechTag}
+                <div style="margin-bottom:8px;">${itemsHtml}</div>
+                <div style="font-size:0.8rem; color:#888;">OT ${o.otNumber || 'N/A'} ${o.unitInfo ? '• ' + o.unitInfo : ''}</div>
+              </div>
+              <div>${action}</div>
+            </div>`;
         });
+        
         container.innerHTML = html;
       }
+
+      /* === [DESHABILITADO] Función tryPickup (Reactivar si se habilita el botón YA LO TENGO) ===
+      function tryPickup(reqId) {
+        showModal("Confirmar Retiro", "Quedará regitrado a su nombre.", "📦", true, () => {
+            document.getElementById('orders-container').innerHTML = "<div style='text-align:center; padding:20px;'>Procesando...</div>";
+            google.script.run.withSuccessHandler(() => refreshOrders()).markAsDelivered(reqId);
+        });
+      }
+      ======================================================================================== */
+
+// === REEMPLAZAR EN Index.html (App Mecánicos) ===
+
+function tryReturn(reqId) {
+  const order = allLoadedOrders.find(o => o.reqId === reqId);
+  if (!order) return;
+
+  // Solo mostramos repuestos que están en estado ENTREGADO
+  const returnableItems = order.items.filter(i => i.status === "ENTREGADO");
+
+  if (returnableItems.length === 0) {
+     showModal("Atención", "Ya no hay repuestos para devolver en este pedido.", "⚠️");
+     return;
+  }
+
+  // Sanitización e inyección de cantidad máxima como atributo 'data-qty'
+  const optionsHtml = returnableItems.map(i => {
+    const safeName = i.name.replace(/"/g, '&quot;');
+    return `<option value="${safeName}" data-qty="${i.qty}">${i.name} (Max: ${i.qty})</option>`;
+  }).join('');
+
+  // UX/UI: Flujo vertical (Región Común). Selección -> Cantidad -> Motivo
+  const htmlContent = `
+    <div style="text-align:left; font-size:0.85rem; color:#555; margin-bottom:6px; font-weight:800;">
+      1. ¿Qué repuesto deseas devolver?
+    </div>
+    <select id="returnItemSelect" style="width:100%; padding:12px; margin-bottom:15px; border-radius:8px; border:2px solid #e0e0e0; font-size:0.9rem; outline:none;" onchange="updateReturnQtyMax(this)">
+      ${optionsHtml}
+    </select>
+
+    <div style="text-align:left; font-size:0.85rem; color:#555; margin-bottom:6px; font-weight:800;">
+      2. ¿Cuántas unidades devuelves?
+    </div>
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
+       <input type="number" id="returnQtyInput" min="1" max="${returnableItems[0].qty}" value="${returnableItems[0].qty}" style="width:100px; padding:12px; border-radius:8px; border:2px solid #e0e0e0; font-size:1rem; outline:none; text-align:center; font-weight:700; color:var(--blue);">
+       <span style="font-size:0.8rem; color:#888; font-weight:600;" id="returnQtyMaxLabel">de ${returnableItems[0].qty} disponibles</span>
+    </div>
+    
+    <div style="text-align:left; font-size:0.85rem; color:#555; margin-bottom:6px; font-weight:800;">
+      3. Motivo (Opcional):
+    </div>
+    <input type="text" id="returnReasonInput" placeholder="Ej. Pieza equivocada, Defecto..." style="width:100%; padding:12px; border-radius:8px; border:2px solid #e0e0e0; font-size:0.9rem; outline:none;">
+  `;
+
+  showModal("Devolución Parcial", htmlContent, "↩️", true, () => {
+    const itemEl = document.getElementById('returnItemSelect');
+    const qtyEl = document.getElementById('returnQtyInput');
+    const inputEl = document.getElementById('returnReasonInput');
+    
+    const itemName = itemEl ? itemEl.value : "";
+    const returnQty = qtyEl ? parseInt(qtyEl.value, 10) : 1;
+    let reason = inputEl ? inputEl.value.trim() : "Sin motivo especificado";
+
+    if (!itemName || isNaN(returnQty) || returnQty < 1) {
+         showModal("Error", "Cantidad inválida.", "⚠️");
+         return;
+    }
+
+    document.getElementById('orders-container').innerHTML = "<div style='text-align:center; padding:40px 20px; color:#9ca3af; font-weight:600;'>Procesando devolución en Pañol...</div>";
+    
+    google.script.run.withSuccessHandler((res) => {
+      if(res.success) {
+        refreshOrders();
+      } else {
+        showModal("Error", res.error || "No se pudo registrar la devolución.", "⛔");
+        refreshOrders(); 
+      }
+    // Pasamos el nuevo parámetro 'returnQty' al Backend
+    }).requestRefund(reqId, itemName, reason, returnQty);
+  });
+}
+
+// === HELPER GLOBAL UX: Actualiza el input si el usuario cambia el select ===
+window.updateReturnQtyMax = function(selectEl) {
+    const selectedOption = selectEl.options[selectEl.selectedIndex];
+    const maxQty = selectedOption.getAttribute('data-qty');
+    const qtyInput = document.getElementById('returnQtyInput');
+    const qtyLabel = document.getElementById('returnQtyMaxLabel');
+
+    if(qtyInput && qtyLabel) {
+        qtyInput.max = maxQty;
+        qtyInput.value = maxQty;
+        qtyLabel.innerText = `de ${maxQty} disponibles`;
+    }
+};
+
+// ===========================================
+// SELECTORES BIDIRECCIONALES Y GLOBALES
+// ===========================================
+const categorySelect = document.getElementById('category-select');
+const categoryResults = document.getElementById('category-results');
+const itemInput = document.getElementById('itemInput');
+const productResults = document.getElementById('product-results');
+
+let currentFilteredProducts = [];
+let isCategoryValid = false;
+let isItemValid = false;
+
+const getUniqueCategories = () => [...new Set(dbItems.map(item => item.category || "GENERAL"))].sort();
+
+// --- LÓGICA DE CATEGORÍAS (De Arriba hacia Abajo) ---
+categorySelect.addEventListener('focus', () => renderCategories(categorySelect.value.toLowerCase().trim()));
+categorySelect.addEventListener('click', () => renderCategories(categorySelect.value.toLowerCase().trim()));
+categorySelect.addEventListener('input', (e) => {
+  isCategoryValid = false;
+  renderCategories(e.target.value.toLowerCase().trim());
+});
+
+function renderCategories(query) {
+  categoryResults.innerHTML = '';
+  const categories = getUniqueCategories();
+  
+  // Filtro SIN LÍMITES
+  const matches = categories.filter(cat => cat.toLowerCase().includes(query));
+
+  if (matches.length > 0) {
+    matches.forEach(cat => {
+      const li = document.createElement('li');
+      const regex = new RegExp(`(${query})`, "gi");
+      li.innerHTML = query ? cat.replace(regex, "<strong style='color: var(--blue);'>$1</strong>") : cat;
+      
+      li.addEventListener('click', () => {
+        categorySelect.value = cat;
+        isCategoryValid = true;
+        categoryResults.classList.add('hidden');
+        
+        // Acotamos los productos a esta categoría
+        currentFilteredProducts = dbItems.filter(item => (item.category || "GENERAL") === cat);
+        
+        // UX: Foco automático al paso 2
+        itemInput.value = ''; 
+        isItemValid = false;
+        itemInput.focus();
+      });
+      categoryResults.appendChild(li);
+    });
+    categoryResults.classList.remove('hidden');
+  } else {
+    categoryResults.classList.add('hidden');
+  }
+}
+
+// --- LÓGICA DE REPUESTOS (Bidireccional / De Abajo hacia Arriba) ---
+itemInput.addEventListener('focus', () => renderProducts(itemInput.value.toLowerCase().trim()));
+itemInput.addEventListener('click', () => renderProducts(itemInput.value.toLowerCase().trim()));
+itemInput.addEventListener('input', (e) => {
+  isItemValid = false;
+  renderProducts(e.target.value.toLowerCase().trim());
+});
+
+function renderProducts(query) {
+  productResults.innerHTML = '';
+  
+  // Si hay rubro válido, busca en ese subgrupo. Si no, busca en TODA la base (dbItems)
+  const sourceList = isCategoryValid ? currentFilteredProducts : dbItems;
+  
+  // Filtro SIN LÍMITES
+  const matches = sourceList.filter(item => {
+    const itemName = item.name || item; 
+    return itemName.toLowerCase().includes(query);
+  });
+
+  if (matches.length > 0) {
+    matches.forEach(match => {
+      const itemName = match.name || match;
+      const itemCat = match.category || "GENERAL";
+      
+      const li = document.createElement('li');
+      const regex = new RegExp(`(${query})`, "gi");
+      const highlightedName = query ? itemName.replace(regex, "<strong style='color: var(--blue);'>$1</strong>") : itemName;
+      
+      // UX Contextual: Si es búsqueda global, mostramos el rubro abajo en gris para diferenciar repuestos similares
+      const catContext = !isCategoryValid ? `<span style="display:block; font-size:0.7rem; color:var(--text-muted); margin-top:2px;">📂 ${itemCat}</span>` : '';
+      li.innerHTML = `${highlightedName} ${catContext}`;
+      
+      li.addEventListener('click', () => {
+        // 1. Rellenar el repuesto
+        itemInput.value = itemName;
+        isItemValid = true;
+        productResults.classList.add('hidden');
+        
+        // 2. MAGIA BIDIRECCIONAL: Si no había rubro, rellenarlo automáticamente hacia arriba
+        if (!isCategoryValid) {
+            categorySelect.value = itemCat;
+            isCategoryValid = true;
+            currentFilteredProducts = dbItems.filter(i => (i.category || "GENERAL") === itemCat);
+            
+            // Poka-Yoke visual: Parpadeo verde para confirmar que el sistema rellenó el dato
+            const originalBg = categorySelect.style.backgroundColor;
+            categorySelect.style.backgroundColor = "#e6fffa"; // Verde tenue
+            categorySelect.style.borderColor = "var(--green)";
+            setTimeout(() => {
+                categorySelect.style.backgroundColor = originalBg;
+                categorySelect.style.borderColor = "#e0e0e0";
+            }, 600);
+        }
+      });
+      productResults.appendChild(li);
+    });
+    productResults.classList.remove('hidden');
+  } else {
+    productResults.innerHTML = `<li style="color: #999; cursor: default;">Sin coincidencias</li>`;
+    productResults.classList.remove('hidden');
+  }
+}
+
+// --- CONTROL DE ERRORES (Poka-Yoke de clicks fuera) ---
+document.addEventListener('click', function(e) {
+  const isClickInsideCat = document.getElementById('category-search-container').contains(e.target);
+  const isClickInsideProd = document.getElementById('function-search-container').contains(e.target);
+
+  if (!isClickInsideCat) {
+    categoryResults.classList.add('hidden');
+    // Si sale dejando un rubro inválido, lo borramos pero dejamos libre el input de Repuestos
+    if (!isCategoryValid && categorySelect.value !== '') {
+      categorySelect.value = '';
+      currentFilteredProducts = dbItems; 
+    }
+  }
+
+  if (!isClickInsideProd) {
+    productResults.classList.add('hidden');
+    // Si sale dejando un repuesto inválido, lo borramos
+    if (!isItemValid && itemInput.value !== '') {
+        itemInput.value = '';
+    }
+  }
+});
+
     </script>
 </body>
 </html>
