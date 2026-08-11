@@ -154,20 +154,21 @@ async function syncDataFromSheets() {
   }
 }
 
-// === 3. RUTAS ESTÁTICAS DEL MONOLITO ===
-app.use(express.static(path.join(__dirname, 'public')));
-
+// === 3. RUTAS ESTÁTICAS DEL MONOLITO Y QUERY PARAMS ===
 app.get('/', (req, res) => {
-  const v = (req.query.v || req.query.view || '').toLowerCase();
-  if (v === 'panol') return res.sendFile(path.join(__dirname, 'public', 'panol.html'));
-  if (v === 'dashboard') return res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
-  if (v === 'inv') return res.sendFile(path.join(__dirname, 'public', 'inv.html'));
+  const v = String(req.query.v || req.query.view || req.query.page || req.query.p || '').toLowerCase().trim();
+  if (v === 'panol' || v === 'monitor') return res.sendFile(path.join(__dirname, 'public', 'panol.html'));
+  if (v === 'dashboard' || v === 'dash') return res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+  if (v === 'inv' || v === 'inventory' || v === 'stock') return res.sendFile(path.join(__dirname, 'public', 'inv.html'));
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.get('/panol', (req, res) => res.sendFile(path.join(__dirname, 'public', 'panol.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/inv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'inv.html')));
+
+// Servidor de archivos estáticos (JS, CSS, imágenes) deshabilitando index automático
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
 // === 4. RPC UNIVERSAL DISPATCHER (google.script.run Polyfill) ===
 app.post('/api/rpc', async (req, res) => {

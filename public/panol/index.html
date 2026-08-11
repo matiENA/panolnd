@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Monitor Pañol</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    
+    <script src="/socket.io/socket.io.min.js"></script>
+    <script src="/js/client-shim.js"></script>
+
+    <style>
+
+      /* === NAVEGACIÓN TOP BAR === */
+      .top-nav { display: flex; gap: 8px; margin-left: 20px; flex: 1; }
+      .nav-tab {
+        background: transparent; color: var(--text-muted); border: none;
+        font-size: 0.85rem; font-weight: 800; cursor: pointer; padding: 8px 16px;
+        border-radius: 8px; transition: all 0.2s; text-transform: uppercase;
+        display: flex; align-items: center; gap: 6px;
+      }
+      .nav-tab:hover { background: rgba(255,255,255,0.05); color: var(--text-white); }
+      .nav-tab.active { background: rgba(56, 139, 253, 0.15); color: #58a6ff; }
+      .nav-tab .badge { background: var(--orange); color: white; padding: 2px 6px; border-radius: 12px; font-size: 0.7rem; }
+
+      /* === TARJETA HORIZONTAL DE DEVOLUCIONES === */
+      .card-horizontal {
+        display: flex; flex-direction: row; background: var(--card-bg);
+        border-radius: 12px; border: 1px solid var(--border); border-left: 5px solid var(--orange);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3); margin-bottom: 16px; overflow: hidden;
+      }
+      .ch-left { padding: 16px; border-right: 1px dashed var(--border); min-width: 180px; display: flex; flex-direction: column; justify-content: center; }
+      .ch-middle { padding: 16px; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+      .ch-right { padding: 16px; border-left: 1px solid var(--border); min-width: 220px; background: rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 12px; justify-content: center; }
+      
+      .btn-ch { flex: 1; padding: 12px; border: none; font-weight: 800; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+      .btn-ch.ok { background: rgba(35, 134, 54, 0.2); color: var(--green); border: 1px solid var(--green); }
+      .btn-ch.ok:hover { background: var(--green); color: white; }
+      .btn-ch.inc { background: transparent; color: var(--orange); border: 1px solid var(--orange); }
+      .btn-ch.inc:hover { background: rgba(245, 158, 11, 0.15); }
+      
+      @media (max-width: 768px) { 
+        .card-horizontal { flex-direction: column; } 
+        .ch-left, .ch-right { border: none; border-bottom: 1px dashed var(--border); min-width: 100%; } 
+      }
+
+      .shake-card {
+        animation: card-shake 0.5s cubic-bezier(.36,.07,.19,.97) both !important;
+        border-left-color: var(--red) !important;
+        box-shadow: 0 0 15px rgba(218, 54, 51, 0.4) !important;
+      }
+      
+      @keyframes card-shake {
+        10%, 90% { transform: translate3d(-2px, 0, 0); }
+        20%, 80% { transform: translate3d(4px, 0, 0); }
+        30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+        40%, 60% { transform: translate3d(6px, 0, 0); }
+      }
+
+      :root {
+        --bg: #0d1117;          
+        --card-bg: #161b22;     
+        --panel-bg: #0d1117;
+        --text: #c9d1d9;        
+        --text-white: #f0f6fc;  
+        --text-muted: #8b949e;
+        --blue: #365BA5;        
+        --green: #238636;       
+        --red: #da3633;         
+        --orange: #f59e0b;
+        --border: #30363d;      
+        
+        --color-metanol: #EF4444; --text-metanol: #ffffff; 
+        --color-glp: #F59E0B;     --text-glp: #1f2937; 
+        --color-campo: #10B981;   --text-campo: #ffffff; 
+        --color-liviano: #6366F1; --text-liviano: #ffffff;
+        --color-abastecedor: #D946EF; --text-abastecedor: #ffffff;
+        --color-gral: #6B7280;   --text-gral: #ffffff;
+
+        --color-iveco: #1d4ed8;
+        --color-volvo: #0369a1;
+        --color-scania: #b91c1c;
+        --color-mercedes: #374151;
+
+        --note-bg: #4d3800; --note-text: #ffd33d; --note-border: #9e7700; 
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        background-color: var(--bg); color: var(--text); font-family: 'Inter', sans-serif;
+        margin: 0; padding: 0; min-height: 100vh;
+      }
+
+      header {
+        position: sticky; top: 0; z-index: 100;
+        background: var(--panel-bg);
+        border-bottom: 1px solid var(--border);
+        padding: 16px 24px;
+      }
+
+      .header-top {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 16px;
+      }
+
+      .header-left { display: flex; align-items: center; gap: 20px; }
+      
+      h1 { 
+        margin: 0; font-size: 1.5rem; font-weight: 900; 
+        letter-spacing: -0.5px; color: var(--text-white); 
+      }
+
+      .live-badge {
+        display: flex; align-items: center; gap: 6px;
+        background: rgba(35, 134, 54, 0.15);
+        border: 1px solid rgba(35, 134, 54, 0.3);
+        padding: 4px 10px; border-radius: 20px;
+        font-size: 0.7rem; font-weight: 700; color: var(--green);
+      }
+      .live-dot {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: var(--green);
+        animation: pulse 2s infinite;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+
+      .header-right { display: flex; align-items: center; gap: 16px; }
+
+      #clock { 
+        font-family: 'Inter', monospace; font-size: 1.1rem; 
+        color: var(--text-muted); font-weight: 600;
+        background: var(--card-bg); padding: 6px 12px;
+        border-radius: 6px; border: 1px solid var(--border);
+      }
+
+      .stats-row { display: flex; gap: 8px; }
+      .stat-chip {
+        display: flex; align-items: center; gap: 6px;
+        padding: 6px 12px; border-radius: 8px;
+        font-size: 0.75rem; font-weight: 700;
+        border: 1px solid var(--border);
+        background: var(--card-bg);
+      }
+      .stat-chip.pending { color: var(--blue); }
+      .stat-chip.ready { color: var(--green); }
+      .stat-count {
+        background: rgba(255,255,255,0.1);
+        padding: 2px 8px; border-radius: 4px;
+        font-weight: 800;
+      }
+
+      .control-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      .search-box { flex: 1; min-width: 250px; max-width: 400px; position: relative; }
+      .search-input {
+        width: 100%; background: var(--card-bg); border: 1px solid var(--border);
+        color: var(--text-white); padding: 10px 12px 10px 38px; border-radius: 8px;
+        font-size: 0.9rem; font-family: 'Inter', sans-serif; transition: all 0.2s;
+      }
+      .search-input:focus { outline: none; border-color: var(--blue); background: #1c2128; }
+      .search-input::placeholder { color: var(--text-muted); }
+      .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 0.9rem; color: var(--text-muted); pointer-events: none; }
+
+      .filter-group { display: flex; gap: 6px; align-items: center; }
+      .filter-label { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px; }
+      .filter-pill {
+        padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700;
+        border: 1px solid var(--border); background: transparent; color: var(--text-muted);
+        cursor: pointer; transition: all 0.15s; white-space: nowrap;
+      }
+      .filter-pill:hover { border-color: var(--text-muted); color: var(--text-white); }
+      .filter-pill.active { background: var(--blue); border-color: var(--blue); color: white; }
+
+      .sort-select {
+        padding: 6px 28px 6px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 600;
+        border: 1px solid var(--border); background: var(--card-bg); color: var(--text);
+        cursor: pointer; appearance: none;
+      }
+      .sort-select:focus { outline: none; border-color: var(--blue); }
+
+      main { padding: 24px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; align-items: start; }
+
+      .card {
+        background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border);
+        border-left: 5px solid var(--blue); display: flex; flex-direction: column;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: all 0.2s ease; overflow: hidden;
+      }
+      .card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
+
+      .card.status-PENDIENTE { border-left-color: var(--blue); }
+      .card.status-LISTO { border-left-color: var(--green); background: linear-gradient(90deg, rgba(35,134,54,0.08) 0%, var(--card-bg) 100%); }
+      .card.urgent { border-left-color: var(--red); animation: urgent-glow 2s infinite; }
+      @keyframes urgent-glow {
+        0%, 100% { box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+        50% { box-shadow: 0 2px 20px rgba(218, 54, 51, 0.3); }
+      }
+
+      .card-header { padding: 16px 16px 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; }
+      .unit-info { display: flex; flex-direction: column; gap: 4px; }
+      .unit-plate { font-size: 1.3rem; font-weight: 900; color: var(--text-white); letter-spacing: 0.5px; line-height: 1.2; display: flex; align-items: center; gap: 8px; }
+      .semi-plate { font-size: 0.85rem; color: var(--orange); font-weight: 700; }
+
+      .ot-display { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; }
+      .ot-label { color: var(--text-muted); font-weight: 600; }
+      .ot-value { color: var(--blue); font-weight: 800; }
+
+      .time-badge { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+      .time-value { font-size: 0.9rem; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+      .time-value.urgent { color: var(--red); }
+      .wait-mins { font-size: 0.7rem; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; }
+      .wait-mins.urgent { background: rgba(218,54,51,0.2); color: var(--red); }
+
+      .badges-row { display: flex; gap: 6px; padding: 8px 16px; flex-wrap: wrap; background: rgba(0,0,0,0.2); }
+      .badge { font-size: 0.65rem; font-weight: 800; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+      
+      .card-body { padding: 12px 16px; flex-grow: 1; }
+      .mechanic-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed var(--border); }
+      .mechanic-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--blue); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800; }
+      .mechanic-name { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+
+      .item-list { display: flex; flex-direction: column; gap: 0; background: rgba(0,0,0,0.2); border-radius: 8px; overflow: hidden; }
+      .item-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+      .item-row:last-child { border-bottom: none; }
+      .item-primary { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+      .item-name { font-weight: 700; color: var(--text-white); font-size: 0.9rem; line-height: 1.3; }
+      .item-qty { background: var(--green); color: #fff; font-size: 0.75rem; font-weight: 800; padding: 3px 8px; border-radius: 4px; min-width: 32px; text-align: center; flex-shrink: 0; }
+
+      .item-secondary { display: flex; justify-content: space-between; align-items: center; }
+      .item-id { font-size: 0.85rem; color: #a5b4fc; font-family: monospace; font-weight: 700; background: rgba(165, 180, 252, 0.1); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px; }
+      .item-loc { font-size: 0.75rem; color: #58a6ff; background: rgba(56, 139, 253, 0.1); border: 1px solid rgba(56, 139, 253, 0.3); border-radius: 4px; padding: 4px 8px; text-align: center; font-weight: 800; white-space: nowrap; }
+
+      .note-box { margin-top: 10px; background: var(--note-bg); color: var(--note-text); padding: 8px 10px; border-radius: 6px; font-size: 0.8rem; border-left: 3px solid var(--note-border); display: flex; align-items: flex-start; gap: 6px; }
+      .btn-action { width: 100%; padding: 14px; border: none; font-weight: 800; font-size: 0.9rem; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+      .btn-ready { background: var(--blue); color: white; }
+      .btn-ready:hover { background: #4169c5; }
+      
+      .status-complete { padding: 14px; background: rgba(35, 134, 54, 0.15); color: var(--green); font-weight: 800; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+      .empty-state { grid-column: 1 / -1; text-align: center; padding: 80px 20px; color: var(--text-muted); }
+      .empty-icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.5; }
+      .empty-title { font-size: 1.2rem; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+      .empty-text { font-size: 0.9rem; }
+
+      .loading { grid-column: 1 / -1; text-align: center; padding: 60px; color: var(--text-muted); }
+      .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      .action-group { display: flex; gap: 8px; padding: 12px 16px; background: rgba(0, 0, 0, 0.1); border-top: 1px solid var(--border); }
+      .panol-select { flex: 1; background: var(--bg); color: var(--text-white); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 0.85rem; font-weight: 600; outline: none; cursor: pointer; transition: all 0.2s; appearance: none; }
+      .btn-undo-ready { width: 100%; padding: 12px; background: rgba(245, 158, 11, 0.2); color: var(--orange); border: 1px solid var(--orange); border-radius: 8px; font-weight: 800; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.2s; }
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 9999; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+      .modal-overlay.active { opacity: 1; pointer-events: auto; }
+      .modal-content { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 28px; min-width: 380px; max-width: 520px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.6); transform: translateY(20px); transition: transform 0.25s; }
+      .modal-title { font-size: 1.1rem; font-weight: 900; color: var(--text-white); margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+      .modal-body { margin-bottom: 20px; }
+      .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+      .modal-btn { padding: 10px 20px; border: none; border-radius: 8px; font-weight: 800; font-size: 0.85rem; cursor: pointer; transition: 0.2s; }
+      .modal-btn.primary { background: var(--blue); color: white; }
+      .modal-btn.danger { background: rgba(218,54,51,0.15); color: var(--red); border: 1px solid var(--red); }
+      .modal-btn.cancel { background: rgba(255,255,255,0.05); color: var(--text-muted); }
+      
+      .item-edit-controls { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+      .qty-btn { width: 28px; height: 28px; border: 1px solid var(--border); background: rgba(255,255,255,0.05); color: var(--text-white); border-radius: 6px; font-size: 1rem; font-weight: 900; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; line-height: 1; }
+      .qty-input { width: 42px; height: 28px; text-align: center; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text-white); font-size: 0.85rem; font-weight: 800; outline: none; }
+      .stock-badge { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+      .btn-remove-item { width: 24px; height: 24px; border: none; background: rgba(218,54,51,0.1); color: var(--red); border-radius: 4px; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.15s; opacity: 0.6; }
+      .btn-add-item { width: 100%; padding: 8px; margin-top: 4px; background: rgba(56,139,253,0.08); border: 1px dashed rgba(56,139,253,0.3); color: #58a6ff; font-size: 0.8rem; font-weight: 700; border-radius: 6px; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+
+      .search-results { max-height: 250px; overflow-y: auto; margin-top: 10px; }
+      .search-result-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: 0.15s; border-radius: 6px; }
+      .search-result-item:hover { background: rgba(56,139,253,0.1); }
+      .search-result-item .sr-name { font-weight: 700; color: var(--text-white); font-size: 0.85rem; }
+      .search-result-item .sr-stock { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); }
+      .sr-add-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 12px; background: rgba(35,134,54,0.1); border-radius: 8px; border: 1px solid rgba(35,134,54,0.3); }
+      .sr-add-row .sr-selected-name { flex: 1; font-weight: 700; color: var(--green); font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+
+<header>
+      <div class="header-top">
+        <div class="header-left">
+          <h1>🔧 Monitor Pañol</h1>
+          <div class="live-badge">
+            <span class="live-dot"></span>
+            EN VIVO
+          </div>
+        </div>
+
+        <div class="top-nav">
+          <button id="tab-despacho" class="nav-tab active" onclick="switchView('despacho')">📦 Despacho</button>
+          <button id="tab-returns" class="nav-tab" onclick="switchView('returns')">♻️ Devolución repuesto anterior <span id="returnsCount" class="badge">0</span></button>
+          <button id="tab-returns-new" class="nav-tab" onclick="switchView('returns-new')">↩️ Devolución repuesto nuevo <span id="returnsNewCount" class="badge">0</span></button>
+        </div>
+
+        <div class="header-right">
+          <div class="stats-row" id="statsRow">
+            <div class="stat-chip pending">⏳ Pendientes <span class="stat-count" id="pendingCount">0</span></div>
+            <div class="stat-chip ready">⚡ Listos <span class="stat-count" id="readyCount">0</span></div>
+          </div>
+          <div id="clock">--:--</div>
+        </div>
+      </div>
+
+      <div id="controlBar" class="control-bar">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput" class="search-input" placeholder="Buscar patente, OT, mecánico o repuesto..." oninput="applyFilters()">
+        </div>
+
+        <div class="filter-group">
+          <span class="filter-label">Estado:</span>
+          <button class="filter-pill active" data-filter="status" data-value="ALL" onclick="setFilter('status', 'ALL', this)">Todos</button>
+          <button class="filter-pill" data-filter="status" data-value="PENDIENTE" onclick="setFilter('status', 'PENDIENTE', this)">⏳ Pendiente</button>
+          <button class="filter-pill" data-filter="status" data-value="LISTO" onclick="setFilter('status', 'LISTO', this)">⚡ Listo</button>
+          <button class="filter-pill" data-filter="status" data-value="ENTREGADO" onclick="setFilter('status', 'ENTREGADO', this)">📜 Historial</button>
+        </div>
+
+        <select class="sort-select" id="sortSelect" onchange="applyFilters()">
+          <option value="time-asc">⏰ Más antiguo primero</option>
+          <option value="time-desc">🕐 Más reciente primero</option>
+          <option value="mechanic">👤 Por mecánico</option>
+          <option value="urgent">🚨 Urgentes primero</option>
+        </select>
+      </div>
+    </header>
+
+    <main id="view-despacho">
+      <div id="board" class="grid">
+        <div class="loading">
+          <div class="spinner"></div>
+          <div>Cargando pedidos...</div>
+        </div>
+      </div>
+    </main>
+
+    <main id="view-returns" style="display: none;">
+      <div style="font-size:1.1rem; font-weight:800; color:var(--text-white); margin-bottom: 20px; display: flex; flex-direction: column; gap: 4px;">
+        <span>Devolución de repuesto anterior</span>
+        <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">Compara la cantidad original solicitada (QTY) contra el estado declarado por el mecánico.</span>
+      </div>
+      <div id="returns-board"></div>
+    </main>
+
+    <main id="view-returns-new" style="display: none;">
+      <div style="font-size:1.1rem; font-weight:800; color:var(--text-white); margin-bottom: 16px; display: flex; flex-direction: column; gap: 4px;">
+        <span>↩️ Devolución de repuesto nuevo (sin uso)</span>
+        <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">Reintegra a stock de DB_ITEMS aquellos repuestos nuevos entregados que hayan sido solicitados para devolución por el mecánico.</span>
+      </div>
+
+      <div class="filter-group" style="margin-bottom: 20px;">
+        <button class="filter-pill active" id="btn-subtab-new-pending" onclick="switchNewReturnsSubtab('pending', this)">
+          ⏳ Pendientes <span id="newPendingBadge" class="badge" style="background:var(--orange); color:#000;">0</span>
+        </button>
+        <button class="filter-pill" id="btn-subtab-new-history" onclick="switchNewReturnsSubtab('history', this)">📜 Historial</button>
+      </div>
+
+      <div id="returns-new-board"></div>
+    </main>
+
+    <div id="panolModal" class="modal-overlay" onclick="if(event.target===this)closePanolModal()">
+      <div class="modal-content">
+        <div class="modal-title" id="modalTitle"></div>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-actions" id="modalActions"></div>
+      </div>
+    </div>
+
+ <script>
+      let allOrders = [];
+      let expandedCards = new Set();
+      let panolStaffList = []; 
+      let pendingSelections = {}; 
+      let undoTimers = {};
+      let filters = { status: 'ALL', product: 'ALL', search: '' };
+      let pollingInterval; 
+      let isInteracting = false;
+
+      function initApp() {
+        panolStaffList = [
+          { id: '101', name: 'Pañolero Turno A' },
+          { id: '102', name: 'Pañolero Turno B' },
+          { id: '103', name: 'Pañolero Noche' }
+        ];
+        loadData();
+        resumePolling();
+        setInterval(updateClock, 1000);
+      }
+
+      initApp();
+
+      function loadData() { 
+        google.script.run
+          .withSuccessHandler(orders => {
+            if (Array.isArray(orders)) {
+              onDataReceived(orders);
+            }
+          })
+          .withFailureHandler(err => {
+            console.warn('Load hiccup, retrying automatically...', err);
+            setTimeout(loadData, 1500);
+          })
+          .getPendingOrdersEnriched(); 
+      }
+
+      function setFilter(type, value, btn) {
+        filters[type] = value;
+        document.querySelectorAll(`[data-filter="${type}"]`).forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        applyFilters();
+      }
+
+      function applyFilters() {
+        const board = document.getElementById('board');
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+        const sortBy = document.getElementById('sortSelect').value;
+        filters.search = searchTerm;
+        let filtered = allOrders.filter(order => {
+          if (filters.status === 'ALL') {
+            if (order.status === 'ENTREGADO') return false;
+          } else {
+            if (order.status !== filters.status) return false;
+          }
+          if (searchTerm) {
+            const matchUnit = (order.unitInfo || '').toLowerCase().includes(searchTerm);
+            const matchOT = String(order.otNumber || '').includes(searchTerm);
+            const matchMech = (order.opInfo || '').toLowerCase().includes(searchTerm);
+            const matchItem = order.items.some(i => (i.name || '').toLowerCase().includes(searchTerm));
+            if (!matchUnit && !matchOT && !matchMech && !matchItem) return false;
+          }
+          return true;
+        });
+        filtered = sortOrders(filtered, sortBy);
+        renderCards(filtered);
+      }
+
+      function sortOrders(orders, sortBy) {
+        return [...orders].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      }
+
+      function renderCards(orders) {
+        const board = document.getElementById('board');
+        if (!orders || orders.length === 0) {
+          board.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">¡Todo al día!</div><div class="empty-text">No hay pedidos pendientes</div></div>`;
+          return;
+        }
+        board.innerHTML = orders.map(order => renderCard(order)).join('');
+      }
+
+      function renderCard(o) {
+        const isReady = o.status === 'LISTO';
+        const dateObj = new Date(o.timestamp);
+        const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        let cardClass = `card status-${o.status}`;
+        let itemsHtml = '<div class="item-list">';
+        (o.items || []).forEach((item, idx) => {
+          itemsHtml += `<div class="item-row"><div class="item-primary"><span class="item-name">${item.name}</span><span class="item-qty">x${item.qty}</span></div></div>`;
+        });
+        itemsHtml += '</div>';
+
+        let footerHtml = isReady 
+          ? `<div class="status-complete">⚡ LISTO PARA ENTREGAR</div>`
+          : `<div class="action-group"><button class="btn-action btn-ready" onclick="markReady('${o.reqId}')">✓ LISTO</button></div>`;
+
+        return `
+          <div class="${cardClass}" id="card-${o.reqId}">
+            <div class="card-header">
+              <div class="unit-info"><div class="unit-plate">${o.unitInfo || 'S/D'}</div><div class="ot-display"><span class="ot-label">OT</span><span class="ot-value">${o.otNumber || '--'}</span></div></div>
+              <div class="time-badge"><span class="time-value">${timeStr}</span></div>
+            </div>
+            <div class="card-body"><div class="mechanic-row"><span class="mechanic-name">${o.opInfo || 'Mecánico'}</span></div>${itemsHtml}</div>
+            <div class="card-footer">${footerHtml}</div>
+          </div>`;
+      }
+
+      function markReady(reqId) {
+        google.script.run.withSuccessHandler(() => loadData()).markAsReady(reqId, '101');
+      }
+
+      function updateStats() {
+        const pending = allOrders.filter(o => o.status === 'PENDIENTE').length;
+        const ready = allOrders.filter(o => o.status === 'LISTO').length;
+        document.getElementById('pendingCount').textContent = pending;
+        document.getElementById('readyCount').textContent = ready;
+      }
+
+      function updateClock() {
+        document.getElementById('clock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+
+      function pausePolling() { isInteracting = true; clearInterval(pollingInterval); }
+      function resumePolling() { isInteracting = false; clearInterval(pollingInterval); pollingInterval = setInterval(loadData, 5000); }
+
+      let knownReqIds = null;
+      let titleFlashInterval = null;
+
+      function updateBrowserFavicon(hasAlert) {
+        let faviconEl = document.getElementById('favicon');
+        if (!faviconEl) {
+          faviconEl = document.createElement('link'); faviconEl.id = 'favicon'; faviconEl.rel = 'icon'; faviconEl.type = 'image/png'; document.head.appendChild(faviconEl);
+        }
+        try {
+          const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64; const ctx = canvas.getContext('2d');
+          ctx.font = '46px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🔧', 32, 34);
+          if (hasAlert) { ctx.beginPath(); ctx.arc(48, 16, 12, 0, 2 * Math.PI); ctx.fillStyle = '#f85149'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#0d1117'; ctx.stroke(); }
+          faviconEl.href = canvas.toDataURL('image/png');
+        } catch(e) {}
+      }
+
+      function setDocumentTitle(titleText) {
+        document.title = titleText;
+        try { if (window.top && window.top !== window) window.top.document.title = titleText; } catch(e) {}
+      }
+
+      function checkForNewCardsAlert(orders) {
+        const pendingOrders = (orders || []).filter(o => o.status === 'PENDIENTE');
+        const currentPendingIds = new Set(pendingOrders.map(o => String(o.reqId)));
+        if (knownReqIds === null) { knownReqIds = currentPendingIds; return; }
+        let brandNewCard = null;
+        pendingOrders.forEach(o => { if (!knownReqIds.has(String(o.reqId))) brandNewCard = o; });
+        knownReqIds = currentPendingIds;
+        if (brandNewCard) triggerWindowsTaskbarAlert(brandNewCard);
+      }
+
+      function triggerWindowsTaskbarAlert(order) {
+        order = order || { opInfo: 'Mecánico', unitInfo: 'General' };
+        try { window.focus(); } catch(e) {}
+        try { if (window.top) window.top.focus(); } catch(e) {}
+        if ('setAppBadge' in navigator) { try { navigator.setAppBadge(1); } catch(e) {} }
+        if ("Notification" in window && Notification.permission === "granted") {
+          try {
+            const notif = new Notification('🔧 Monitor Pañol: ¡Nuevo Pedido!', { body: `Solicitud de ${order.opInfo || 'Mecánico'} - Unidad: ${order.unitInfo || 'S/D'}`, tag: 'new-card-alert', requireInteraction: true });
+            notif.onclick = function() { clearWindowsTaskbarAlert(); };
+          } catch(e) {}
+        }
+        clearInterval(titleFlashInterval);
+        let flashState = false;
+        titleFlashInterval = setInterval(() => {
+          const titleStr = flashState ? '🔴 (1) ¡NUEVO PEDIDO! | Pañol' : '🔧 Monitor Pañol';
+          setDocumentTitle(titleStr); updateBrowserFavicon(flashState); flashState = !flashState;
+        }, 500);
+      }
+
+      function clearWindowsTaskbarAlert() {
+        if (titleFlashInterval) { clearInterval(titleFlashInterval); titleFlashInterval = null; setDocumentTitle('Monitor Pañol'); updateBrowserFavicon(false); }
+        if ('clearAppBadge' in navigator) { try { navigator.clearAppBadge(); } catch(e) {} }
+      }
+
+      function onDataReceived(orders) {
+        allOrders = orders || [];
+        checkForNewCardsAlert(allOrders);
+        updateStats();
+        applyFilters();
+        renderReturnsBoard();
+        renderReturnsNewBoard();
+        updateClock();
+      }
+
+      function switchView(view) {
+        document.getElementById('tab-despacho').classList.toggle('active', view === 'despacho');
+        document.getElementById('tab-returns').classList.toggle('active', view === 'returns');
+        document.getElementById('tab-returns-new').classList.toggle('active', view === 'returns-new');
+        document.getElementById('view-despacho').style.display = view === 'despacho' ? 'block' : 'none';
+        document.getElementById('view-returns').style.display = view === 'returns' ? 'block' : 'none';
+        document.getElementById('view-returns-new').style.display = view === 'returns-new' ? 'block' : 'none';
+      }
+
+      function renderReturnsBoard() {}
+      function renderReturnsNewBoard() {}
+      function switchNewReturnsSubtab() {}
+    </script>
+</body>
+</html>

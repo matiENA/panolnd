@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dashboard Control</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    
+    <script src="/socket.io/socket.io.min.js"></script>
+    <script src="/js/client-shim.js"></script>
+
+    <style>
+      :root {
+        --bg: #0d1117; --card-bg: #161b22; --panel-bg: #0d1117;
+        --text: #c9d1d9; --text-white: #f0f6fc; --text-muted: #8b949e;
+        --blue: #365BA5; --green: #238636; --red: #da3633; 
+        --orange: #f59e0b; --purple: #a855f7; --cyan: #06b6d4; --border: #30363d;
+        
+        --color-metanol: #EF4444; --text-metanol: #ffffff; 
+        --color-glp: #F59E0B; --text-glp: #1f2937; 
+        --color-campo: #10B981; --text-campo: #ffffff; 
+        --color-liviano: #6366F1; --text-liviano: #ffffff;
+        --color-abastecedor: #D946EF; --text-abastecedor: #ffffff;
+        --color-gral: #6B7280; --text-gral: #ffffff;
+      }
+      * { box-sizing: border-box; }
+      body { background-color: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; margin: 0; padding: 0; min-height: 100vh; }
+
+      header { position: sticky; top: 0; z-index: 100; background: var(--panel-bg); border-bottom: 1px solid var(--border); padding: 16px 24px; }
+      .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+      .header-left { display: flex; align-items: center; gap: 20px; }
+      h1 { margin: 0; font-size: 1.5rem; font-weight: 900; color: var(--text-white); }
+      .admin-badge { display: flex; align-items: center; gap: 6px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; color: var(--purple); text-transform: uppercase; }
+      .header-right { display: flex; align-items: center; gap: 16px; }
+      #clock { font-family: 'Inter', monospace; font-size: 1.1rem; color: var(--text-muted); font-weight: 600; background: var(--card-bg); padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); }
+      .control-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      .search-box { flex: 1; min-width: 250px; position: relative; }
+      .search-input { width: 100%; background: var(--card-bg); border: 1px solid var(--border); color: var(--text-white); padding: 10px 12px 10px 38px; border-radius: 8px; font-size: 0.9rem; font-family: 'Inter', sans-serif; }
+      .search-input:focus { outline: none; border-color: var(--purple); }
+      .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 0.9rem; color: var(--text-muted); pointer-events: none; }
+
+      main { padding: 24px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; align-items: start; }
+      
+      .card { background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border); border-left: 5px solid var(--border); display: flex; flex-direction: column; box-shadow: 0 2px 8px rgba(0,0,0,0.3); overflow: hidden; transition: border-color 0.3s; }
+      .card-header { padding: 16px 16px 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; }
+      .unit-info { display: flex; flex-direction: column; gap: 4px; }
+      .unit-plate { font-size: 1.3rem; font-weight: 900; color: var(--text-white); display: flex; align-items: center; gap: 8px; }
+      .semi-plate { font-size: 0.85rem; color: var(--orange); font-weight: 700; }
+      .ot-display { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; }
+      .ot-label { color: var(--text-muted); font-weight: 600; }
+      .ot-value { color: var(--blue); font-weight: 800; }
+      .time-badge { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+      .time-value { font-size: 0.9rem; font-weight: 700; color: var(--text-muted); }
+      .time-value.urgent { color: var(--red); }
+      .wait-mins { font-size: 0.7rem; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; }
+      .wait-mins.urgent { background: rgba(218,54,51,0.2); color: var(--red); }
+      
+      .badges-row { display: flex; gap: 6px; padding: 8px 16px; background: rgba(0,0,0,0.2); }
+      .badge { font-size: 0.65rem; font-weight: 800; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; }
+      
+      .card-body { padding: 12px 16px; flex-grow: 1; }
+      .mechanic-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed var(--border); }
+      .mechanic-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--blue); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800; }
+      .mechanic-name { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+      
+      .item-list { display: flex; flex-direction: column; background: rgba(0,0,0,0.2); border-radius: 8px; overflow: hidden; }
+      .item-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+      .item-row:last-child { border-bottom: none; }
+      .item-primary { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+      .item-name { font-weight: 700; color: var(--text-white); font-size: 0.9rem; line-height: 1.3; }
+      .item-qty { background: var(--green); color: #fff; font-size: 0.75rem; font-weight: 800; padding: 3px 8px; border-radius: 4px; min-width: 32px; text-align: center; }
+      .item-secondary { display: flex; justify-content: space-between; align-items: center; }
+      .item-id { font-size: 0.85rem; color: #a5b4fc; font-family: monospace; font-weight: 700; background: rgba(165, 180, 252, 0.1); padding: 2px 6px; border-radius: 4px; }
+      .item-loc { font-size: 0.75rem; color: #58a6ff; background: rgba(56, 139, 253, 0.1); border: 1px solid rgba(56, 139, 253, 0.3); border-radius: 4px; padding: 4px 8px; font-weight: 800; }
+
+      .admin-panel {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 12px 16px; background: rgba(0, 0, 0, 0.3); border-top: 1px solid var(--border);
+      }
+      
+      .color-picker { display: flex; gap: 8px; }
+      .swatch {
+        width: 20px; height: 20px; border-radius: 50%;
+        cursor: pointer; border: 2px solid transparent;
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+      .swatch:hover { transform: scale(1.2); }
+      
+      .s-default { background: var(--border); }
+      .s-red { background: var(--red); }
+      .s-green { background: var(--green); }
+      .s-blue { background: var(--blue); }
+      .s-orange { background: var(--orange); }
+
+      .btn-ping {
+        background: transparent; color: var(--red);
+        border: 1px solid rgba(218, 54, 51, 0.4);
+        padding: 6px 16px; border-radius: 6px;
+        font-size: 0.75rem; font-weight: 800;
+        cursor: pointer; transition: all 0.3s;
+        text-transform: uppercase;
+      }
+      .btn-ping:hover { background: rgba(218, 54, 51, 0.15); border-color: var(--red); }
+      .btn-ping.success {
+        background: var(--green); color: white; border-color: var(--green);
+        box-shadow: 0 0 10px rgba(35, 134, 54, 0.5);
+      }
+
+      .loading { grid-column: 1 / -1; text-align: center; padding: 60px; color: var(--text-muted); }
+
+      .btn-toggle {
+        background: transparent; color: var(--text-muted);
+        border: 1px solid var(--border); border-radius: 6px;
+        padding: 6px 12px; font-size: 0.8rem; font-weight: 600;
+        cursor: pointer; display: flex; align-items: center; gap: 6px;
+        transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+        font-family: inherit;
+      }
+      .btn-toggle:hover { color: var(--text-white); border-color: var(--text-muted); }
+      .btn-toggle.active { 
+        background: rgba(56, 139, 253, 0.1); 
+        color: #58a6ff; 
+        border-color: rgba(56, 139, 253, 0.3); 
+      }
+
+      body.minimal-mode .item-secondary { display: none !important; }
+      body.minimal-mode .item-row { gap: 0; padding: 8px 14px; }
+    </style>
+</head>
+<body>
+    <header>
+      <div class="header-top">
+        <div class="header-left">
+          <h1>⚙️ Dashboard Control</h1>
+          <div class="admin-badge">ADMIN</div>
+        </div>
+        <button id="toggleDetailsBtn" class="btn-toggle active" onclick="toggleNoise()">
+            <span id="toggleIcon">👁️</span> <span id="toggleText">Ver Detalles</span>
+        </button>
+        <div class="header-right">
+          <div id="clock">--:--</div>
+        </div>
+      </div>
+      <div class="control-bar">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput" class="search-input" placeholder="Buscar patente, OT o repuesto..." oninput="applyFilters()">
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div id="board" class="grid">
+        <div class="loading">Sincronizando...</div>
+      </div>
+    </main>
+
+ <script>
+      let allOrders = [];
+      let expandedCards = new Set();
+      let filters = { search: '' };
+
+      function initApp() {
+        initMinimalMode();
+        loadData(); 
+        setInterval(loadData, 5000);
+        setInterval(updateClock, 1000);
+      }
+      initApp();
+
+      function loadData() { 
+        google.script.run
+          .withSuccessHandler(onDataReceived)
+          .getPendingOrdersEnriched(); 
+      }
+
+      function onDataReceived(orders) {
+        allOrders = orders || [];
+        applyFilters();
+      }
+
+      function applyFilters() {
+        const board = document.getElementById('board');
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+        filters.search = searchTerm;
+        
+        let filtered = allOrders.filter(order => {
+          if (searchTerm) {
+            const matchUnit = (order.unitInfo || '').toLowerCase().includes(searchTerm);
+            const matchOT = String(order.otNumber || '').includes(searchTerm);
+            const matchItem = order.items.some(i => (i.name || '').toLowerCase().includes(searchTerm));
+            if (!matchUnit && !matchOT && !matchItem) return false;
+          }
+          return true;
+        });
+
+        renderCards(filtered);
+      }
+
+      function renderCards(orders) {
+        const board = document.getElementById('board');
+        if (!orders || orders.length === 0) {
+          board.innerHTML = `<div class="loading">No hay datos activos.</div>`;
+          return;
+        }
+        board.innerHTML = orders.map(order => renderAdminCard(order)).join('');
+      }
+
+      function initMinimalMode() {
+        const isMinimal = localStorage.getItem('dashboardMinimalMode') === 'true';
+        if (isMinimal) document.body.classList.add('minimal-mode');
+        updateToggleUI(isMinimal);
+      }
+
+      function toggleNoise() {
+        const isNowMinimal = document.body.classList.toggle('minimal-mode');
+        localStorage.setItem('dashboardMinimalMode', isNowMinimal);
+        updateToggleUI(isNowMinimal);
+      }
+
+      function updateToggleUI(isMinimal) {
+        const btn = document.getElementById('toggleDetailsBtn');
+        const icon = document.getElementById('toggleIcon');
+        const text = document.getElementById('toggleText');
+        if (isMinimal) {
+          btn.classList.remove('active');
+          icon.textContent = '👁️‍🗨️';
+          text.textContent = 'Mostrar ID/Loc';
+        } else {
+          btn.classList.add('active');
+          icon.textContent = '👁️';
+          text.textContent = 'Ocultar ID/Loc';
+        }
+      }
+
+      function renderAdminCard(o) {
+        const dateObj = new Date(o.timestamp);
+        const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const waitMins = Math.floor((Date.now() - dateObj.getTime()) / 60000);
+        const isUrgent = o.status !== 'LISTO' && waitMins >= 15;
+        
+        const hasSemi = o.unitInfo && (o.unitInfo.includes('/') || o.unitInfo.includes('+'));
+        let mainPlate = o.unitInfo || ''; let semiPlate = '';
+        if (hasSemi) { const p = o.unitInfo.split(/[\/+]/); mainPlate = p[0].trim(); semiPlate = p[1] ? p[1].trim() : ''; }
+        
+        const activeColor = o.uiColor || 'default';
+        const borderColor = activeColor === 'default' ? 'var(--border)' : `var(--${activeColor})`;
+        const initials = (o.opInfo || 'NN').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+        let itemsHtml = '<div class="item-list">';
+        (o.items || []).forEach(item => {
+          itemsHtml += `
+            <div class="item-row">
+              <div class="item-primary"><span class="item-name">${item.name}</span><span class="item-qty">x${item.qty}</span></div>
+              <div class="item-secondary"><span class="item-id">#${item.id || 'S/D'}</span><span class="item-loc">📍 ${item.loc || 'S/D'}</span></div>
+            </div>`;
+        });
+        itemsHtml += '</div>';
+
+        return `
+          <div class="card" id="card-${o.reqId}" style="border-left-color: ${borderColor};">
+            <div class="card-header">
+              <div class="unit-info">
+                <div class="unit-plate">${mainPlate} ${semiPlate ? `<span class="semi-plate">/ ${semiPlate}</span>` : ''}</div>
+                <div class="ot-display">OT <span class="ot-value">${o.otNumber || '--'}</span></div>
+              </div>
+              <div class="time-badge">
+                <span class="time-value ${isUrgent ? 'urgent' : ''}">${timeStr} ${isUrgent ? '⚠️' : ''}</span>
+                <span class="wait-mins ${isUrgent ? 'urgent' : ''}">${waitMins} min</span>
+              </div>
+            </div>
+            
+            <div class="card-body">
+              <div class="mechanic-row"><div class="mechanic-avatar">${initials}</div><span class="mechanic-name">${o.opInfo || 'Sin asignar'}</span></div>
+              ${itemsHtml}
+            </div>
+            
+            <div class="admin-panel">
+              <div class="color-picker">
+                <div class="swatch s-default" onclick="sendSignal('${o.reqId}', 'color', 'default')"></div>
+                <div class="swatch s-red" onclick="sendSignal('${o.reqId}', 'color', 'red')"></div>
+                <div class="swatch s-orange" onclick="sendSignal('${o.reqId}', 'color', 'orange')"></div>
+                <div class="swatch s-green" onclick="sendSignal('${o.reqId}', 'color', 'green')"></div>
+              </div>
+              <button id="btn-ping-${o.reqId}" class="btn-ping" onclick="sendSignal('${o.reqId}', 'ping', Date.now())">🔔 Ping</button>
+            </div>
+          </div>`;
+      }
+
+      function sendSignal(reqId, type, value) {
+        if (type === 'ping') {
+          const btn = document.getElementById(`btn-ping-${reqId}`);
+          if (btn) {
+            btn.textContent = "✓ Enviado";
+            btn.classList.add('success');
+            setTimeout(() => { btn.textContent = "🔔 Ping"; btn.classList.remove('success'); }, 2000);
+          }
+          google.script.run.sendOrderPing(reqId);
+        } else {
+          google.script.run.setOrderCardColor(reqId, value);
+        }
+      }
+
+      function updateClock() { document.getElementById('clock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+    </script>
+</body>
+</html>
