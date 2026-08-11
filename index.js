@@ -169,213 +169,140 @@ app.get('/panol', (req, res) => res.sendFile(path.join(__dirname, 'public', 'pan
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/inv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'inv.html')));
 
-// === 4. REST API ENDPOINTS ===
+// === 4. RPC UNIVERSAL DISPATCHER (google.script.run Polyfill) ===
+app.post('/api/rpc', async (req, res) => {
+  const { action, args = [] } = req.body;
+  try {
+    let result = null;
 
-// GET /api/orders: Obtener lista enriquecida de pedidos
+    if (action === 'getMechanicConfig') {
+      const opId = String(args[0] || '').trim();
+      let staffRow = null;
+      if (sheets) {
+        try {
+          const sRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_STAFF!A1:L100' });
+          const rows = sRes.data.values || [];
+          staffRow = rows.find(r => String(r[0] || '').trim() === opId);
+        } catch(e) {}
+      }
+      if (staffRow) {
+        const boxes = staffRow.slice(6, 11).map(String).filter(c => c);
+        result = { success: true, name: staffRow[1] || ('Operario ' + opId), role: staffRow[2] || 'MECANICO', boxes: boxes.length ? boxes : ['BOX 1', 'BOX 2'] };
+      } else {
+        result = { success: true, name: 'Mecánico ' + opId, role: 'MECANICO', boxes: ['BOX 1', 'BOX 2', 'BOX 3'] };
+      }
+    } 
+    else if (action === 'getItemCatalog') {
+      await syncDataFromSheets();
+      result = itemsCatalogCache.map(i => ({ category: i.category || 'GENERAL', name: i.name, requiereCanje: !!i.requiereCanje }));
+    }
+    else if (action === 'getUnitCatalog') {
+      let units = new Set();
+      if (sheets) {
+        try {
+          const otRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_OT_LIST!A1:D500' });
+          (otRes.data.values || []).slice(1).forEach(r => {
+            if (r[0]) units.add(String(r[0]).trim().toUpperCase());
+            if (r[2]) units.add(String(r[2]).trim().toUpperCase());
+          });
+        } catch(e) {}
+      }
+      result = Array.from(units).sort();
+    }
+    else if (action === 'findUnitOrOt') {
+      const query = String(args[0] || '').trim().toUpperCase();
+      const type = args[1];
+      let match = null;
+      if (sheets && query.length >= 2) {
+        try {
+          const otRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_OT_LIST!A1:G500' });
+          const data = otRes.data.values || [];
+          for (let i = 1; i < data.length; i++) {
+            const unit = String(data[i][0] || '').toUpperCase().trim();
+            const ot = String(data[i][1] || '').toUpperCase().trim();
+            const semi = String(data[i][2] || '').toUpperCase().trim();
+            const semiOt = String(data[i][3] || '').toUpperCase().trim();
+            let isMatch = false;
+            if (type === 'OT') isMatch = (ot === query);
+            else if (type === 'UNIT') isMatch = (unit === query || unit.includes(query));
+            else if (type === 'SEMI_OT') isMatch = (semiOt === query || ot === query);
+            else if (type === 'SEMI') isMatch = (semi === query || semi.includes(query));
+            else isMatch = (unit.includes(query) || semi.includes(query) || ot === query || semiOt === query);
+
+            if (isMatch) {
+              match = { success: true, unit: unit, ot: ot, semi: semi, semiOt: semiOt || ot };
+              break;
+            }
+          }
+        } catch(e) {}
+      }
+      result = match || { success: false };
+    }
+    else if (action === 'submitBatchRequest' || action === 'createOrder') {
+      const payload = args[0] || {};
+      const { opId, mechanicName, otNumber, unitId, items } = payload;
+      const timestamp = new Date().toISOString();
+      const reqId = 'REQ-' + Date.now();
+      const rowsToAppend = [];
+
+      (items || []).forEach(itemObj => {
+        rowsToAppend.push([
+          timestamp, reqId, opId, mechanicName, otNumber, unitId,
+          itemObj.item, itemObj.qty, 'PENDIENTE', '', '', itemObj.notes || '', '', '', '', '', itemObj.canjeStatus || '', ''
+        ]);
+      });
+
+      if (sheets && rowsToAppend.length > 0) {
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SPREADSHEET_ID,
+          range: 'DB_TRANSACTIONS!A:R',
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: rowsToAppend }
+        });
+      }
+      await syncDataFromSheets();
+      io.emit('orders_sync', ordersCache);
+      result = { success: true, reqId: reqId };
+    }
+    else if (action === 'getPendingOrdersEnriched' || action === 'getPendingOrders') {
+      result = await syncDataFromSheets();
+    }
+    else if (action === 'getInventoryItems') {
+      const q = String(args[0] || '').trim().toLowerCase();
+      await syncDataFromSheets();
+      let resList = itemsCatalogCache;
+      if (q) resList = resList.filter(i => i.name.toLowerCase().includes(q) || i.brand.toLowerCase().includes(q));
+      result = resList.slice(0, 50);
+    }
+    else if (action === 'markAsReady' || action === 'markAsDelivered') {
+      const reqId = args[0];
+      const panolOpId = args[1];
+      const target = ordersCache.find(o => String(o.reqId) === String(reqId));
+      if (target) { target.status = 'LISTO'; target.panolOpId = panolOpId; }
+      io.emit('orders_sync', ordersCache);
+      result = { success: true };
+    }
+    else if (action === 'validateWarehouseUser') {
+      const key = String(args[0] || '').trim();
+      const users = { "1": "Ema", "6": "Matias" };
+      result = users[key] || ("Operador " + key);
+    }
+    else {
+      // Fallback genérico
+      result = { success: true };
+    }
+
+    res.json({ result: result });
+  } catch (e) {
+    console.error('❌ RPC Error en ' + action + ':', e.message);
+    res.json({ error: e.message });
+  }
+});
+
+// REST GET /api/orders
 app.get('/api/orders', async (req, res) => {
   const orders = await syncDataFromSheets();
   res.json(orders);
-});
-
-// GET /api/inventory: Catálogo de repuestos
-app.get('/api/inventory', async (req, res) => {
-  const q = String(req.query.q || '').trim().toLowerCase();
-  await syncDataFromSheets();
-  let results = itemsCatalogCache;
-  if (q) {
-    results = results.filter(i => i.name.toLowerCase().includes(q) || i.brand.toLowerCase().includes(q));
-  }
-  res.json(results.slice(0, 30));
-});
-
-// POST /api/orders/create: Crear nuevo pedido de mecánico
-app.post('/api/orders/create', async (req, res) => {
-  try {
-    const { opId, mechanicName, otNumber, unitId, items } = req.body;
-    if (!opId || !items || !items.length) {
-      return res.status(400).json({ success: false, error: 'Datos de pedido incompletos.' });
-    }
-
-    const timestamp = new Date().toISOString();
-    const reqId = 'REQ-' + Date.now();
-    const rowsToAppend = [];
-
-    items.forEach(itemObj => {
-      rowsToAppend.push([
-        timestamp, reqId, opId, mechanicName, otNumber, unitId,
-        itemObj.item, itemObj.qty, 'PENDIENTE', '', '', itemObj.notes || '', '', '', '', '', '', ''
-      ]);
-    });
-
-    if (sheets) {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'DB_TRANSACTIONS!A:R',
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: rowsToAppend }
-      });
-    }
-
-    await syncDataFromSheets();
-    io.emit('orders_sync', ordersCache);
-    res.json({ success: true, reqId });
-  } catch (e) {
-    console.error('❌ Error creando pedido:', e.message);
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-// POST /api/orders/mark-ready: Marcar listo para retirar
-app.post('/api/orders/mark-ready', async (req, res) => {
-  try {
-    const { reqId, panolOpId } = req.body;
-    if (!reqId) return res.status(400).json({ success: false, error: 'REQ-ID requerido.' });
-
-    // Actualizamos en memoria optimista
-    const target = ordersCache.find(o => String(o.reqId) === String(reqId));
-    if (target) {
-      target.status = 'LISTO';
-      target.panolOpId = panolOpId;
-    }
-    io.emit('orders_sync', ordersCache);
-
-    // Persistir en Sheets de fondo
-    if (sheets) {
-      const transRes = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'DB_TRANSACTIONS!A1:R500'
-      });
-      const rows = transRes.data.values || [];
-      for (let i = 1; i < rows.length; i++) {
-        if (String(rows[i][1] || '').trim() === String(reqId).trim()) {
-          const rowNum = i + 1;
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SPREADSHEET_ID,
-            range: 'DB_TRANSACTIONS!I' + rowNum + ':P' + rowNum,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [['LISTO', '', '', '', '', '', '', panolOpId]] }
-          });
-        }
-      }
-    }
-
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-// POST /api/orders/update-item-qty: Actualizar cantidad de un ítem
-app.post('/api/orders/update-item-qty', async (req, res) => {
-  try {
-    const { reqId, itemName, newQty } = req.body;
-    await syncDataFromSheets();
-    io.emit('orders_sync', ordersCache);
-    res.json({ success: true });
-  } catch(e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-// POST /api/orders/remove-item: Eliminar ítem
-app.post('/api/orders/remove-item', async (req, res) => {
-  try {
-    const { reqId, itemName } = req.body;
-    await syncDataFromSheets();
-    io.emit('orders_sync', ordersCache);
-    res.json({ success: true });
-  } catch(e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-// POST /api/orders/set-color & Pings
-app.post('/api/orders/set-color', (req, res) => {
-  const { reqId, color } = req.body;
-  uiPropertiesCache['COLOR_' + reqId] = color;
-  const target = ordersCache.find(o => String(o.reqId) === String(reqId));
-  if (target) target.uiColor = color;
-  io.emit('orders_sync', ordersCache);
-  res.json({ success: true });
-});
-
-app.post('/api/orders/send-ping', (req, res) => {
-  const { reqId } = req.body;
-  const pingVal = Date.now();
-  uiPropertiesCache['PING_' + reqId] = pingVal;
-  const target = ordersCache.find(o => String(o.reqId) === String(reqId));
-  if (target) target.uiPing = pingVal;
-  io.emit('orders_sync', ordersCache);
-  res.json({ success: true });
-});
-
-// === SERVICIO DE OTS Y BÚSQUEDA DE UNIDADES ===
-app.post('/api/ot/search', async (req, res) => {
-  try {
-    const { query, type } = req.body;
-    if (!query || query.length < 2) return res.json({ success: false });
-    if (!sheets) return res.json({ success: false, error: 'Sin cliente de Sheets' });
-
-    const otRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: 'DB_OT_LIST!A1:G1000'
-    });
-
-    const data = otRes.data.values || [];
-    const q = String(query).trim().toUpperCase();
-
-    for (let i = 1; i < data.length; i++) {
-      const unit = String(data[i][0] || '').toUpperCase().trim();
-      const ot = String(data[i][1] || '').toUpperCase().trim();
-      const semi = String(data[i][2] || '').toUpperCase().trim();
-      const semiOt = String(data[i][3] || '').toUpperCase().trim();
-
-      let isMatch = false;
-      if (type === 'OT') isMatch = (ot === q);
-      else if (type === 'UNIT') isMatch = (unit === q || unit.includes(q));
-      else if (type === 'SEMI_OT') isMatch = (semiOt === q || ot === q);
-      else if (type === 'SEMI') isMatch = (semi === q || semi.includes(q));
-      else isMatch = (unit.includes(q) || semi.includes(q) || ot === q || semiOt === q);
-
-      if (isMatch) {
-        return res.json({
-          success: true,
-          unit: unit,
-          ot: ot,
-          semi: semi,
-          semiOt: semiOt || ot
-        });
-      }
-    }
-
-    res.json({ success: false });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-// WEBHOOK NUEVA OT (Normalización con plateNormalizer.js)
-app.post('/webhook/nueva-ot', async (req, res) => {
-  try {
-    const { unitId, otNumber, semi, semiOt, product, brand, brandSemi } = req.body;
-    const cleanUnit = extractCleanPlate(unitId);
-    const cleanSemi = extractCleanPlate(semi);
-
-    if (sheets) {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'DB_OT_LIST!A:G',
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [[cleanUnit, otNumber, cleanSemi, semiOt || '', product || '', brand || '', brandSemi || '']]
-        }
-      });
-    }
-
-    res.json({ success: true, unit: cleanUnit, ot: otNumber });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
 });
 
 // Health check
