@@ -7,6 +7,6 @@ services:
     startCommand: npm start
     envVars:
       - key: SPREADSHEET_ID
-        value: 1grLJZIYdWLRtjxK0kXobcaxj-1nZQaNnz23NU4oUDko
+        value: 1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc
       - key: NODE_ENV
         value: production

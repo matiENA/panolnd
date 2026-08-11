@@ -19,7 +19,7 @@ const io = new Server(server, {
 });
 
 // === 1. CREDENCIALES CENTRALIZADAS CON GOOGLE SHEETS ===
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1grLJZIYdWLRtjxK0kXobcaxj-1nZQaNnz23NU4oUDko';
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc';
 
 const DEFAULT_SERVICE_ACCOUNT = {
   type: "service_account",
@@ -307,6 +307,75 @@ app.post('/api/orders/send-ping', (req, res) => {
   if (target) target.uiPing = pingVal;
   io.emit('orders_sync', ordersCache);
   res.json({ success: true });
+});
+
+// === SERVICIO DE OTS Y BÚSQUEDA DE UNIDADES ===
+app.post('/api/ot/search', async (req, res) => {
+  try {
+    const { query, type } = req.body;
+    if (!query || query.length < 2) return res.json({ success: false });
+    if (!sheets) return res.json({ success: false, error: 'Sin cliente de Sheets' });
+
+    const otRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: 'DB_OT_LIST!A1:G1000'
+    });
+
+    const data = otRes.data.values || [];
+    const q = String(query).trim().toUpperCase();
+
+    for (let i = 1; i < data.length; i++) {
+      const unit = String(data[i][0] || '').toUpperCase().trim();
+      const ot = String(data[i][1] || '').toUpperCase().trim();
+      const semi = String(data[i][2] || '').toUpperCase().trim();
+      const semiOt = String(data[i][3] || '').toUpperCase().trim();
+
+      let isMatch = false;
+      if (type === 'OT') isMatch = (ot === q);
+      else if (type === 'UNIT') isMatch = (unit === q || unit.includes(q));
+      else if (type === 'SEMI_OT') isMatch = (semiOt === q || ot === q);
+      else if (type === 'SEMI') isMatch = (semi === q || semi.includes(q));
+      else isMatch = (unit.includes(q) || semi.includes(q) || ot === q || semiOt === q);
+
+      if (isMatch) {
+        return res.json({
+          success: true,
+          unit: unit,
+          ot: ot,
+          semi: semi,
+          semiOt: semiOt || ot
+        });
+      }
+    }
+
+    res.json({ success: false });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// WEBHOOK NUEVA OT (Normalización con plateNormalizer.js)
+app.post('/webhook/nueva-ot', async (req, res) => {
+  try {
+    const { unitId, otNumber, semi, semiOt, product, brand, brandSemi } = req.body;
+    const cleanUnit = extractCleanPlate(unitId);
+    const cleanSemi = extractCleanPlate(semi);
+
+    if (sheets) {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SPREADSHEET_ID,
+        range: 'DB_OT_LIST!A:G',
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [[cleanUnit, otNumber, cleanSemi, semiOt || '', product || '', brand || '', brandSemi || '']]
+        }
+      });
+    }
+
+    res.json({ success: true, unit: cleanUnit, ot: otNumber });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 // Health check
