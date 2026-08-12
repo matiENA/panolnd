@@ -6,10 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Monitor Pañol</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
-    
-    <script src="/socket.io/socket.io.min.js"></script>
-    <script src="/js/client-shim.js"></script>
-
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/client-shim.js"></script>
     <style>
 
       /* === NAVEGACIÓN TOP BAR === */
@@ -45,6 +43,7 @@
         .ch-left, .ch-right { border: none; border-bottom: 1px dashed var(--border); min-width: 100%; } 
       }
 
+      /* === SHAKE DE TARJETA (Alerta Global) === */
       .shake-card {
         animation: card-shake 0.5s cubic-bezier(.36,.07,.19,.97) both !important;
         border-left-color: var(--red) !important;
@@ -71,6 +70,7 @@
         --orange: #f59e0b;
         --border: #30363d;      
         
+        /* Product Colors */
         --color-metanol: #EF4444; --text-metanol: #ffffff; 
         --color-glp: #F59E0B;     --text-glp: #1f2937; 
         --color-campo: #10B981;   --text-campo: #ffffff; 
@@ -78,6 +78,7 @@
         --color-abastecedor: #D946EF; --text-abastecedor: #ffffff;
         --color-gral: #6B7280;   --text-gral: #ffffff;
 
+        /* Brand Colors */
         --color-iveco: #1d4ed8;
         --color-volvo: #0369a1;
         --color-scania: #b91c1c;
@@ -155,6 +156,7 @@
       }
 
       .control-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
       .search-box { flex: 1; min-width: 250px; max-width: 400px; position: relative; }
       .search-input {
         width: 100%; background: var(--card-bg); border: 1px solid var(--border);
@@ -163,10 +165,16 @@
       }
       .search-input:focus { outline: none; border-color: var(--blue); background: #1c2128; }
       .search-input::placeholder { color: var(--text-muted); }
-      .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 0.9rem; color: var(--text-muted); pointer-events: none; }
+      .search-icon {
+        position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+        font-size: 0.9rem; color: var(--text-muted); pointer-events: none;
+      }
 
       .filter-group { display: flex; gap: 6px; align-items: center; }
-      .filter-label { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px; }
+      .filter-label {
+        font-size: 0.7rem; font-weight: 700; color: var(--text-muted);
+        text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px;
+      }
       .filter-pill {
         padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700;
         border: 1px solid var(--border); background: transparent; color: var(--text-muted);
@@ -175,10 +183,18 @@
       .filter-pill:hover { border-color: var(--text-muted); color: var(--text-white); }
       .filter-pill.active { background: var(--blue); border-color: var(--blue); color: white; }
 
+      .filter-pill.active[data-product="METANOL"] { background: var(--color-metanol); border-color: var(--color-metanol); }
+      .filter-pill.active[data-product="GLP"] { background: var(--color-glp); border-color: var(--color-glp); color: var(--text-glp); }
+      .filter-pill.active[data-product="CAMPO"] { background: var(--color-campo); border-color: var(--color-campo); }
+      .filter-pill.active[data-product="LIVIANO"] { background: var(--color-liviano); border-color: var(--color-liviano); }
+      .filter-pill.active[data-product="ABASTECEDOR"] { background: var(--color-abastecedor); border-color: var(--color-abastecedor); }
+      .filter-pill.active[data-product="GRAL"] { background: var(--color-gral); border-color: var(--color-gral); }
+
       .sort-select {
         padding: 6px 28px 6px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 600;
-        border: 1px solid var(--border); background: var(--card-bg); color: var(--text);
-        cursor: pointer; appearance: none;
+        border: 1px solid var(--border);
+        background: var(--card-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238b949e' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E") no-repeat right 10px center;
+        color: var(--text); cursor: pointer; appearance: none;
       }
       .sort-select:focus { outline: none; border-color: var(--blue); }
 
@@ -200,11 +216,13 @@
         50% { box-shadow: 0 2px 20px rgba(218, 54, 51, 0.3); }
       }
 
+      .card.has-semi { border-left-color: var(--orange); }
+      .card.has-semi.status-LISTO { border-left-color: var(--green); }
+
       .card-header { padding: 16px 16px 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; }
       .unit-info { display: flex; flex-direction: column; gap: 4px; }
       .unit-plate { font-size: 1.3rem; font-weight: 900; color: var(--text-white); letter-spacing: 0.5px; line-height: 1.2; display: flex; align-items: center; gap: 8px; }
       .semi-plate { font-size: 0.85rem; color: var(--orange); font-weight: 700; }
-
       .ot-display { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; }
       .ot-label { color: var(--text-muted); font-weight: 600; }
       .ot-value { color: var(--blue); font-weight: 800; }
@@ -217,7 +235,17 @@
 
       .badges-row { display: flex; gap: 6px; padding: 8px 16px; flex-wrap: wrap; background: rgba(0,0,0,0.2); }
       .badge { font-size: 0.65rem; font-weight: 800; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
-      
+      .badge-metanol { background: var(--color-metanol); color: var(--text-metanol); }
+      .badge-glp { background: var(--color-glp); color: var(--text-glp); }
+      .badge-campo { background: var(--color-campo); color: var(--text-campo); }
+      .badge-liviano { background: var(--color-liviano); color: var(--text-liviano); }
+      .badge-abastecedor { background: var(--color-abastecedor); color: var(--text-abastecedor); }
+      .badge-gral { background: var(--color-gral); color: var(--text-gral); }
+      .badge-brand { background: rgba(255,255,255,0.1); color: var(--text); border: 1px solid var(--border); }
+      .badge-brand.iveco { background: rgba(29,78,216,0.2); color: #60a5fa; border-color: rgba(29,78,216,0.4); }
+      .badge-brand.volvo { background: rgba(3,105,161,0.2); color: #38bdf8; border-color: rgba(3,105,161,0.4); }
+      .badge-brand.scania { background: rgba(185,28,28,0.2); color: #f87171; border-color: rgba(185,28,28,0.4); }
+
       .card-body { padding: 12px 16px; flex-grow: 1; }
       .mechanic-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed var(--border); }
       .mechanic-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--blue); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800; }
@@ -226,19 +254,24 @@
       .item-list { display: flex; flex-direction: column; gap: 0; background: rgba(0,0,0,0.2); border-radius: 8px; overflow: hidden; }
       .item-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.05); }
       .item-row:last-child { border-bottom: none; }
+      .item-row.highlighted { background: rgba(35, 134, 54, 0.2); }
       .item-primary { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
       .item-name { font-weight: 700; color: var(--text-white); font-size: 0.9rem; line-height: 1.3; }
       .item-qty { background: var(--green); color: #fff; font-size: 0.75rem; font-weight: 800; padding: 3px 8px; border-radius: 4px; min-width: 32px; text-align: center; flex-shrink: 0; }
-
       .item-secondary { display: flex; justify-content: space-between; align-items: center; }
       .item-id { font-size: 0.85rem; color: #a5b4fc; font-family: monospace; font-weight: 700; background: rgba(165, 180, 252, 0.1); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px; }
       .item-loc { font-size: 0.75rem; color: #58a6ff; background: rgba(56, 139, 253, 0.1); border: 1px solid rgba(56, 139, 253, 0.3); border-radius: 4px; padding: 4px 8px; text-align: center; font-weight: 800; white-space: nowrap; }
 
+      .hidden-items { display: none; }
+      .hidden-items.show { display: block; }
+      .expand-btn { width: 100%; padding: 10px; background: rgba(56, 139, 253, 0.1); border: none; color: #58a6ff; font-size: 0.75rem; font-weight: 700; cursor: pointer; text-transform: uppercase; }
+      .expand-btn:hover { background: rgba(56, 139, 253, 0.2); }
       .note-box { margin-top: 10px; background: var(--note-bg); color: var(--note-text); padding: 8px 10px; border-radius: 6px; font-size: 0.8rem; border-left: 3px solid var(--note-border); display: flex; align-items: flex-start; gap: 6px; }
+
+      .card-footer { padding: 0; }
       .btn-action { width: 100%; padding: 14px; border: none; font-weight: 800; font-size: 0.9rem; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
       .btn-ready { background: var(--blue); color: white; }
       .btn-ready:hover { background: #4169c5; }
-      
       .status-complete { padding: 14px; background: rgba(35, 134, 54, 0.15); color: var(--green); font-weight: 800; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; }
 
       .empty-state { grid-column: 1 / -1; text-align: center; padding: 80px 20px; color: var(--text-muted); }
@@ -251,25 +284,49 @@
       @keyframes spin { to { transform: rotate(360deg); } }
 
       .action-group { display: flex; gap: 8px; padding: 12px 16px; background: rgba(0, 0, 0, 0.1); border-top: 1px solid var(--border); }
-      .panol-select { flex: 1; background: var(--bg); color: var(--text-white); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 0.85rem; font-weight: 600; outline: none; cursor: pointer; transition: all 0.2s; appearance: none; }
+      .panol-select { flex: 1; background: var(--bg); color: var(--text-white); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 0.85rem; font-weight: 600; outline: none; cursor: pointer; transition: all 0.2s; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23c9d1d9' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+      .panol-select:focus { border-color: var(--blue); }
+      .btn-action.btn-ready { flex: 1; padding: 10px; margin: 0; }
+
+      .shake-error { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; border-color: var(--red) !important; color: var(--red) !important; background-color: rgba(218, 54, 51, 0.1) !important; }
+      @keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }
+
       .btn-undo-ready { width: 100%; padding: 12px; background: rgba(245, 158, 11, 0.2); color: var(--orange); border: 1px solid var(--orange); border-radius: 8px; font-weight: 800; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.2s; }
+      .btn-undo-ready:hover { background: var(--orange); color: #000; }
+
       .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 9999; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
       .modal-overlay.active { opacity: 1; pointer-events: auto; }
       .modal-content { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 28px; min-width: 380px; max-width: 520px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.6); transform: translateY(20px); transition: transform 0.25s; }
+      .modal-overlay.active .modal-content { transform: translateY(0); }
       .modal-title { font-size: 1.1rem; font-weight: 900; color: var(--text-white); margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
       .modal-body { margin-bottom: 20px; }
+      .modal-body label { display: block; font-size: 0.8rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; }
+      .modal-body input[type="number"], .modal-body input[type="text"] { width: 100%; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text-white); font-size: 1rem; font-weight: 700; outline: none; transition: border-color 0.2s; }
+      .modal-body input:focus { border-color: var(--blue); }
+      .modal-info { background: rgba(56,139,253,0.08); border: 1px solid rgba(56,139,253,0.2); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.85rem; color: #58a6ff; font-weight: 600; }
       .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
       .modal-btn { padding: 10px 20px; border: none; border-radius: 8px; font-weight: 800; font-size: 0.85rem; cursor: pointer; transition: 0.2s; }
       .modal-btn.primary { background: var(--blue); color: white; }
+      .modal-btn.primary:hover { background: #4169c5; }
       .modal-btn.danger { background: rgba(218,54,51,0.15); color: var(--red); border: 1px solid var(--red); }
+      .modal-btn.danger:hover { background: var(--red); color: white; }
       .modal-btn.cancel { background: rgba(255,255,255,0.05); color: var(--text-muted); }
-      
+      .modal-btn.cancel:hover { background: rgba(255,255,255,0.1); color: var(--text-white); }
+
       .item-edit-controls { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
       .qty-btn { width: 28px; height: 28px; border: 1px solid var(--border); background: rgba(255,255,255,0.05); color: var(--text-white); border-radius: 6px; font-size: 1rem; font-weight: 900; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; line-height: 1; }
-      .qty-input { width: 42px; height: 28px; text-align: center; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text-white); font-size: 0.85rem; font-weight: 800; outline: none; }
+      .qty-btn:hover { background: var(--blue); border-color: var(--blue); }
+      .qty-btn:active { transform: scale(0.9); }
+      .qty-input { width: 42px; height: 28px; text-align: center; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text-white); font-size: 0.85rem; font-weight: 800; outline: none; -moz-appearance: textfield; }
+      .qty-input::-webkit-inner-spin-button, .qty-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+      .qty-input:focus { border-color: var(--blue); }
       .stock-badge { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+      .stock-badge.low { color: var(--orange); background: rgba(245,158,11,0.1); }
+      .stock-badge.out { color: var(--red); background: rgba(218,54,51,0.1); }
       .btn-remove-item { width: 24px; height: 24px; border: none; background: rgba(218,54,51,0.1); color: var(--red); border-radius: 4px; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.15s; opacity: 0.6; }
+      .btn-remove-item:hover { background: var(--red); color: white; opacity: 1; }
       .btn-add-item { width: 100%; padding: 8px; margin-top: 4px; background: rgba(56,139,253,0.08); border: 1px dashed rgba(56,139,253,0.3); color: #58a6ff; font-size: 0.8rem; font-weight: 700; border-radius: 6px; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+      .btn-add-item:hover { background: rgba(56,139,253,0.15); border-color: #58a6ff; }
 
       .search-results { max-height: 250px; overflow-y: auto; margin-top: 10px; }
       .search-result-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: 0.15s; border-radius: 6px; }
@@ -293,15 +350,25 @@
         </div>
 
         <div class="top-nav">
-          <button id="tab-despacho" class="nav-tab active" onclick="switchView('despacho')">📦 Despacho</button>
-          <button id="tab-returns" class="nav-tab" onclick="switchView('returns')">♻️ Devolución repuesto anterior <span id="returnsCount" class="badge">0</span></button>
-          <button id="tab-returns-new" class="nav-tab" onclick="switchView('returns-new')">↩️ Devolución repuesto nuevo <span id="returnsNewCount" class="badge">0</span></button>
+          <button id="tab-despacho" class="nav-tab active" onclick="switchView('despacho')">
+            📦 Despacho
+          </button>
+          <button id="tab-returns" class="nav-tab" onclick="switchView('returns')">
+            ♻️ Devolución repuesto anterior <span id="returnsCount" class="badge">0</span>
+          </button>
+          <button id="tab-returns-new" class="nav-tab" onclick="switchView('returns-new')">
+            ↩️ Devolución repuesto nuevo <span id="returnsNewCount" class="badge">0</span>
+          </button>
         </div>
 
         <div class="header-right">
           <div class="stats-row" id="statsRow">
-            <div class="stat-chip pending">⏳ Pendientes <span class="stat-count" id="pendingCount">0</span></div>
-            <div class="stat-chip ready">⚡ Listos <span class="stat-count" id="readyCount">0</span></div>
+            <div class="stat-chip pending">
+              ⏳ Pendientes <span class="stat-count" id="pendingCount">0</span>
+            </div>
+            <div class="stat-chip ready">
+              ⚡ Listos <span class="stat-count" id="readyCount">0</span>
+            </div>
           </div>
           <div id="clock">--:--</div>
         </div>
@@ -310,7 +377,9 @@
       <div id="controlBar" class="control-bar">
         <div class="search-box">
           <span class="search-icon">🔍</span>
-          <input type="text" id="searchInput" class="search-input" placeholder="Buscar patente, OT, mecánico o repuesto..." oninput="applyFilters()">
+          <input type="text" id="searchInput" class="search-input" 
+                 placeholder="Buscar patente, OT, mecánico o repuesto..." 
+                 oninput="applyFilters()">
         </div>
 
         <div class="filter-group">
@@ -319,6 +388,16 @@
           <button class="filter-pill" data-filter="status" data-value="PENDIENTE" onclick="setFilter('status', 'PENDIENTE', this)">⏳ Pendiente</button>
           <button class="filter-pill" data-filter="status" data-value="LISTO" onclick="setFilter('status', 'LISTO', this)">⚡ Listo</button>
           <button class="filter-pill" data-filter="status" data-value="ENTREGADO" onclick="setFilter('status', 'ENTREGADO', this)">📜 Historial</button>
+        </div>
+
+        <div class="filter-group">
+          <span class="filter-label">Producto:</span>
+          <button class="filter-pill active" data-filter="product" data-value="ALL" onclick="setFilter('product', 'ALL', this)">Todos</button>
+          <button class="filter-pill" data-filter="product" data-value="METANOL" data-product="METANOL" onclick="setFilter('product', 'METANOL', this)">Metanol</button>
+          <button class="filter-pill" data-filter="product" data-value="GLP" data-product="GLP" onclick="setFilter('product', 'GLP', this)">GLP</button>
+          <button class="filter-pill" data-filter="product" data-value="CAMPO" data-product="CAMPO" onclick="setFilter('product', 'CAMPO', this)">Campo</button>
+          <button class="filter-pill" data-filter="product" data-value="LIVIANO" data-product="LIVIANO" onclick="setFilter('product', 'LIVIANO', this)">Liviano</button>
+          <button class="filter-pill" data-filter="product" data-value="ABASTECEDOR" data-product="ABASTECEDOR" onclick="setFilter('product', 'ABASTECEDOR', this)">Abast.</button>
         </div>
 
         <select class="sort-select" id="sortSelect" onchange="applyFilters()">
@@ -342,7 +421,9 @@
     <main id="view-returns" style="display: none;">
       <div style="font-size:1.1rem; font-weight:800; color:var(--text-white); margin-bottom: 20px; display: flex; flex-direction: column; gap: 4px;">
         <span>Devolución de repuesto anterior</span>
-        <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">Compara la cantidad original solicitada (QTY) contra el estado declarado por el mecánico.</span>
+        <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">
+          Compara la cantidad original solicitada (QTY) contra el estado declarado por el mecánico.
+        </span>
       </div>
       <div id="returns-board"></div>
     </main>
@@ -350,14 +431,18 @@
     <main id="view-returns-new" style="display: none;">
       <div style="font-size:1.1rem; font-weight:800; color:var(--text-white); margin-bottom: 16px; display: flex; flex-direction: column; gap: 4px;">
         <span>↩️ Devolución de repuesto nuevo (sin uso)</span>
-        <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">Reintegra a stock de DB_ITEMS aquellos repuestos nuevos entregados que hayan sido solicitados para devolución por el mecánico.</span>
+        <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">
+          Reintegra a stock de DB_ITEMS aquellos repuestos nuevos entregados que hayan sido solicitados para devolución por el mecánico.
+        </span>
       </div>
 
       <div class="filter-group" style="margin-bottom: 20px;">
         <button class="filter-pill active" id="btn-subtab-new-pending" onclick="switchNewReturnsSubtab('pending', this)">
           ⏳ Pendientes <span id="newPendingBadge" class="badge" style="background:var(--orange); color:#000;">0</span>
         </button>
-        <button class="filter-pill" id="btn-subtab-new-history" onclick="switchNewReturnsSubtab('history', this)">📜 Historial</button>
+        <button class="filter-pill" id="btn-subtab-new-history" onclick="switchNewReturnsSubtab('history', this)">
+          📜 Historial
+        </button>
       </div>
 
       <div id="returns-new-board"></div>
@@ -371,25 +456,32 @@
       </div>
     </div>
 
- <script>
+    <script>
       let allOrders = [];
       let expandedCards = new Set();
       let panolStaffList = []; 
       let pendingSelections = {}; 
+      let dirtyOrders = {};
       let undoTimers = {};
       let filters = { status: 'ALL', product: 'ALL', search: '' };
       let pollingInterval; 
       let isInteracting = false;
+      let lastPingMem = {};
 
       function initApp() {
-        panolStaffList = [
-          { id: '101', name: 'Pañolero Turno A' },
-          { id: '102', name: 'Pañolero Turno B' },
-          { id: '103', name: 'Pañolero Noche' }
-        ];
-        loadData();
-        resumePolling();
-        setInterval(updateClock, 1000);
+        google.script.run
+          .withSuccessHandler(staff => {
+            panolStaffList = staff || [];
+            loadData();
+            resumePolling();
+            setInterval(updateClock, 1000);
+          })
+          .withFailureHandler(err => {
+            console.error("Error al cargar staff:", err);
+            loadData();
+            resumePolling();
+          })
+          .getPanolStaff();
       }
 
       initApp();
@@ -419,34 +511,70 @@
         const board = document.getElementById('board');
         const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
         const sortBy = document.getElementById('sortSelect').value;
+        
         filters.search = searchTerm;
+
         let filtered = allOrders.filter(order => {
           if (filters.status === 'ALL') {
             if (order.status === 'ENTREGADO') return false;
           } else {
             if (order.status !== filters.status) return false;
           }
+          
+          if (filters.product !== 'ALL') {
+            const orderProduct = (order.product || '').toUpperCase();
+            if (orderProduct !== filters.product) return false;
+          }
           if (searchTerm) {
             const matchUnit = (order.unitInfo || '').toLowerCase().includes(searchTerm);
             const matchOT = String(order.otNumber || '').includes(searchTerm);
             const matchMech = (order.opInfo || '').toLowerCase().includes(searchTerm);
             const matchItem = order.items.some(i => (i.name || '').toLowerCase().includes(searchTerm));
-            if (!matchUnit && !matchOT && !matchMech && !matchItem) return false;
+            const matchBrand = (order.brand || '').toLowerCase().includes(searchTerm);
+            const matchProduct = (order.product || '').toLowerCase().includes(searchTerm);
+            
+            if (!matchUnit && !matchOT && !matchMech && !matchItem && !matchBrand && !matchProduct) return false;
           }
           return true;
         });
+
         filtered = sortOrders(filtered, sortBy);
         renderCards(filtered);
       }
 
       function sortOrders(orders, sortBy) {
-        return [...orders].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        const now = Date.now();
+        return [...orders].sort((a, b) => {
+          switch (sortBy) {
+            case 'time-asc': return new Date(a.timestamp) - new Date(b.timestamp);
+            case 'time-desc': return new Date(b.timestamp) - new Date(a.timestamp);
+            case 'mechanic': return (a.opInfo || '').localeCompare(b.opInfo || '');
+            case 'urgent':
+              const aWait = now - new Date(a.timestamp).getTime();
+              const bWait = now - new Date(b.timestamp).getTime();
+              const aUrgent = a.status !== 'LISTO' && aWait > 15 * 60000;
+              const bUrgent = b.status !== 'LISTO' && bWait > 15 * 60000;
+              if (aUrgent && !bUrgent) return -1;
+              if (!aUrgent && bUrgent) return 1;
+              return bWait - aWait;
+            default: return 0;
+          }
+        });
       }
 
       function renderCards(orders) {
         const board = document.getElementById('board');
         if (!orders || orders.length === 0) {
-          board.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">¡Todo al día!</div><div class="empty-text">No hay pedidos pendientes</div></div>`;
+          const msg = filters.search || filters.status !== 'ALL' || filters.product !== 'ALL'
+            ? { icon: '🔍', title: 'Sin resultados', text: 'Intenta con otros filtros' }
+            : { icon: '✅', title: '¡Todo al día!', text: 'No hay pedidos pendientes' };
+          
+          board.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-icon">${msg.icon}</div>
+              <div class="empty-title">${msg.title}</div>
+              <div class="empty-text">${msg.text}</div>
+            </div>`;
           return;
         }
         board.innerHTML = orders.map(order => renderCard(order)).join('');
@@ -456,30 +584,260 @@
         const isReady = o.status === 'LISTO';
         const dateObj = new Date(o.timestamp);
         const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        const now = Date.now();
+        const waitMins = Math.floor((now - dateObj.getTime()) / 60000);
+        const isUrgent = !isReady && waitMins >= 15;
+        
+        const hasSemi = o.unitInfo && (o.unitInfo.includes('/') || o.unitInfo.includes('+'));
+        let mainPlate = o.unitInfo || '';
+        let semiPlate = '';
+        if (hasSemi) {
+          const parts = o.unitInfo.split(/[\/+]/);
+          mainPlate = parts[0].trim();
+          semiPlate = parts[1] ? parts[1].trim() : '';
+        }
+        
         let cardClass = `card status-${o.status}`;
+        if (isUrgent) cardClass += ' urgent';
+        if (hasSemi) cardClass += ' has-semi';
+
+        const productBadge = o.product ? `<span class="badge badge-${o.product.toLowerCase()}">${o.product}</span>` : '';
+        const brandBadge = o.brand ? `<span class="badge badge-brand ${o.brand.toLowerCase()}">${o.brand}</span>` : '';
+        const initials = (o.opInfo || 'NN').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+        const MAX_VISIBLE = 3;
+        const isExpanded = expandedCards.has(o.reqId);
+        
         let itemsHtml = '<div class="item-list">';
-        (o.items || []).forEach((item, idx) => {
-          itemsHtml += `<div class="item-row"><div class="item-primary"><span class="item-name">${item.name}</span><span class="item-qty">x${item.qty}</span></div></div>`;
+        const isPendiente = o.status === 'PENDIENTE';
+        o.items.forEach((item, idx) => {
+          const isHighlighted = filters.search && item.name.toLowerCase().includes(filters.search);
+          const highlightClass = isHighlighted ? 'highlighted' : '';
+          
+          if (idx === MAX_VISIBLE && !isExpanded) {
+            itemsHtml += `<div class="hidden-items" id="hidden-${o.reqId}">`;
+          }
+          
+          const itemId = item.id || 'S/D';
+          const itemLoc = item.loc || 'S/D';
+          const safeItemName = item.name.replace(/'/g, "\\'");
+
+          let qtyHtml;
+          if (isPendiente) {
+            const currentStock = item.stock || 0;
+            const stockClass = currentStock <= 0 ? 'out' : currentStock <= 3 ? 'low' : '';
+            qtyHtml = `
+              <div class="item-edit-controls">
+                <button class="qty-btn" onclick="changeItemQty('${o.reqId}','${safeItemName}',${item.qty},-1)" title="Reducir">−</button>
+                <input type="number" class="qty-input" id="qi-${o.reqId}-${idx}" value="${item.qty}" min="1"
+                       onchange="updateItemQty('${o.reqId}','${safeItemName}',this.value,${item.qty})"
+                       onfocus="pausePolling()" onblur="resumePolling()">
+                <button class="qty-btn" onclick="changeItemQty('${o.reqId}','${safeItemName}',${item.qty},1)" title="Aumentar">+</button>
+                <span class="stock-badge ${stockClass}" title="Stock actual en estantería">📦${currentStock}</span>
+                <button class="btn-remove-item" onclick="removeItem('${o.reqId}','${safeItemName}')" title="Eliminar ítem">✕</button>
+              </div>`;
+          } else {
+            qtyHtml = `<span class="item-qty">x${item.qty}</span>`;
+          }
+
+          itemsHtml += `
+            <div class="item-row ${highlightClass}">
+              <div class="item-primary">
+                <span class="item-name">${item.name}</span>
+                ${qtyHtml}
+              </div>
+              <div class="item-secondary">
+                <span class="item-id" title="ID de Artículo">#${itemId}</span>
+                <span class="item-loc" title="Ubicación física">📍 ${itemLoc}</span>
+              </div>
+            </div>`;
         });
+        
+        if (o.items.length > MAX_VISIBLE) {
+          if (!isExpanded) itemsHtml += '</div>';
+          const remaining = o.items.length - MAX_VISIBLE;
+          const btnText = isExpanded ? '▲ Ver menos' : `▼ Ver ${remaining} más`;
+          itemsHtml += `<button class="expand-btn" onclick="toggleExpand('${o.reqId}')">${btnText}</button>`;
+        }
+
+        if (isPendiente) {
+          itemsHtml += `<button class="btn-add-item" onclick="openAddItemModal('${o.reqId}')">＋ Agregar ítem</button>`;
+        }
         itemsHtml += '</div>';
 
-        let footerHtml = isReady 
-          ? `<div class="status-complete">⚡ LISTO PARA ENTREGAR</div>`
-          : `<div class="action-group"><button class="btn-action btn-ready" onclick="markReady('${o.reqId}')">✓ LISTO</button></div>`;
+        const noteHtml = o.notes && o.notes.trim() ? `<div class="note-box">📝 ${o.notes}</div>` : '';
+
+        const savedOpId = pendingSelections[o.reqId];
+        const defaultSelected = !savedOpId ? 'selected' : '';
+
+        const staffOptions = panolStaffList.map(s => {
+          const isSelected = savedOpId === String(s.id) ? 'selected' : '';
+          return `<option value="${s.id}" ${isSelected}>${s.name}</option>`;
+        }).join('');
+
+        const isDelivered = o.status === 'ENTREGADO';
+        let footerHtml;
+        if (isDelivered) {
+          footerHtml = `<div class="status-complete" style="background: rgba(139, 148, 158, 0.12); color: #8b949e;">✅ ENTREGADO Y CERRADO</div>`;
+        } else if (isReady) {
+          footerHtml = `<div class="status-complete">⚡ LISTO PARA ENTREGAR</div>`;
+        } else if (undoTimers[o.reqId]) {
+          const secs = undoTimers[o.reqId].secondsLeft || 5;
+          footerHtml = `<div class="action-group" style="padding: 10px 16px;">
+               <button class="btn-undo-ready" onclick="cancelMarkReady('${o.reqId}')" title="Clic para cancelar y mantener en PENDIENTE">
+                 <span>↩️ DESHACER</span>
+                 <span style="background: rgba(0,0,0,0.3); padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">${secs}s</span>
+               </button>
+             </div>`;
+        } else {
+          footerHtml = `<div class="action-group">
+               <select id="panol-op-${o.reqId}" 
+                       class="panol-select" 
+                       onchange="pendingSelections['${o.reqId}'] = this.value"
+                       onfocus="pausePolling()" 
+                       onblur="resumePolling()">
+                 <option value="" disabled ${defaultSelected}>👤 Tu nombre...</option>
+                 ${staffOptions}
+               </select>
+               <button class="btn-action btn-ready" onclick="markReady('${o.reqId}')">✓ LISTO</button>
+             </div>`;
+        }
 
         return `
           <div class="${cardClass}" id="card-${o.reqId}">
             <div class="card-header">
-              <div class="unit-info"><div class="unit-plate">${o.unitInfo || 'S/D'}</div><div class="ot-display"><span class="ot-label">OT</span><span class="ot-value">${o.otNumber || '--'}</span></div></div>
-              <div class="time-badge"><span class="time-value">${timeStr}</span></div>
+              <div class="unit-info">
+                <div class="unit-plate">
+                  ${mainPlate}
+                  ${semiPlate ? `<span class="semi-plate">/ ${semiPlate}</span>` : ''}
+                </div>
+                <div class="ot-display">
+                  <span class="ot-label">OT</span>
+                  <span class="ot-value">${o.otNumber || '--'}</span>
+                </div>
+              </div>
+              <div class="time-badge">
+                <span class="time-value ${isUrgent ? 'urgent' : ''}">${timeStr} ${isUrgent ? '⚠️' : ''}</span>
+                <span class="wait-mins ${isUrgent ? 'urgent' : ''}">${waitMins} min</span>
+              </div>
             </div>
-            <div class="card-body"><div class="mechanic-row"><span class="mechanic-name">${o.opInfo || 'Mecánico'}</span></div>${itemsHtml}</div>
+            
+            ${productBadge || brandBadge ? `
+              <div class="badges-row">
+                ${productBadge}
+                ${brandBadge}
+              </div>
+            ` : ''}
+            
+            <div class="card-body">
+              <div class="mechanic-row">
+                <div class="mechanic-avatar">${initials}</div>
+                <span class="mechanic-name">${o.opInfo || 'Sin asignar'}</span>
+              </div>
+              ${itemsHtml}
+              ${noteHtml}
+            </div>
+            
             <div class="card-footer">${footerHtml}</div>
           </div>`;
       }
 
+      function toggleExpand(reqId) {
+        if (expandedCards.has(reqId)) {
+          expandedCards.delete(reqId);
+        } else {
+          expandedCards.add(reqId);
+        }
+        applyFilters(); 
+      }
+
       function markReady(reqId) {
-        google.script.run.withSuccessHandler(() => loadData()).markAsReady(reqId, '101');
+        const selectEl = document.getElementById(`panol-op-${reqId}`);
+        const panolOpId = selectEl ? selectEl.value : null;
+
+        if (!panolOpId) {
+          if (selectEl) {
+            selectEl.classList.remove('shake-error');
+            void selectEl.offsetWidth; 
+            selectEl.classList.add('shake-error');
+          }
+          return;
+        }
+
+        pendingSelections[reqId] = panolOpId;
+        startUndoTimer(reqId, panolOpId);
+      }
+
+      function startUndoTimer(reqId, panolOpId) {
+        pausePolling();
+        let secondsLeft = 5;
+
+        const updateFooterUI = () => {
+          const cardFooter = document.querySelector(`#card-${reqId} .card-footer`);
+          if (cardFooter) {
+            cardFooter.innerHTML = `
+              <div class="action-group" style="padding: 10px 16px;">
+                <button class="btn-undo-ready" onclick="cancelMarkReady('${reqId}')" title="Clic para cancelar y mantener en PENDIENTE">
+                  <span>↩️ DESHACER</span>
+                  <span style="background: rgba(0,0,0,0.3); padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">${secondsLeft}s</span>
+                </button>
+              </div>`;
+          }
+        };
+
+        updateFooterUI();
+
+        const intervalId = setInterval(() => {
+          secondsLeft--;
+          if (undoTimers[reqId]) {
+            undoTimers[reqId].secondsLeft = secondsLeft;
+          }
+          if (secondsLeft > 0) {
+            updateFooterUI();
+          } else {
+            clearInterval(intervalId);
+            delete undoTimers[reqId];
+            executeMarkReady(reqId, panolOpId);
+          }
+        }, 1000);
+
+        undoTimers[reqId] = {
+          intervalId: intervalId,
+          panolOpId: panolOpId,
+          secondsLeft: 5
+        };
+      }
+
+      function cancelMarkReady(reqId) {
+        if (undoTimers[reqId]) {
+          clearInterval(undoTimers[reqId].intervalId);
+          delete undoTimers[reqId];
+        }
+        applyFilters();
+        resumePolling();
+      }
+
+      function executeMarkReady(reqId, panolOpId) {
+        const card = document.getElementById(`card-${reqId}`);
+        if (card) {
+          card.style.opacity = '0.3';
+          card.style.pointerEvents = 'none';
+        }
+        
+        google.script.run
+          .withSuccessHandler(() => {
+            delete pendingSelections[reqId];
+            loadData();
+            resumePolling();
+          })
+          .withFailureHandler(err => {
+            console.error('Mark ready error:', err);
+            if (card) { card.style.opacity = '1'; card.style.pointerEvents = 'auto'; }
+            applyFilters();
+            resumePolling();
+          })
+          .markAsReady(reqId, panolOpId); 
       }
 
       function updateStats() {
@@ -490,11 +848,20 @@
       }
 
       function updateClock() {
-        document.getElementById('clock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        document.getElementById('clock').textContent = 
+          new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       }
 
-      function pausePolling() { isInteracting = true; clearInterval(pollingInterval); }
-      function resumePolling() { isInteracting = false; clearInterval(pollingInterval); pollingInterval = setInterval(loadData, 5000); }
+      function pausePolling() {
+        isInteracting = true;
+        clearInterval(pollingInterval);
+      }
+
+      function resumePolling() {
+        isInteracting = false;
+        clearInterval(pollingInterval);
+        pollingInterval = setInterval(loadData, 5000);
+      }
 
       let knownReqIds = null;
       let titleFlashInterval = null;
@@ -502,77 +869,714 @@
       function updateBrowserFavicon(hasAlert) {
         let faviconEl = document.getElementById('favicon');
         if (!faviconEl) {
-          faviconEl = document.createElement('link'); faviconEl.id = 'favicon'; faviconEl.rel = 'icon'; faviconEl.type = 'image/png'; document.head.appendChild(faviconEl);
+          faviconEl = document.createElement('link');
+          faviconEl.id = 'favicon';
+          faviconEl.rel = 'icon';
+          faviconEl.type = 'image/png';
+          document.head.appendChild(faviconEl);
         }
+
         try {
-          const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64; const ctx = canvas.getContext('2d');
-          ctx.font = '46px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🔧', 32, 34);
-          if (hasAlert) { ctx.beginPath(); ctx.arc(48, 16, 12, 0, 2 * Math.PI); ctx.fillStyle = '#f85149'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#0d1117'; ctx.stroke(); }
+          const canvas = document.createElement('canvas');
+          canvas.width = 64;
+          canvas.height = 64;
+          const ctx = canvas.getContext('2d');
+
+          ctx.font = '46px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🔧', 32, 34);
+
+          if (hasAlert) {
+            ctx.beginPath();
+            ctx.arc(48, 16, 12, 0, 2 * Math.PI);
+            ctx.fillStyle = '#f85149';
+            ctx.fill();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#0d1117';
+            ctx.stroke();
+          }
           faviconEl.href = canvas.toDataURL('image/png');
         } catch(e) {}
       }
 
       function setDocumentTitle(titleText) {
         document.title = titleText;
-        try { if (window.top && window.top !== window) window.top.document.title = titleText; } catch(e) {}
+        try {
+          if (window.top && window.top !== window) {
+            window.top.document.title = titleText;
+          }
+        } catch(e) {}
+      }
+
+      if ("Notification" in window && Notification.permission === "default") {
+        document.addEventListener('click', function requestNotifPerm() {
+          Notification.requestPermission();
+          document.removeEventListener('click', requestNotifPerm);
+        }, { once: true });
       }
 
       function checkForNewCardsAlert(orders) {
         const pendingOrders = (orders || []).filter(o => o.status === 'PENDIENTE');
         const currentPendingIds = new Set(pendingOrders.map(o => String(o.reqId)));
-        if (knownReqIds === null) { knownReqIds = currentPendingIds; return; }
+
+        if (knownReqIds === null) {
+          knownReqIds = currentPendingIds;
+          return;
+        }
+
         let brandNewCard = null;
-        pendingOrders.forEach(o => { if (!knownReqIds.has(String(o.reqId))) brandNewCard = o; });
+        pendingOrders.forEach(o => {
+          if (!knownReqIds.has(String(o.reqId))) {
+            brandNewCard = o;
+          }
+        });
+
         knownReqIds = currentPendingIds;
-        if (brandNewCard) triggerWindowsTaskbarAlert(brandNewCard);
+
+        if (brandNewCard) {
+          triggerWindowsTaskbarAlert(brandNewCard);
+        }
       }
 
       function triggerWindowsTaskbarAlert(order) {
         order = order || { opInfo: 'Mecánico', unitInfo: 'General' };
+
         try { window.focus(); } catch(e) {}
         try { if (window.top) window.top.focus(); } catch(e) {}
-        if ('setAppBadge' in navigator) { try { navigator.setAppBadge(1); } catch(e) {} }
+
+        if ('setAppBadge' in navigator) {
+          try { navigator.setAppBadge(1); } catch(e) {}
+        }
+
         if ("Notification" in window && Notification.permission === "granted") {
           try {
-            const notif = new Notification('🔧 Monitor Pañol: ¡Nuevo Pedido!', { body: `Solicitud de ${order.opInfo || 'Mecánico'} - Unidad: ${order.unitInfo || 'S/D'}`, tag: 'new-card-alert', requireInteraction: true });
-            notif.onclick = function() { clearWindowsTaskbarAlert(); };
-          } catch(e) {}
+            const notif = new Notification('🔧 Monitor Pañol: ¡Nuevo Pedido!', {
+              body: `Solicitud de ${order.opInfo || 'Mecánico'} - Unidad: ${order.unitInfo || 'S/D'}`,
+              tag: 'new-card-alert',
+              requireInteraction: true
+            });
+            notif.onclick = function() {
+              try { window.focus(); } catch(e) {}
+              try { if (window.top) window.top.focus(); } catch(e) {}
+              clearWindowsTaskbarAlert();
+            };
+          } catch(e) { console.log('Notification error:', e); }
         }
+
         clearInterval(titleFlashInterval);
         let flashState = false;
         titleFlashInterval = setInterval(() => {
           const titleStr = flashState ? '🔴 (1) ¡NUEVO PEDIDO! | Pañol' : '🔧 Monitor Pañol';
-          setDocumentTitle(titleStr); updateBrowserFavicon(flashState); flashState = !flashState;
+          setDocumentTitle(titleStr);
+          updateBrowserFavicon(flashState);
+          flashState = !flashState;
         }, 500);
+
+        playAlertSound();
       }
 
       function clearWindowsTaskbarAlert() {
-        if (titleFlashInterval) { clearInterval(titleFlashInterval); titleFlashInterval = null; setDocumentTitle('Monitor Pañol'); updateBrowserFavicon(false); }
-        if ('clearAppBadge' in navigator) { try { navigator.clearAppBadge(); } catch(e) {} }
+        if (titleFlashInterval) {
+          clearInterval(titleFlashInterval);
+          titleFlashInterval = null;
+          setDocumentTitle('Monitor Pañol');
+          updateBrowserFavicon(false);
+        }
+        if ('clearAppBadge' in navigator) {
+          try { navigator.clearAppBadge(); } catch(e) {}
+        }
       }
+
+      function playAlertSound() {
+        try {
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.3);
+          gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.3);
+        } catch(e) {}
+      }
+
+      window.addEventListener('focus', clearWindowsTaskbarAlert);
+      document.addEventListener('click', clearWindowsTaskbarAlert);
 
       function onDataReceived(orders) {
         allOrders = orders || [];
         checkForNewCardsAlert(allOrders);
         updateStats();
-        applyFilters();
+        
+        applyFilters(); 
         renderReturnsBoard();
         renderReturnsNewBoard();
         updateClock();
-      }
+
+        allOrders.forEach(o => {
+          const card = document.getElementById(`card-${o.reqId}`);
+          if (!card) return;
+
+          if (o.uiColor && o.uiColor !== 'default') {
+             card.style.borderLeftColor = `var(--${o.uiColor})`;
+          }
+
+          if (o.uiPing && String(o.uiPing) !== String(lastPingMem[o.reqId])) {
+             lastPingMem[o.reqId] = String(o.uiPing);
+             card.classList.add('shake-card');
+             setTimeout(() => {
+                card.classList.remove('shake-card');
+             }, 1000);
+          }
+        });
+      }      
 
       function switchView(view) {
-        document.getElementById('tab-despacho').classList.toggle('active', view === 'despacho');
-        document.getElementById('tab-returns').classList.toggle('active', view === 'returns');
-        document.getElementById('tab-returns-new').classList.toggle('active', view === 'returns-new');
-        document.getElementById('view-despacho').style.display = view === 'despacho' ? 'block' : 'none';
-        document.getElementById('view-returns').style.display = view === 'returns' ? 'block' : 'none';
-        document.getElementById('view-returns-new').style.display = view === 'returns-new' ? 'block' : 'none';
+        const isDespacho = view === 'despacho';
+        const isReturns = view === 'returns';
+        const isReturnsNew = view === 'returns-new';
+
+        document.getElementById('tab-despacho').classList.toggle('active', isDespacho);
+        document.getElementById('tab-returns').classList.toggle('active', isReturns);
+        document.getElementById('tab-returns-new').classList.toggle('active', isReturnsNew);
+        
+        document.getElementById('view-despacho').style.display = isDespacho ? 'block' : 'none';
+        document.getElementById('controlBar').style.display = isDespacho ? 'flex' : 'none';
+        document.getElementById('view-returns').style.display = isReturns ? 'block' : 'none';
+        document.getElementById('view-returns-new').style.display = isReturnsNew ? 'block' : 'none';
+
+        if (isReturnsNew) {
+          renderReturnsNewBoard();
+        }
       }
 
-      function renderReturnsBoard() {}
-      function renderReturnsNewBoard() {}
-      function switchNewReturnsSubtab() {}
+      function renderReturnsBoard() {
+        const board = document.getElementById('returns-board');
+        let html = '';
+        let pendingReturnsCount = 0;
+
+        allOrders.forEach(o => {
+          const returnItems = o.items.filter(i => i.requiereCanje || (i.estadoCanje && i.estadoCanje !== ""));
+          const hasPendingItems = returnItems.some(i => !i.panolConfirmacion.includes('OK') && !i.panolConfirmacion.includes('INCOMPLETO'));
+          
+          if (returnItems.length > 0 && hasPendingItems) {
+            pendingReturnsCount++;
+            
+            const itemsHtml = returnItems.map((i, idx) => {
+              const promisedText = i.estadoCanje || "Sin promesar";
+              const badgeColor = promisedText.includes('FALTA') ? 'var(--orange)' : 'var(--green)';
+              const safeItemName = i.name.replace(/'/g, "\\'");
+              const itemTag = `${o.reqId}-${idx}`;
+              
+              const isResolved = i.panolConfirmacion.includes('OK') || i.panolConfirmacion.includes('INCOMPLETO');
+
+              if (isResolved) {
+                const isOk = i.panolConfirmacion.includes('OK');
+                const statusColor = isOk ? 'var(--green)' : 'var(--orange)';
+                const statusLabel = isOk ? '✓ AUDITADO OK' : '⚠️ AUDITADO INCOMPLETO';
+
+                return `
+                  <div id="ret-item-${itemTag}" style="margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; opacity: 0.45; filter: grayscale(0.2); pointer-events: none;">
+                    <div style="font-size: 1.15rem; font-weight: 900; color: var(--text-white); letter-spacing: -0.3px;">
+                      • ${i.name} <span style="color: var(--text-muted); font-weight: 600; font-size: 0.9rem;">(Pedido Original: x${i.qty})</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: ${statusColor}; font-weight: 800; margin-left: 14px; margin-top: 6px;">
+                      ${statusLabel}: [${i.panolConfirmacion}]
+                    </div>
+                  </div>`;
+              }
+              
+              let returnedQty = i.qty; 
+              const partialMatch = promisedText.match(/(\d+)\s*entregada/i);
+              if (partialMatch && partialMatch[1]) {
+                  returnedQty = parseInt(partialMatch[1], 10);
+              } else if (promisedText.startsWith('FALTA:') || promisedText === 'FALTA') {
+                  returnedQty = 0;
+              }
+
+              const btnOkText = `✓ RECIBÍ ${returnedQty}`;
+              const btnOkTooltip = `Confirmar que recibiste exactamente ${returnedQty} unidad(es) de las ${i.qty} solicitadas originalmente.`;
+              const btnIncTooltip = `Reportar que NO recibiste las ${returnedQty} unidad(es) declaradas por el mecánico, o hay otro problema.`;
+
+              return `
+                <div id="ret-item-${itemTag}" style="margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; transition: opacity 0.2s;">
+                  <div style="font-size: 1.15rem; font-weight: 900; color: var(--text-white); letter-spacing: -0.3px;">
+                    • ${i.name} <span style="color: var(--text-muted); font-weight: 600; font-size: 0.9rem;">(Pedido Original: x${i.qty})</span>
+                  </div>
+                  
+                  <div style="font-size: 0.85rem; color: ${badgeColor}; font-weight: 800; margin-left: 14px; margin-top: 4px; margin-bottom: 12px;">
+                    ↳ Mecánico indica: [${promisedText}]
+                  </div>
+
+                  <div style="display:flex; gap:8px; margin-left: 14px;">
+                    <button class="btn-ch ok" 
+                            title="${btnOkTooltip}" 
+                            onclick="submitReturnAudit('${o.reqId}', '${safeItemName}', 'OK', null, '${itemTag}')"
+                            style="padding: 8px 12px; font-size: 0.8rem;">
+                        ${btnOkText}
+                    </button>
+                    
+                    <button class="btn-ch inc" 
+                            title="${btnIncTooltip}" 
+                            onclick="openIncompletePopup('${o.reqId}', '${safeItemName}', ${i.qty}, ${returnedQty}, '${itemTag}')"
+                            style="padding: 8px 12px; font-size: 0.8rem;">
+                        ⚠️ INCOMPLETO
+                    </button>
+                  </div>
+                </div>`;
+            }).join('');
+
+            const savedOpId = pendingSelections[`ret_${o.reqId}`] || o.panolOpId || '';
+            const staffOptions = panolStaffList.map(s => `<option value="${s.id}" ${savedOpId === String(s.id) ? 'selected' : ''}>${s.name}</option>`).join('');
+
+            html += `
+              <div class="card-horizontal" id="ret-card-${o.reqId}">
+                <div class="ch-left">
+                  <div class="unit-plate">${(o.unitInfo || '').split(/[\/+]/)[0].trim()}</div>
+                  <div class="ot-display" style="margin-top:4px;">OT: ${o.otNumber || '--'}</div>
+                  <div style="margin-top:12px; font-size:0.8rem; color:var(--text-muted); font-weight:600;">
+                    👤 Pidió: ${o.opInfo}
+                  </div>
+                </div>
+                
+                <div class="ch-middle">
+                  ${itemsHtml}
+                </div>
+                
+                <div class="ch-right" style="justify-content: flex-start;">
+                   <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; margin-bottom:4px; text-transform:uppercase;">Auditor:</div>
+                  <select id="ret-op-${o.reqId}" class="panol-select" onchange="pendingSelections['ret_${o.reqId}'] = this.value" onfocus="pausePolling()" onblur="resumePolling()" style="width:100%; border-color:var(--border);">
+                    <option value="" disabled ${!savedOpId ? 'selected' : ''}>👤 Revisa Pañolero...</option>
+                    ${staffOptions}
+                  </select>
+                </div>
+              </div>`;
+          }
+        });
+
+        document.getElementById('returnsCount').innerText = pendingReturnsCount;
+
+        if (pendingReturnsCount === 0) {
+          board.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">Sin devoluciones pendientes</div><div class="empty-text">No hay repuestos viejos a auditar en este momento.</div></div>`;
+        } else {
+          board.innerHTML = html;
+        }
+      }
+      
+      function submitReturnAudit(reqId, itemName, status, declaredQty, itemTag) {
+        const selectEl = document.getElementById(`ret-op-${reqId}`);
+        const panolOpId = selectEl ? selectEl.value : null;
+
+        if (!panolOpId) {
+          if (selectEl) {
+            selectEl.classList.remove('shake-error');
+            void selectEl.offsetWidth; 
+            selectEl.classList.add('shake-error');
+          }
+          return;
+        }
+
+        const itemEl = document.getElementById(`ret-item-${itemTag}`);
+        if (itemEl) {
+          itemEl.style.opacity = '0.4';
+          itemEl.style.pointerEvents = 'none';
+        }
+        
+        google.script.run
+          .withSuccessHandler(() => {
+            loadData();
+          })
+          .withFailureHandler(err => {
+            console.error('Audit Error:', err);
+            if (itemEl) {
+              itemEl.style.opacity = '1';
+              itemEl.style.pointerEvents = 'auto';
+            }
+          })
+          .confirmReturnItem(reqId, itemName, panolOpId, status, declaredQty || null); 
+      }
+
+      function showPanolModal(title, bodyHtml, actionsHtml) {
+        document.getElementById('modalTitle').innerHTML = title;
+        document.getElementById('modalBody').innerHTML = bodyHtml;
+        document.getElementById('modalActions').innerHTML = actionsHtml;
+        document.getElementById('panolModal').classList.add('active');
+        pausePolling();
+      }
+      function closePanolModal() {
+        document.getElementById('panolModal').classList.remove('active');
+        resumePolling();
+      }
+
+      const pendingQtyDebounce = {};
+      const apiQueue = [];
+      let isProcessingQueue = false;
+
+      function enqueueApiTask(taskFn) {
+        apiQueue.push(taskFn);
+        processApiQueue();
+      }
+
+      function processApiQueue() {
+        if (isProcessingQueue || apiQueue.length === 0) return;
+        isProcessingQueue = true;
+
+        const nextTask = apiQueue.shift();
+        nextTask(() => {
+          isProcessingQueue = false;
+          setTimeout(processApiQueue, 150);
+        });
+      }
+
+      function changeItemQty(reqId, itemName, currentQty, delta) {
+        const order = allOrders.find(o => String(o.reqId) === String(reqId));
+        if (!order) return;
+        const item = order.items.find(i => String(i.name).toLowerCase() === String(itemName).toLowerCase());
+        if (!item) return;
+
+        const newQty = Math.max(0, Number(item.qty) + delta);
+        if (newQty === 0) {
+          removeItem(reqId, itemName);
+          return;
+        }
+
+        item.qty = newQty;
+        applyFilters();
+
+        const key = `${reqId}_${itemName}`;
+        clearTimeout(pendingQtyDebounce[key]);
+        pendingQtyDebounce[key] = setTimeout(() => {
+          enqueueApiTask((done) => {
+            google.script.run
+              .withSuccessHandler(res => {
+                done();
+              })
+              .withFailureHandler(err => {
+                console.error('Qty update error:', err);
+                done();
+              })
+              .updatePendingItemQty(reqId, itemName, newQty);
+          });
+        }, 400);
+      }
+
+      function updateItemQty(reqId, itemName, newQty, oldQty) {
+        newQty = Number(newQty);
+        if (isNaN(newQty) || newQty < 0) return;
+        if (newQty === 0) { removeItem(reqId, itemName); return; }
+        if (newQty === Number(oldQty)) return;
+
+        const order = allOrders.find(o => String(o.reqId) === String(reqId));
+        if (order) {
+          const item = order.items.find(i => String(i.name).toLowerCase() === String(itemName).toLowerCase());
+          if (item) item.qty = newQty;
+        }
+        applyFilters();
+
+        const key = `${reqId}_${itemName}`;
+        clearTimeout(pendingQtyDebounce[key]);
+        pendingQtyDebounce[key] = setTimeout(() => {
+          enqueueApiTask((done) => {
+            google.script.run
+              .withSuccessHandler(res => {
+                done();
+              })
+              .withFailureHandler(err => {
+                console.error('Qty update error:', err);
+                done();
+              })
+              .updatePendingItemQty(reqId, itemName, newQty);
+          });
+        }, 400);
+      }
+
+      function removeItem(reqId, itemName) {
+        showPanolModal(
+          '⚠️ Eliminar Ítem',
+          `<div class="modal-info">¿Seguro que querés eliminar <strong>${itemName}</strong> del pedido?<br>La cantidad se devolverá al stock.</div>`,
+          `<button class="modal-btn cancel" onclick="closePanolModal()">Cancelar</button>
+           <button class="modal-btn danger" onclick="confirmRemoveItem('${reqId}','${itemName.replace(/'/g, "\\'")}')">Sí, Eliminar</button>`
+        );
+      }
+
+      function confirmRemoveItem(reqId, itemName) {
+        closePanolModal();
+
+        const orderIndex = allOrders.findIndex(o => String(o.reqId) === String(reqId));
+        if (orderIndex !== -1) {
+          allOrders[orderIndex].items = allOrders[orderIndex].items.filter(
+            i => String(i.name).toLowerCase() !== String(itemName).toLowerCase()
+          );
+          if (allOrders[orderIndex].items.length === 0) {
+            allOrders.splice(orderIndex, 1);
+          }
+        }
+        applyFilters();
+
+        enqueueApiTask((done) => {
+          google.script.run
+            .withSuccessHandler(res => {
+              done();
+            })
+            .withFailureHandler(err => {
+              console.error('Remove error:', err);
+              done();
+            })
+            .removePendingItem(reqId, itemName);
+        });
+      }
+
+      let addItemSearchTimeout = null;
+      let addItemSelectedItem = null;
+
+      function openAddItemModal(reqId) {
+        addItemSelectedItem = null;
+        const bodyHtml = `
+          <label>Buscar repuesto</label>
+          <input type="text" id="addItemSearchInput" placeholder="Nombre del repuesto..." 
+                 oninput="searchItemsForAdd(this.value)" autocomplete="off">
+          <div id="addItemResults" class="search-results"></div>
+          <div id="addItemConfirmRow" style="display:none;"></div>`;
+        const actionsHtml = `
+          <button class="modal-btn cancel" onclick="closePanolModal()">Cancelar</button>
+          <button class="modal-btn primary" id="btnConfirmAddItem" onclick="confirmAddItem('${reqId}')" disabled>Agregar al Pedido</button>`;
+        showPanolModal('＋ Agregar Ítem al Pedido', bodyHtml, actionsHtml);
+        setTimeout(() => document.getElementById('addItemSearchInput')?.focus(), 100);
+      }
+
+      function searchItemsForAdd(query) {
+        clearTimeout(addItemSearchTimeout);
+        if (query.length < 2) { document.getElementById('addItemResults').innerHTML = ''; return; }
+        addItemSearchTimeout = setTimeout(() => {
+          google.script.run
+            .withSuccessHandler(results => {
+              const container = document.getElementById('addItemResults');
+              if (!results || results.length === 0) {
+                container.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:0.85rem;">Sin resultados.</div>';
+                return;
+              }
+              container.innerHTML = results.map(r => `
+                <div class="search-result-item" onclick="selectItemForAdd('${r.name.replace(/'/g, "\\\'")}', ${r.stock || 0})">
+                  <span class="sr-name">${r.name}</span>
+                  <span class="sr-stock">📦 Stock: ${r.stock || 0}</span>
+                </div>`).join('');
+            })
+            .withFailureHandler(err => console.error('Search error:', err))
+            .getInventoryItems(query);
+        }, 300);
+      }
+
+      function selectItemForAdd(itemName, stock) {
+        addItemSelectedItem = { name: itemName, stock: stock };
+        document.getElementById('addItemResults').innerHTML = '';
+        document.getElementById('addItemSearchInput').value = itemName;
+        const confirmRow = document.getElementById('addItemConfirmRow');
+        confirmRow.style.display = 'block';
+        confirmRow.innerHTML = `
+          <div class="sr-add-row">
+            <span class="sr-selected-name">✓ ${itemName}</span>
+            <span style="font-size:0.8rem;color:var(--text-muted);font-weight:700;">📦 ${stock}</span>
+            <label style="margin:0;font-size:0.75rem;">QTY:</label>
+            <input type="number" id="addItemQtyInput" value="1" min="1" 
+                   class="qty-input" style="width:55px;" onfocus="pausePolling()" onblur="resumePolling()">
+          </div>`;
+        document.getElementById('btnConfirmAddItem').disabled = false;
+      }
+
+      function confirmAddItem(reqId) {
+        if (!addItemSelectedItem) return;
+        const qty = Number(document.getElementById('addItemQtyInput')?.value) || 0;
+        if (qty < 1) { alert('Cantidad inválida.'); return; }
+
+        const itemName = addItemSelectedItem.name;
+        const stock = addItemSelectedItem.stock || 0;
+        closePanolModal();
+
+        const order = allOrders.find(o => String(o.reqId) === String(reqId));
+        if (order) {
+          order.items.push({
+            name: itemName, qty: qty, id: '---', loc: 'S/D',
+            requiereCanje: false, estadoCanje: '', panolConfirmacion: '',
+            stock: stock, status: 'PENDIENTE'
+          });
+        }
+        applyFilters();
+
+        google.script.run
+          .withSuccessHandler(res => {
+            if (res && !res.success) {
+              alert(res.error || 'Error al agregar ítem.');
+              loadData();
+            }
+          })
+          .withFailureHandler(err => {
+            console.error('Add item error:', err);
+            loadData();
+          })
+          .addItemToPendingOrder(reqId, itemName, qty);
+      }
+
+      function openIncompletePopup(reqId, itemName, originalQty, declaredByMechanic, itemTag) {
+        const safeItemName = itemName.replace(/'/g, "\\'");
+        const bodyHtml = `
+          <div class="modal-info">
+            <strong>${itemName}</strong><br>
+            El mecánico declaró: <strong>${declaredByMechanic}</strong> de <strong>${originalQty}</strong> unidad(es)
+          </div>
+          <label>Cantidad efectivamente recibida</label>
+          <input type="number" id="incompleteQtyInput" value="${declaredByMechanic}" min="0" max="${originalQty}"
+                 onfocus="pausePolling()" onblur="resumePolling()">`;
+        const actionsHtml = `
+          <button class="modal-btn cancel" onclick="closePanolModal()">Cancelar</button>
+          <button class="modal-btn danger" onclick="confirmIncomplete('${reqId}', '${safeItemName}', '${itemTag}')">Confirmar Incompleto</button>`;
+        showPanolModal('⚠️ Declaración de Devolución Incompleta', bodyHtml, actionsHtml);
+        setTimeout(() => document.getElementById('incompleteQtyInput')?.focus(), 100);
+      }
+
+      function confirmIncomplete(reqId, itemName, itemTag) {
+        const declaredQty = Number(document.getElementById('incompleteQtyInput')?.value);
+        if (isNaN(declaredQty) || declaredQty < 0) { alert('Cantidad inválida.'); return; }
+        closePanolModal();
+        submitReturnAudit(reqId, itemName, 'INCOMPLETO', declaredQty, itemTag);
+      }
+
+      let currentNewReturnsSubtab = 'pending';
+
+      function switchNewReturnsSubtab(tab, btn) {
+        currentNewReturnsSubtab = tab;
+        document.querySelectorAll('#view-returns-new .filter-pill').forEach(b => b.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        renderReturnsNewBoard();
+      }
+
+      function renderReturnsNewBoard() {
+        const board = document.getElementById('returns-new-board');
+        if (!board) return;
+        let html = '';
+        let pendingNewCount = 0;
+
+        allOrders.forEach(o => {
+          let eligibleItems = [];
+          if (currentNewReturnsSubtab === 'pending') {
+            eligibleItems = o.items.filter(i => i.status === 'DEVOLUCION PENDIENTE');
+          } else {
+            eligibleItems = o.items.filter(i => i.status === 'DEVOLUCION');
+          }
+
+          const pendingInOrder = o.items.filter(i => i.status === 'DEVOLUCION PENDIENTE');
+          if (pendingInOrder.length > 0) pendingNewCount += pendingInOrder.length;
+
+          if (eligibleItems.length > 0) {
+            const itemsHtml = eligibleItems.map((i, idx) => {
+              const safeItemName = i.name.replace(/'/g, "\\'");
+              const itemTag = `newret-${o.reqId}-${idx}`;
+              const isPending = i.status === 'DEVOLUCION PENDIENTE';
+
+              if (!isPending) {
+                return `
+                  <div id="${itemTag}" style="margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; opacity: 0.5;">
+                    <div style="font-size: 1.1rem; font-weight: 900; color: var(--text-white);">
+                      • ${i.name} <span style="color: var(--text-muted); font-weight: 600; font-size: 0.9rem;">(x${i.qty})</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--green); font-weight: 800; margin-left: 14px; margin-top: 4px;">
+                      ✓ REINTEGRADO A STOCK EN DB_ITEMS
+                    </div>
+                  </div>`;
+              }
+
+              return `
+                <div id="${itemTag}" style="margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px;">
+                  <div style="font-size: 1.1rem; font-weight: 900; color: var(--text-white);">
+                    • ${i.name} <span style="color: var(--text-muted); font-weight: 600; font-size: 0.9rem;">(Cant. a devolver: x${i.qty})</span>
+                  </div>
+                  <div style="font-size: 0.85rem; color: var(--orange); font-weight: 800; margin-left: 14px; margin-top: 4px; margin-bottom: 10px;">
+                    ↳ Solicitado para devolución por el mecánico
+                  </div>
+                  <div style="margin-left: 14px;">
+                    <button class="btn-ch ok" 
+                            onclick="confirmNewItemReturn('${o.reqId}', '${safeItemName}', ${i.qty}, '${itemTag}')"
+                            style="padding: 8px 16px; font-size: 0.85rem;">
+                        ✓ REINTEGRAR A STOCK
+                    </button>
+                  </div>
+                </div>`;
+            }).join('');
+
+            const savedOpId = pendingSelections[`newret_${o.reqId}`] || o.panolOpId || '';
+            const staffOptions = panolStaffList.map(s => `<option value="${s.id}" ${savedOpId === String(s.id) ? 'selected' : ''}>${s.name}</option>`).join('');
+
+            html += `
+              <div class="card-horizontal">
+                <div class="ch-left">
+                  <div class="unit-plate">${(o.unitInfo || '').split(/[\/+]/)[0].trim()}</div>
+                  <div class="ot-display" style="margin-top:4px;">OT: ${o.otNumber || '--'}</div>
+                  <div style="margin-top:12px; font-size:0.8rem; color:var(--text-muted); font-weight:600;">
+                    👤 Operario: ${o.opInfo}
+                  </div>
+                </div>
+                <div class="ch-middle">
+                  ${itemsHtml}
+                </div>
+                <div class="ch-right" style="justify-content: flex-start;">
+                  <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; margin-bottom:4px; text-transform:uppercase;">Auditor Pañol:</div>
+                  <select id="newret-op-${o.reqId}" class="panol-select" onchange="pendingSelections['newret_${o.reqId}'] = this.value" onfocus="pausePolling()" onblur="resumePolling()" style="width:100%; border-color:var(--border);">
+                    <option value="" disabled ${!savedOpId ? 'selected' : ''}>👤 Revisa Pañolero...</option>
+                    ${staffOptions}
+                  </select>
+                </div>
+              </div>`;
+          }
+        });
+
+        const badgeEl = document.getElementById('newPendingBadge');
+        if (badgeEl) badgeEl.innerText = pendingNewCount;
+        const navBadgeEl = document.getElementById('returnsNewCount');
+        if (navBadgeEl) navBadgeEl.innerText = pendingNewCount;
+
+        if (!html) {
+          board.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">Sin devoluciones de nuevos</div><div class="empty-text">No hay repuestos nuevos pendientes en esta sección.</div></div>`;
+        } else {
+          board.innerHTML = html;
+        }
+      }
+
+      function confirmNewItemReturn(reqId, itemName, returnQty, itemTag) {
+        const selectEl = document.getElementById(`newret-op-${reqId}`);
+        const panolOpId = selectEl ? selectEl.value : null;
+
+        if (!panolOpId) {
+          if (selectEl) {
+            selectEl.classList.remove('shake-error');
+            void selectEl.offsetWidth; 
+            selectEl.classList.add('shake-error');
+          }
+          return;
+        }
+
+        const itemEl = document.getElementById(itemTag);
+        if (itemEl) {
+          itemEl.style.opacity = '0.4';
+          itemEl.style.pointerEvents = 'none';
+        }
+
+        google.script.run
+          .withSuccessHandler(() => {
+            loadData();
+          })
+          .withFailureHandler(err => {
+            console.error('Error al reintegrar stock:', err);
+            if (itemEl) {
+              itemEl.style.opacity = '1';
+              itemEl.style.pointerEvents = 'auto';
+            }
+          })
+          .confirmNewReturn(reqId, itemName, returnQty, panolOpId);
+      }
     </script>
 </body>
 </html>

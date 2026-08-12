@@ -170,6 +170,31 @@ app.get('/inv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'inv.h
 // Servidor de archivos estáticos (JS, CSS, imágenes) deshabilitando index automático
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
+async function updateStockByName(itemName, deltaQty) {
+  if (!sheets || !itemName || !deltaQty) return;
+  try {
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_ITEMS!A1:E500' });
+    const rows = res.data.values || [];
+    const searchName = String(itemName).trim().toLowerCase();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][1] || '').trim().toLowerCase() === searchName) {
+        const currentStock = Number(rows[i][4]) || 0;
+        const newStock = Math.max(0, currentStock + Number(deltaQty));
+        const rowNum = i + 1;
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `DB_ITEMS!E${rowNum}`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [[newStock]] }
+        });
+        break;
+      }
+    }
+  } catch(e) {
+    console.error('Error actualizando stock:', e.message);
+  }
+}
+
 // === 4. RPC UNIVERSAL DISPATCHER (google.script.run Polyfill) ===
 app.post('/api/rpc', async (req, res) => {
   const { action, args = [] } = req.body;
@@ -198,6 +223,32 @@ app.post('/api/rpc', async (req, res) => {
         result = { success: false, error: "Usuario no encontrado o sin acceso activo" };
       }
     } 
+    else if (action === 'getPanolStaff') {
+      let panoleros = [];
+      if (sheets) {
+        try {
+          const sRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_STAFF!A1:L100' });
+          const rows = sRes.data.values || [];
+          for (let i = 1; i < rows.length; i++) {
+            const id = String(rows[i][0] || '').trim();
+            const name = String(rows[i][1] || '').trim();
+            const role = String(rows[i][2] || '').trim().toUpperCase();
+            const hasAppAccess = rows[i][11] === true || String(rows[i][11] || '').toUpperCase() === 'TRUE';
+            if (id && name && hasAppAccess && (role === 'PANOL' || role === 'PAÑOL' || role === 'LOGISTICA')) {
+              panoleros.push({ id: id, name: name });
+            }
+          }
+          if (panoleros.length === 0) {
+            for (let i = 1; i < rows.length; i++) {
+              const id = String(rows[i][0] || '').trim();
+              const name = String(rows[i][1] || '').trim();
+              if (id && name) panoleros.push({ id: id, name: name });
+            }
+          }
+        } catch(e) {}
+      }
+      result = panoleros.sort((a, b) => a.name.localeCompare(b.name));
+    }
     else if (action === 'getItemCatalog') {
       await syncDataFromSheets();
       result = itemsCatalogCache.map(i => ({ category: i.category || 'GENERAL', name: i.name, requiereCanje: !!i.requiereCanje }));
@@ -283,10 +334,241 @@ app.post('/api/rpc', async (req, res) => {
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: rowsToAppend }
         });
+
+        (items || []).forEach(itemObj => {
+          updateStockByName(itemObj.item, -Math.abs(Number(itemObj.qty) || 0));
+        });
       }
       await syncDataFromSheets();
       io.emit('orders_sync', ordersCache);
       result = { success: true, reqId: reqId };
+    }
+    else if (action === 'updatePendingItemQty') {
+      const reqId = String(args[0] || '').trim();
+      const itemName = String(args[1] || '').trim();
+      const newQty = Number(args[2]) || 0;
+      let updated = false;
+
+      if (sheets) {
+        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A1:R500' });
+        const rows = transRes.data.values || [];
+        for (let i = 1; i < rows.length; i++) {
+          const rReq = String(rows[i][1] || '').trim();
+          const rItem = String(rows[i][6] || '').trim();
+          const rStatus = String(rows[i][8] || '').trim();
+
+          if (rReq === reqId && rItem.toLowerCase() === itemName.toLowerCase() && rStatus === 'PENDIENTE') {
+            const oldQty = Number(rows[i][7]) || 0;
+            const delta = newQty - oldQty;
+            const rowNum = i + 1;
+
+            if (newQty <= 0) {
+              await sheets.spreadsheets.values.clear({ spreadsheetId: SPREADSHEET_ID, range: `DB_TRANSACTIONS!A${rowNum}:R${rowNum}` });
+              await updateStockByName(itemName, oldQty);
+            } else {
+              await sheets.spreadsheets.values.update({
+                spreadsheetId: SPREADSHEET_ID,
+                range: `DB_TRANSACTIONS!H${rowNum}`,
+                valueInputOption: 'USER_ENTERED',
+                requestBody: { values: [[newQty]] }
+              });
+              await updateStockByName(itemName, -delta);
+            }
+            updated = true;
+            break;
+          }
+        }
+      }
+      await syncDataFromSheets();
+      io.emit('orders_sync', ordersCache);
+      result = { success: updated };
+    }
+    else if (action === 'removePendingItem') {
+      const reqId = String(args[0] || '').trim();
+      const itemName = String(args[1] || '').trim();
+      let updated = false;
+
+      if (sheets) {
+        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A1:R500' });
+        const rows = transRes.data.values || [];
+        for (let i = 1; i < rows.length; i++) {
+          const rReq = String(rows[i][1] || '').trim();
+          const rItem = String(rows[i][6] || '').trim();
+          const rStatus = String(rows[i][8] || '').trim();
+
+          if (rReq === reqId && rItem.toLowerCase() === itemName.toLowerCase() && rStatus === 'PENDIENTE') {
+            const oldQty = Number(rows[i][7]) || 0;
+            const rowNum = i + 1;
+            await sheets.spreadsheets.values.clear({ spreadsheetId: SPREADSHEET_ID, range: `DB_TRANSACTIONS!A${rowNum}:R${rowNum}` });
+            if (oldQty > 0) await updateStockByName(itemName, oldQty);
+            updated = true;
+            break;
+          }
+        }
+      }
+      await syncDataFromSheets();
+      io.emit('orders_sync', ordersCache);
+      result = { success: updated };
+    }
+    else if (action === 'addItemToPendingOrder') {
+      const reqId = String(args[0] || '').trim();
+      const itemName = String(args[1] || '').trim();
+      const qty = Number(args[2]) || 0;
+      let updated = false;
+
+      if (sheets && qty > 0) {
+        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A1:R500' });
+        const rows = transRes.data.values || [];
+        let contextRow = null;
+
+        for (let i = 1; i < rows.length; i++) {
+          if (String(rows[i][1] || '').trim() === reqId && String(rows[i][8] || '').trim() === 'PENDIENTE') {
+            contextRow = rows[i];
+            break;
+          }
+        }
+
+        if (contextRow) {
+          const newRow = new Array(17).fill('');
+          newRow[0] = contextRow[0];
+          newRow[1] = reqId;
+          newRow[2] = contextRow[2];
+          newRow[3] = contextRow[3];
+          newRow[4] = contextRow[4];
+          newRow[5] = contextRow[5];
+          newRow[6] = itemName;
+          newRow[7] = qty;
+          newRow[8] = 'PENDIENTE';
+          newRow[11] = '';
+
+          const colARes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A:A' });
+          const colAVals = colARes.data.values || [];
+          let lastFilledRow = 0;
+          for (let i = colAVals.length - 1; i >= 0; i--) {
+            if (colAVals[i] && colAVals[i][0] && String(colAVals[i][0]).trim() !== '') {
+              lastFilledRow = i + 1;
+              break;
+            }
+          }
+          const startRow = (lastFilledRow || colAVals.length) + 1;
+
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SPREADSHEET_ID,
+            range: `DB_TRANSACTIONS!A${startRow}:Q${startRow}`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [newRow] }
+          });
+          await updateStockByName(itemName, -Math.abs(qty));
+          updated = true;
+        }
+      }
+      await syncDataFromSheets();
+      io.emit('orders_sync', ordersCache);
+      result = { success: updated };
+    }
+    else if (action === 'confirmReturnItem' || action === 'confirmReturnBatch') {
+      const reqId = String(args[0] || '').trim();
+      let itemName = null;
+      let opId = null;
+      let status = null;
+      let declaredQty = null;
+
+      if (args.length >= 4 && typeof args[1] === 'string' && isNaN(Number(args[1]))) {
+        itemName = String(args[1]).trim().toLowerCase();
+        opId = args[2];
+        status = args[3];
+        declaredQty = args[4];
+      } else {
+        opId = args[1];
+        status = args[2];
+        declaredQty = args[3];
+      }
+
+      let updated = false;
+      if (sheets) {
+        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A1:R500' });
+        const rows = transRes.data.values || [];
+
+        for (let i = 1; i < rows.length; i++) {
+          const rReq = String(rows[i][1] || '').trim();
+          const rItem = String(rows[i][6] || '').trim().toLowerCase();
+          const reqMatch = rReq === reqId;
+          const itemMatch = !itemName || rItem === itemName;
+
+          if (reqMatch && itemMatch) {
+            const rowNum = i + 1;
+            const estadoCanjeColQ = String(rows[i][16] || '').trim();
+            const confirmacionColR = String(rows[i][17] || '').trim();
+
+            if (estadoCanjeColQ !== '' && !confirmacionColR.includes('OK') && !confirmacionColR.includes('INCOMPLETO')) {
+              let finalAuditString;
+              if (status === 'INCOMPLETO' && declaredQty !== null && declaredQty !== undefined) {
+                const originalQty = Number(rows[i][7]) || 0;
+                finalAuditString = `[OP: ${opId}] - INCOMPLETO (${declaredQty}/${originalQty})`;
+              } else {
+                finalAuditString = `[OP: ${opId}] - ${status}`;
+              }
+
+              await sheets.spreadsheets.values.update({
+                spreadsheetId: SPREADSHEET_ID,
+                range: `DB_TRANSACTIONS!R${rowNum}`,
+                valueInputOption: 'USER_ENTERED',
+                requestBody: { values: [[finalAuditString]] }
+              });
+              updated = true;
+              if (itemName) break;
+            }
+          }
+        }
+      }
+      await syncDataFromSheets();
+      io.emit('orders_sync', ordersCache);
+      result = { success: updated };
+    }
+    else if (action === 'confirmNewReturn' || action === 'processNewItemReturn') {
+      const reqId = String(args[0] || '').trim();
+      const itemName = String(args[1] || '').trim();
+      const returnQty = Number(args[2]) || 1;
+      const panolOpId = args[3] || args[4];
+      let updated = false;
+
+      if (sheets) {
+        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A1:R500' });
+        const rows = transRes.data.values || [];
+
+        for (let i = 1; i < rows.length; i++) {
+          const rReq = String(rows[i][1] || '').trim();
+          const rItem = String(rows[i][6] || '').trim().toLowerCase();
+          const rStatus = String(rows[i][8] || '').trim();
+
+          if (rReq === reqId && rItem === itemName.toLowerCase() && (rStatus === 'DEVOLUCION PENDIENTE' || rStatus === 'ENTREGADO' || rStatus === 'LISTO')) {
+            const originalQty = Number(rows[i][7]) || 0;
+            const rowNum = i + 1;
+            const panolNote = `DEVOLUCIÓN ACEPTADA: OK [OP: ${panolOpId || 'PAÑOL'}]`;
+            const existingNote = String(rows[i][14] || '').trim();
+            const finalNote = existingNote ? `${existingNote} | ${panolNote}` : panolNote;
+
+            await sheets.spreadsheets.values.update({
+              spreadsheetId: SPREADSHEET_ID,
+              range: `DB_TRANSACTIONS!I${rowNum}`,
+              valueInputOption: 'USER_ENTERED',
+              requestBody: { values: [['DEVOLUCION']] }
+            });
+            await sheets.spreadsheets.values.update({
+              spreadsheetId: SPREADSHEET_ID,
+              range: `DB_TRANSACTIONS!O${rowNum}`,
+              valueInputOption: 'USER_ENTERED',
+              requestBody: { values: [[finalNote]] }
+            });
+            await updateStockByName(itemName, returnQty || originalQty);
+            updated = true;
+            break;
+          }
+        }
+      }
+      await syncDataFromSheets();
+      io.emit('orders_sync', ordersCache);
+      result = { success: updated };
     }
     else if (action === 'getPendingOrdersEnriched' || action === 'getPendingOrders' || action === 'getMechanicOrders') {
       result = await syncDataFromSheets();
@@ -301,8 +583,42 @@ app.post('/api/rpc', async (req, res) => {
     else if (action === 'markAsReady' || action === 'markAsDelivered') {
       const reqId = args[0];
       const panolOpId = args[1];
-      const target = ordersCache.find(o => String(o.reqId) === String(reqId));
-      if (target) { target.status = 'LISTO'; target.panolOpId = panolOpId; }
+      if (sheets && reqId) {
+        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A1:R500' });
+        const rows = transRes.data.values || [];
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
+        const timeStr = now.toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const newStatus = action === 'markAsDelivered' ? 'ENTREGADO' : 'LISTO';
+        const colIdx = action === 'markAsDelivered' ? 'K' : 'J';
+
+        for (let i = 1; i < rows.length; i++) {
+          if (String(rows[i][1] || '').trim() === String(reqId).trim()) {
+            const rowNum = i + 1;
+            await sheets.spreadsheets.values.update({
+              spreadsheetId: SPREADSHEET_ID,
+              range: `DB_TRANSACTIONS!I${rowNum}`,
+              valueInputOption: 'USER_ENTERED',
+              requestBody: { values: [[newStatus]] }
+            });
+            await sheets.spreadsheets.values.update({
+              spreadsheetId: SPREADSHEET_ID,
+              range: `DB_TRANSACTIONS!${colIdx}${rowNum}`,
+              valueInputOption: 'USER_ENTERED',
+              requestBody: { values: [[`${dateStr} ${timeStr}`]] }
+            });
+            if (panolOpId) {
+              await sheets.spreadsheets.values.update({
+                spreadsheetId: SPREADSHEET_ID,
+                range: `DB_TRANSACTIONS!P${rowNum}`,
+                valueInputOption: 'USER_ENTERED',
+                requestBody: { values: [[panolOpId]] }
+              });
+            }
+          }
+        }
+      }
+      await syncDataFromSheets();
       io.emit('orders_sync', ordersCache);
       result = { success: true };
     }
