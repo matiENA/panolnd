@@ -167,6 +167,9 @@ app.get('/panol', (req, res) => res.sendFile(path.join(__dirname, 'public', 'pan
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/inv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'inv.html')));
 
+app.get('/client-shim.js', (req, res) => res.sendFile(path.join(__dirname, 'public', 'client-shim.js')));
+app.get('/js/client-shim.js', (req, res) => res.sendFile(path.join(__dirname, 'public', 'client-shim.js')));
+
 // Servidor de archivos estáticos (JS, CSS, imágenes) deshabilitando index automático
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
