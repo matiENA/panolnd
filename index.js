@@ -187,10 +187,15 @@ app.post('/api/rpc', async (req, res) => {
         } catch(e) {}
       }
       if (staffRow) {
-        const boxes = staffRow.slice(6, 11).map(String).filter(c => c);
-        result = { success: true, name: staffRow[1] || ('Operario ' + opId), role: staffRow[2] || 'MECANICO', boxes: boxes.length ? boxes : ['BOX 1', 'BOX 2'] };
+        const hasAppAccess = staffRow[11] === true || String(staffRow[11] || '').toUpperCase() === 'TRUE';
+        if (!hasAppAccess && staffRow[11] !== undefined) {
+          result = { success: false, error: "Usuario no encontrado o sin acceso activo" };
+        } else {
+          const boxes = staffRow.slice(6, 11).map(c => String(c || '').trim()).filter(c => c !== '');
+          result = { success: true, name: staffRow[1] || ('Operario ' + opId), role: staffRow[2] || 'MECANICO', boxes: boxes };
+        }
       } else {
-        result = { success: true, name: 'Mecánico ' + opId, role: 'MECANICO', boxes: ['BOX 1', 'BOX 2', 'BOX 3'] };
+        result = { success: false, error: "Usuario no encontrado o sin acceso activo" };
       }
     } 
     else if (action === 'getItemCatalog') {
@@ -242,8 +247,9 @@ app.post('/api/rpc', async (req, res) => {
     else if (action === 'submitBatchRequest' || action === 'createOrder') {
       const payload = args[0] || {};
       const { opId, mechanicName, otNumber, unitId, items } = payload;
-      const timestamp = new Date().toISOString();
-      const reqId = 'REQ-' + Date.now();
+      const now = new Date();
+      const timestamp = now.toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
+      const reqId = 'REQ-' + Math.floor(Math.random() * 10000000).toString(16).toUpperCase();
       const rowsToAppend = [];
 
       (items || []).forEach(itemObj => {
@@ -254,9 +260,26 @@ app.post('/api/rpc', async (req, res) => {
       });
 
       if (sheets && rowsToAppend.length > 0) {
-        await sheets.spreadsheets.values.append({
+        const colARes = await sheets.spreadsheets.values.get({
           spreadsheetId: SPREADSHEET_ID,
-          range: 'DB_TRANSACTIONS!A:R',
+          range: 'DB_TRANSACTIONS!A:A'
+        });
+        const colAVals = colARes.data.values || [];
+        let lastFilledRow = 0;
+        for (let i = colAVals.length - 1; i >= 0; i--) {
+          if (colAVals[i] && colAVals[i][0] && String(colAVals[i][0]).trim() !== '') {
+            lastFilledRow = i + 1;
+            break;
+          }
+        }
+        if (lastFilledRow === 0) lastFilledRow = colAVals.length;
+
+        const startRow = lastFilledRow + 1;
+        const endRow = startRow + rowsToAppend.length - 1;
+
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `DB_TRANSACTIONS!A${startRow}:R${endRow}`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: rowsToAppend }
         });
