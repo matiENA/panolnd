@@ -58,9 +58,17 @@ let ordersCache = [];
 let itemsCatalogCache = [];
 let uiPropertiesCache = {};
 let readyTimestamps = {}; // reqId -> timestamp when transitioned to LISTO
+let lastSyncTime = 0;
+const MIN_SYNC_INTERVAL_MS = 8000; // Evitar Quota Exceeded (max 1 lectura cada 8s)
 
-async function syncDataFromSheets() {
+async function syncDataFromSheets(force = false) {
   if (!sheets) return ordersCache;
+
+  const now = Date.now();
+  if (!force && (now - lastSyncTime < MIN_SYNC_INTERVAL_MS) && ordersCache.length > 0) {
+    return ordersCache;
+  }
+  lastSyncTime = now;
 
   try {
     // A. Leer catálogo completo de ítems y stock desde DB_ITEMS (sin límite de 500 para cargar los 7600+ ítems)
@@ -755,6 +763,8 @@ app.post('/api/rpc', async (req, res) => {
     else if (action === 'markAsReady' || action === 'markAsDelivered') {
       const reqId = args[0];
       const panolOpId = args[1];
+      const itemsPayload = args[2]; // Opcional: array de [{ name, qty }] confirmados al presionar LISTO
+
       if (sheets && reqId) {
         const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A:R' });
         const rows = transRes.data.values || [];
@@ -773,6 +783,29 @@ app.post('/api/rpc', async (req, res) => {
         for (let i = 1; i < rows.length; i++) {
           if (String(rows[i][1] || '').trim() === String(reqId).trim()) {
             const rowNum = i + 1;
+            const rItemName = String(rows[i][6] || '').trim();
+
+            // Si el Pañolero modificó cantidades con los contadores antes de confirmar
+            if (Array.isArray(itemsPayload)) {
+              const matchedItem = itemsPayload.find(p => String(p.name || '').trim().toLowerCase() === rItemName.toLowerCase());
+              if (matchedItem && matchedItem.qty !== undefined) {
+                const confirmedQty = Number(matchedItem.qty);
+                const oldQty = Number(rows[i][7]) || 0;
+                const delta = confirmedQty - oldQty;
+
+                if (delta !== 0) {
+                  await sheets.spreadsheets.values.update({
+                    spreadsheetId: SPREADSHEET_ID,
+                    range: `DB_TRANSACTIONS!H${rowNum}`,
+                    valueInputOption: 'USER_ENTERED',
+                    requestBody: { values: [[confirmedQty]] }
+                  });
+                  // Ajustar stock en DB_ITEMS permitiendo saldos negativos para fidelidad real
+                  await updateStockByName(rItemName, -delta);
+                }
+              }
+            }
+
             await sheets.spreadsheets.values.update({
               spreadsheetId: SPREADSHEET_ID,
               range: `DB_TRANSACTIONS!I${rowNum}`,
@@ -796,7 +829,7 @@ app.post('/api/rpc', async (req, res) => {
           }
         }
       }
-      await syncDataFromSheets();
+      await syncDataFromSheets(true);
       io.emit('orders_sync', ordersCache);
       result = { success: true };
     }

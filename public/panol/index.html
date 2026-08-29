@@ -825,6 +825,9 @@
           card.style.pointerEvents = 'none';
         }
         
+        const order = allOrders.find(o => String(o.reqId) === String(reqId));
+        const confirmedItems = order ? order.items.map(i => ({ name: i.name, qty: Number(i.qty) })) : null;
+
         google.script.run
           .withSuccessHandler(() => {
             delete pendingSelections[reqId];
@@ -837,7 +840,7 @@
             applyFilters();
             resumePolling();
           })
-          .markAsReady(reqId, panolOpId); 
+          .markAsReady(reqId, panolOpId, confirmedItems); 
       }
 
       function updateStats() {
@@ -1247,29 +1250,12 @@
 
         item.qty = newQty;
         applyFilters();
-
-        const key = `${reqId}_${itemName}`;
-        clearTimeout(pendingQtyDebounce[key]);
-        pendingQtyDebounce[key] = setTimeout(() => {
-          enqueueApiTask((done) => {
-            google.script.run
-              .withSuccessHandler(res => {
-                done();
-              })
-              .withFailureHandler(err => {
-                console.error('Qty update error:', err);
-                done();
-              })
-              .updatePendingItemQty(reqId, itemName, newQty);
-          });
-        }, 400);
       }
 
       function updateItemQty(reqId, itemName, newQty, oldQty) {
         newQty = Number(newQty);
         if (isNaN(newQty) || newQty < 0) return;
         if (newQty === 0) { removeItem(reqId, itemName); return; }
-        if (newQty === Number(oldQty)) return;
 
         const order = allOrders.find(o => String(o.reqId) === String(reqId));
         if (order) {
@@ -1277,22 +1263,6 @@
           if (item) item.qty = newQty;
         }
         applyFilters();
-
-        const key = `${reqId}_${itemName}`;
-        clearTimeout(pendingQtyDebounce[key]);
-        pendingQtyDebounce[key] = setTimeout(() => {
-          enqueueApiTask((done) => {
-            google.script.run
-              .withSuccessHandler(res => {
-                done();
-              })
-              .withFailureHandler(err => {
-                console.error('Qty update error:', err);
-                done();
-              })
-              .updatePendingItemQty(reqId, itemName, newQty);
-          });
-        }, 400);
       }
 
       function removeItem(reqId, itemName) {
