@@ -1422,7 +1422,7 @@
       }
 
       function openIncompletePopup(reqId, itemName, originalQty, declaredByMechanic, itemTag) {
-        const safeItemName = itemName.replace(/'/g, "\\ me'");
+        const safeItemName = itemName.replace(/'/g, "\\'");
         const bodyHtml = `
           <div class="modal-info">
             <strong>${itemName}</strong><br>

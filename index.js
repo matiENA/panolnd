@@ -57,15 +57,16 @@ const sheets = getSheetsClient();
 let ordersCache = [];
 let itemsCatalogCache = [];
 let uiPropertiesCache = {};
+let readyTimestamps = {}; // reqId -> timestamp when transitioned to LISTO
 
 async function syncDataFromSheets() {
   if (!sheets) return ordersCache;
 
   try {
-    // A. Leer catálogo de ítems y stock desde DB_ITEMS
+    // A. Leer catálogo completo de ítems y stock desde DB_ITEMS (sin límite de 500 para cargar los 7600+ ítems)
     const itemRes = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: 'DB_ITEMS!A1:H500'
+      range: 'DB_ITEMS!A:H'
     });
     const itemRows = itemRes.data.values || [];
     const itemMap = {};
@@ -89,14 +90,14 @@ async function syncDataFromSheets() {
     // B. Leer transacciones de pedidos desde DB_TRANSACTIONS
     const transRes = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: 'DB_TRANSACTIONS!A1:R500'
+      range: 'DB_TRANSACTIONS!A:R'
     });
 
     const rows = transRes.data.values || [];
     if (rows.length < 2) return [];
 
     const ordersMap = {};
-    for (let i = Math.max(1, rows.length - 200); i < rows.length; i++) {
+    for (let i = Math.max(1, rows.length - 1000); i < rows.length; i++) {
       const row = rows[i];
       const reqId = String(row[1] || '').trim();
       const status = String(row[8] || '').trim();
@@ -153,6 +154,90 @@ async function syncDataFromSheets() {
     return ordersCache;
   }
 }
+
+async function updateStockByName(itemName, deltaQty) {
+  if (!sheets || !itemName || !deltaQty) return;
+  try {
+    const res = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_ITEMS!A:E' });
+    const rows = res.data.values || [];
+    const searchName = String(itemName).trim().toLowerCase();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][1] || '').trim().toLowerCase() === searchName) {
+        const currentStock = Number(rows[i][4]) || 0;
+        // 829.txt Punto 3: Permitir saldos negativos para mantener la fidelidad real del stock
+        const newStock = currentStock + Number(deltaQty);
+        const rowNum = i + 1;
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `DB_ITEMS!E${rowNum}`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [[newStock]] }
+        });
+        break;
+      }
+    }
+  } catch(e) {
+    console.error('Error actualizando stock:', e.message);
+  }
+}
+
+// 829.txt Punto 4: Resolución temporal a 1 minuto (LISTO -> ENTREGADO Y CERRADO)
+async function checkAutoDeliveredOrders() {
+  if (!sheets || !ordersCache || ordersCache.length === 0) return;
+  const now = Date.now();
+  const ONE_MINUTE_MS = 60 * 1000;
+  let hasUpdates = false;
+
+  for (const order of ordersCache) {
+    if (order.status === 'LISTO') {
+      let readyTime = readyTimestamps[order.reqId];
+      if (!readyTime) {
+        readyTime = now;
+        readyTimestamps[order.reqId] = readyTime;
+      }
+
+      if (now - readyTime >= ONE_MINUTE_MS) {
+        console.log(`⏰ Resolución temporal (1 min transcurrido): Auto-cambiando pedido ${order.reqId} a ENTREGADO Y CERRADO...`);
+        try {
+          const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A:R' });
+          const rows = transRes.data.values || [];
+          const nowObj = new Date();
+          const dateStr = nowObj.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
+          const timeStr = nowObj.toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+          for (let i = 1; i < rows.length; i++) {
+            if (String(rows[i][1] || '').trim() === String(order.reqId).trim()) {
+              const rowNum = i + 1;
+              await sheets.spreadsheets.values.update({
+                spreadsheetId: SPREADSHEET_ID,
+                range: `DB_TRANSACTIONS!I${rowNum}`,
+                valueInputOption: 'USER_ENTERED',
+                requestBody: { values: [['ENTREGADO']] }
+              });
+              await sheets.spreadsheets.values.update({
+                spreadsheetId: SPREADSHEET_ID,
+                range: `DB_TRANSACTIONS!K${rowNum}`,
+                valueInputOption: 'USER_ENTERED',
+                requestBody: { values: [[`${dateStr} ${timeStr}`]] }
+              });
+            }
+          }
+          delete readyTimestamps[order.reqId];
+          hasUpdates = true;
+        } catch(e) {
+          console.error('Error en auto-entrega a 1 minuto:', e.message);
+        }
+      }
+    }
+  }
+
+  if (hasUpdates) {
+    await syncDataFromSheets();
+    io.emit('orders_sync', ordersCache);
+  }
+}
+
+setInterval(checkAutoDeliveredOrders, 10000);
 
 // === 3. RUTAS ESTÁTICAS DEL MONOLITO Y QUERY PARAMS ===
 app.get('/', (req, res) => {
@@ -587,13 +672,19 @@ app.post('/api/rpc', async (req, res) => {
       const reqId = args[0];
       const panolOpId = args[1];
       if (sheets && reqId) {
-        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A1:R500' });
+        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A:R' });
         const rows = transRes.data.values || [];
         const now = new Date();
         const dateStr = now.toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
         const timeStr = now.toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', minute: '2-digit', second: '2-digit' });
         const newStatus = action === 'markAsDelivered' ? 'ENTREGADO' : 'LISTO';
         const colIdx = action === 'markAsDelivered' ? 'K' : 'J';
+
+        if (newStatus === 'LISTO') {
+          readyTimestamps[reqId] = Date.now();
+        } else {
+          delete readyTimestamps[reqId];
+        }
 
         for (let i = 1; i < rows.length; i++) {
           if (String(rows[i][1] || '').trim() === String(reqId).trim()) {

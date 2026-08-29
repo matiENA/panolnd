@@ -436,8 +436,8 @@
                 <input type="text" id="otInput" 
                        placeholder="Escribe el N° de OT..." 
                        autocomplete="off"
-                       onkeyup="filterUnitInput(this.value, 'otInput', 'otSuggestions', 'OT')"
-                       onblur="searchByField(this.value, 'OT')" 
+                       onkeyup="filterUnitInput(this.value, 'otInput', 'otSuggestions', 'OT'); autoFillSemiOt();"
+                       onblur="searchByField(this.value, 'OT'); autoFillSemiOt();" 
                        required>
                 <div id="otSuggestions" class="suggestions-list"></div>
               </div>
@@ -908,8 +908,29 @@
           });
       }
 
+      // --- AUTO-FILL SEMI OT (829.txt Punto 2: N° OT Semi predeterminado: 1 número más que OT ASIGNADA) ---
+      function autoFillSemiOt() {
+          const otInput = document.getElementById('otInput');
+          const semiOtInput = document.getElementById('semiOtInput');
+          if (!otInput || !semiOtInput) return;
+          const otVal = otInput.value.trim();
+          if (otVal) {
+              const match = otVal.match(/\d+/);
+              if (match) {
+                  const num = parseInt(match[0], 10);
+                  const nextNum = num + 1;
+                  const autoSemi = otVal.replace(match[0], String(nextNum));
+                  if (!semiOtInput.value || semiOtInput.dataset.autoDefault === "true" || semiOtInput.value === semiOtInput.dataset.lastAutoVal) {
+                      semiOtInput.value = autoSemi;
+                      semiOtInput.dataset.autoDefault = "true";
+                      semiOtInput.dataset.lastAutoVal = autoSemi;
+                  }
+              }
+          }
+      }
+
       // --- SEARCH & POPULATE ---
-function searchByField(val, type) {
+      function searchByField(val, type) {
           // 1. Validaciones iniciales
           if (!val || val.length < 3 || isPopulating) return;
 
@@ -940,6 +961,9 @@ function searchByField(val, type) {
                       // Ley de Cierre: Resaltamos visualmente el campo que el sistema completó por el usuario
                       if (type === 'UNIT' && res.ot) flashField(otInput, "#e6fffa");
                       if (type === 'OT' && res.unit) flashField(unitInput, "#e6fffa");
+                      
+                      // 829.txt: N° OT (Semi) predeterminado +1 número más
+                      autoFillSemiOt();
                   }
 
                   // --- Lógica del SEMI (Unidad / OT) ---
