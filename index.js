@@ -658,6 +658,90 @@ app.post('/api/rpc', async (req, res) => {
       io.emit('orders_sync', ordersCache);
       result = { success: updated };
     }
+    else if (action === 'requestRefund' || action === 'requestReturn') {
+      const reqId = String(args[0] || '').trim();
+      const itemName = String(args[1] || '').trim();
+      const reason = String(args[2] || '').trim();
+      const returnQty = Number(args[3]) || 1;
+      let updated = false;
+
+      if (sheets && reqId && itemName) {
+        try {
+          const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A:R' });
+          const rows = transRes.data.values || [];
+          const fallbackReason = reason ? reason : "Devolución repuesto nuevo";
+
+          for (let i = 1; i < rows.length; i++) {
+            const rReq = String(rows[i][1] || '').trim();
+            const rItem = String(rows[i][6] || '').trim().toLowerCase();
+            const rStatus = String(rows[i][8] || '').trim();
+
+            if (rReq === reqId && rItem === itemName.toLowerCase() && rStatus === 'ENTREGADO') {
+              const originalQty = Number(rows[i][7]) || 1;
+              const actualReturnQty = Math.min(returnQty, originalQty);
+              const rowNum = i + 1;
+
+              if (actualReturnQty >= originalQty) {
+                // DEVOLUCIÓN TOTAL SOLICITADA: Col I = DEVOLUCION PENDIENTE, Col O = SOLICITUD DEVOLUCIÓN NUEVA: ...
+                await sheets.spreadsheets.values.update({
+                  spreadsheetId: SPREADSHEET_ID,
+                  range: `DB_TRANSACTIONS!I${rowNum}`,
+                  valueInputOption: 'USER_ENTERED',
+                  requestBody: { values: [['DEVOLUCION PENDIENTE']] }
+                });
+                await sheets.spreadsheets.values.update({
+                  spreadsheetId: SPREADSHEET_ID,
+                  range: `DB_TRANSACTIONS!O${rowNum}`,
+                  valueInputOption: 'USER_ENTERED',
+                  requestBody: { values: [[`SOLICITUD DEVOLUCIÓN NUEVA: ${fallbackReason}`]] }
+                });
+              } else {
+                // DEVOLUCIÓN PARCIAL SOLICITADA (SPLIT ROW)
+                const remainingQty = originalQty - actualReturnQty;
+                await sheets.spreadsheets.values.update({
+                  spreadsheetId: SPREADSHEET_ID,
+                  range: `DB_TRANSACTIONS!H${rowNum}`,
+                  valueInputOption: 'USER_ENTERED',
+                  requestBody: { values: [[remainingQty]] }
+                });
+
+                const newRow = [...rows[i]];
+                while (newRow.length < 18) newRow.push('');
+                newRow[7] = actualReturnQty; // Col H
+                newRow[8] = 'DEVOLUCION PENDIENTE'; // Col I
+                newRow[14] = `SOLICITUD DEVOLUCIÓN NUEVA PARCIAL: ${fallbackReason}`; // Col O (Índice 14)
+
+                const colARes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A:A' });
+                const colAVals = colARes.data.values || [];
+                let lastFilledRow = 0;
+                for (let k = colAVals.length - 1; k >= 0; k--) {
+                  if (colAVals[k] && colAVals[k][0] && String(colAVals[k][0]).trim() !== '') {
+                    lastFilledRow = k + 1;
+                    break;
+                  }
+                }
+                const startRow = (lastFilledRow || colAVals.length) + 1;
+
+                await sheets.spreadsheets.values.update({
+                  spreadsheetId: SPREADSHEET_ID,
+                  range: `DB_TRANSACTIONS!A${startRow}:R${startRow}`,
+                  valueInputOption: 'USER_ENTERED',
+                  requestBody: { values: [newRow] }
+                });
+              }
+
+              updated = true;
+              break;
+            }
+          }
+        } catch(e) {
+          console.error('Error en requestRefund:', e.message);
+        }
+      }
+      await syncDataFromSheets();
+      io.emit('orders_sync', ordersCache);
+      result = { success: updated, error: updated ? null : "El repuesto exacto no fue encontrado o ya fue devuelto." };
+    }
     else if (action === 'getPendingOrdersEnriched' || action === 'getPendingOrders' || action === 'getMechanicOrders') {
       result = await syncDataFromSheets();
     }
