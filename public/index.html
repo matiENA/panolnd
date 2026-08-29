@@ -909,7 +909,7 @@
       }
 
       // --- AUTO-FILL SEMI OT (829.txt Punto 2: N° OT Semi predeterminado: 1 número más que OT ASIGNADA) ---
-      function autoFillSemiOt() {
+      function autoFillSemiOt(force = false) {
           const otInput = document.getElementById('otInput');
           const semiOtInput = document.getElementById('semiOtInput');
           if (!otInput || !semiOtInput) return;
@@ -920,10 +920,13 @@
                   const num = parseInt(match[0], 10);
                   const nextNum = num + 1;
                   const autoSemi = otVal.replace(match[0], String(nextNum));
-                  if (!semiOtInput.value || semiOtInput.dataset.autoDefault === "true" || semiOtInput.value === semiOtInput.dataset.lastAutoVal) {
+                  const currentSemiVal = semiOtInput.value.trim();
+                  
+                  if (force || !currentSemiVal || currentSemiVal === otVal || semiOtInput.dataset.autoDefault === "true" || currentSemiVal === semiOtInput.dataset.lastAutoVal) {
                       semiOtInput.value = autoSemi;
                       semiOtInput.dataset.autoDefault = "true";
                       semiOtInput.dataset.lastAutoVal = autoSemi;
+                      semiOtInput.style.backgroundColor = "#f0fdf4";
                   }
               }
           }
@@ -961,21 +964,16 @@
                       // Ley de Cierre: Resaltamos visualmente el campo que el sistema completó por el usuario
                       if (type === 'UNIT' && res.ot) flashField(otInput, "#e6fffa");
                       if (type === 'OT' && res.unit) flashField(unitInput, "#e6fffa");
-                      
-                      // 829.txt: N° OT (Semi) predeterminado +1 número más
-                      autoFillSemiOt();
                   }
 
                   // --- Lógica del SEMI (Unidad / OT) ---
                   if (res.semi || res.semiOt) {
                       if (res.semi) semiUnitInput.value = res.semi;
                       
-                      if(res.semiOt) {
+                      // Si viene una OT de Semi específica diferente a la OT principal, usarla; si es idéntica, autoFillSemiOt la incrementará +1
+                      if (res.semiOt && String(res.semiOt).trim() !== String(res.ot || '').trim()) {
                           semiOtInput.value = res.semiOt;
                           semiOtInput.style.backgroundColor = "#f0fdf4";
-                      } else {
-                          semiOtInput.value = "";
-                          semiOtInput.style.backgroundColor = "white";
                       }
 
                       // Ley de Cierre para el Semi
@@ -996,6 +994,9 @@
                       // No semi in DB, but check if user manually typed one?
                       updateDestToggle(res.unit, null);
                   }
+
+                  // 829.txt: N° OT (Semi) predeterminado +1 número más que OT ASIGNADA
+                  autoFillSemiOt(true);
 
                   isPopulating = false;
               } else {
