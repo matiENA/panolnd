@@ -422,7 +422,7 @@
       <div style="font-size:1.1rem; font-weight:800; color:var(--text-white); margin-bottom: 20px; display: flex; flex-direction: column; gap: 4px;">
         <span>Devolución de repuesto anterior</span>
         <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">
-          Compara la cantidad original solicitada (QTY) contra el estado declarado por el mecánico.
+          Compara la cantidad original solicitada contra el estado declarado por el mecánico.
         </span>
       </div>
       <div id="returns-board"></div>
@@ -432,7 +432,7 @@
       <div style="font-size:1.1rem; font-weight:800; color:var(--text-white); margin-bottom: 16px; display: flex; flex-direction: column; gap: 4px;">
         <span>↩️ Devolución de repuesto nuevo (sin uso)</span>
         <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">
-          Reintegra a stock de DB_ITEMS aquellos repuestos nuevos entregados que hayan sido solicitados para devolución por el mecánico.
+          Reintegra aquellos repuestos nuevos entregados que hayan sido solicitados para devolución por el mecánico.
         </span>
       </div>
 
@@ -1046,7 +1046,7 @@
 
         document.getElementById('tab-despacho').classList.toggle('active', isDespacho);
         document.getElementById('tab-returns').classList.toggle('active', isReturns);
-        document.getElementById('tab-returns-new').classList.toggle('active', isReturnsNew);
+document.getElementById('tab-returns-new').classList.toggle('active', isReturnsNew);
         
         document.getElementById('view-despacho').style.display = isDespacho ? 'block' : 'none';
         document.getElementById('controlBar').style.display = isDespacho ? 'flex' : 'none';
@@ -1069,6 +1069,7 @@
           
           if (returnItems.length > 0 && hasPendingItems) {
             pendingReturnsCount++;
+            let firstActionButtons = '';
             
             const itemsHtml = returnItems.map((i, idx) => {
               const promisedText = i.estadoCanje || "Sin promesar";
@@ -1078,18 +1079,26 @@
               
               const isResolved = i.panolConfirmacion.includes('OK') || i.panolConfirmacion.includes('INCOMPLETO');
 
+              let reasonText = '';
+              if (i.notesColO) {
+                reasonText = i.notesColO.replace(/DEVOLUCIÓN ACEPTADA:\s*/i, '').trim();
+              }
+              if (!reasonText && o.notes) reasonText = String(o.notes).trim();
+
               if (isResolved) {
                 const isOk = i.panolConfirmacion.includes('OK');
                 const statusColor = isOk ? 'var(--green)' : 'var(--orange)';
                 const statusLabel = isOk ? '✓ AUDITADO OK' : '⚠️ AUDITADO INCOMPLETO';
 
                 return `
-                  <div id="ret-item-${itemTag}" style="margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; opacity: 0.45; filter: grayscale(0.2); pointer-events: none;">
-                    <div style="font-size: 1.15rem; font-weight: 900; color: var(--text-white); letter-spacing: -0.3px;">
-                      • ${i.name} <span style="color: var(--text-muted); font-weight: 600; font-size: 0.9rem;">(Pedido Original: x${i.qty})</span>
-                    </div>
-                    <div style="font-size: 0.85rem; color: ${statusColor}; font-weight: 800; margin-left: 14px; margin-top: 6px;">
-                      ${statusLabel}: [${i.panolConfirmacion}]
+                  <div id="ret-item-${itemTag}" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; padding-bottom: 12px; opacity: 0.45; filter: grayscale(0.2); pointer-events: none;">
+                    <div>
+                      <div style="font-size: 1.15rem; font-weight: 900; color: var(--text-white);">
+                        • ${i.name} <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">(Pedido Original: x${i.qty})</span>
+                      </div>
+                      <div style="font-size: 0.85rem; color: ${statusColor}; font-weight: 800; margin-left: 14px; margin-top: 4px;">
+                        ${statusLabel}: [${i.panolConfirmacion}]
+                      </div>
                     </div>
                   </div>`;
               }
@@ -1104,33 +1113,40 @@
 
               const btnOkText = `✓ RECIBÍ ${returnedQty}`;
               const btnOkTooltip = `Confirmar que recibiste exactamente ${returnedQty} unidad(es) de las ${i.qty} solicitadas originalmente.`;
-              const btnIncTooltip = `Reportar que NO recibiste las ${returnedQty} unidad(es) declaradas por el mecánico, o hay otro problema.`;
+              const btnIncTooltip = `Reportar que NO recibiste las ${returnedQty} unidad(es) declaradas por el mecánico.`;
+
+              if (!firstActionButtons) {
+                firstActionButtons = `
+                  <button class="btn-ch ok" 
+                          title="${btnOkTooltip}" 
+                          onclick="submitReturnAudit('${o.reqId}', '${safeItemName}', 'OK', null, '${itemTag}')"
+                          style="width:100%; padding: 10px; font-size: 0.85rem; font-weight: 800; background: rgba(35, 134, 54, 0.25); color: var(--green); border: 1px solid var(--green); border-radius: 6px; cursor: pointer;">
+                      ${btnOkText}
+                  </button>
+                  <button class="btn-ch inc" 
+                          title="${btnIncTooltip}" 
+                          onclick="openIncompletePopup('${o.reqId}', '${safeItemName}', ${i.qty}, ${returnedQty}, '${itemTag}')"
+                          style="width:100%; padding: 10px; font-size: 0.85rem; font-weight: 800; background: transparent; color: var(--orange); border: 1px solid var(--orange); border-radius: 6px; cursor: pointer;">
+                      ⚠️ INCOMPLETO
+                  </button>`;
+              }
 
               return `
-                <div id="ret-item-${itemTag}" style="margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; transition: opacity 0.2s;">
-                  <div style="font-size: 1.15rem; font-weight: 900; color: var(--text-white); letter-spacing: -0.3px;">
-                    • ${i.name} <span style="color: var(--text-muted); font-weight: 600; font-size: 0.9rem;">(Pedido Original: x${i.qty})</span>
+                <div id="ret-item-${itemTag}" style="display:flex; justify-content:space-between; align-items:flex-start; gap: 20px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                  <div style="flex: 1;">
+                    <div style="font-size: 1.15rem; font-weight: 900; color: var(--text-white); letter-spacing: -0.3px;">
+                      • ${i.name} <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">(Pedido Original: x${i.qty})</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: ${badgeColor}; font-weight: 800; margin-left: 14px; margin-top: 4px;">
+                      ↳ Mecánico indica: [${promisedText}]
+                    </div>
                   </div>
-                  
-                  <div style="font-size: 0.85rem; color: ${badgeColor}; font-weight: 800; margin-left: 14px; margin-top: 4px; margin-bottom: 12px;">
-                    ↳ Mecánico indica: [${promisedText}]
-                  </div>
-
-                  <div style="display:flex; gap:8px; margin-left: 14px;">
-                    <button class="btn-ch ok" 
-                            title="${btnOkTooltip}" 
-                            onclick="submitReturnAudit('${o.reqId}', '${safeItemName}', 'OK', null, '${itemTag}')"
-                            style="padding: 8px 12px; font-size: 0.8rem;">
-                        ${btnOkText}
-                    </button>
-                    
-                    <button class="btn-ch inc" 
-                            title="${btnIncTooltip}" 
-                            onclick="openIncompletePopup('${o.reqId}', '${safeItemName}', ${i.qty}, ${returnedQty}, '${itemTag}')"
-                            style="padding: 8px 12px; font-size: 0.8rem;">
-                        ⚠️ INCOMPLETO
-                    </button>
-                  </div>
+                  ${reasonText ? `
+                    <div style="min-width: 200px; max-width: 320px; font-size: 0.85rem; line-height: 1.4;">
+                      <span style="color: var(--orange); font-weight: 800;">Motivo:</span>
+                      <span style="color: var(--text-white); font-weight: 600;"> ${reasonText}</span>
+                    </div>
+                  ` : ''}
                 </div>`;
             }).join('');
 
@@ -1138,25 +1154,25 @@
             const staffOptions = panolStaffList.map(s => `<option value="${s.id}" ${savedOpId === String(s.id) ? 'selected' : ''}>${s.name}</option>`).join('');
 
             html += `
-              <div class="card-horizontal" id="ret-card-${o.reqId}">
-                <div class="ch-left">
-                  <div class="unit-plate">${(o.unitInfo || '').split(/[\/+]/)[0].trim()}</div>
-                  <div class="ot-display" style="margin-top:4px;">OT: ${o.otNumber || '--'}</div>
-                  <div style="margin-top:12px; font-size:0.8rem; color:var(--text-muted); font-weight:600;">
-                    👤 Pidió: ${o.opInfo}
+              <div class="card-horizontal" id="ret-card-${o.reqId}" style="margin-bottom: 16px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);">
+                <div class="ch-left" style="min-width: 210px; padding: 20px; display: flex; flex-direction: column; justify-content: center; border-right: 1px dashed var(--border);">
+                  <div class="unit-plate" style="font-size: 1.4rem; font-weight: 900; color: var(--text-white);">${(o.unitInfo || '').split(/[\/+]/)[0].trim()}</div>
+                  <div class="ot-display" style="margin-top:4px; font-size:0.85rem; font-weight:700; color:var(--text-muted);">OT: ${o.otNumber || '--'}</div>
+                  <div style="margin-top:10px; font-size:0.85rem; color:var(--text); font-weight:700;">
+                    ${o.opInfo || 'Mecánico'}
                   </div>
                 </div>
                 
-                <div class="ch-middle">
+                <div class="ch-middle" style="padding: 20px; flex: 1; display: flex; flex-direction: column; justify-content: center;">
                   ${itemsHtml}
                 </div>
                 
-                <div class="ch-right" style="justify-content: flex-start;">
-                   <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; margin-bottom:4px; text-transform:uppercase;">Auditor:</div>
-                  <select id="ret-op-${o.reqId}" class="panol-select" onchange="pendingSelections['ret_${o.reqId}'] = this.value" onfocus="pausePolling()" onblur="resumePolling()" style="width:100%; border-color:var(--border);">
+                <div class="ch-right" style="min-width: 220px; padding: 20px; background: rgba(0,0,0,0.18); display: flex; flex-direction: column; gap: 12px; justify-content: center; border-left: 1px solid var(--border);">
+                  <select id="ret-op-${o.reqId}" class="panol-select" onchange="pendingSelections['ret_${o.reqId}'] = this.value" onfocus="pausePolling()" onblur="resumePolling()" style="width:100%;">
                     <option value="" disabled ${!savedOpId ? 'selected' : ''}>👤 Revisa Pañolero...</option>
                     ${staffOptions}
                   </select>
+                  ${firstActionButtons}
                 </div>
               </div>`;
           }
@@ -1170,11 +1186,134 @@
           board.innerHTML = html;
         }
       }
+
+      function renderReturnsNewBoard() {
+        const board = document.getElementById('returns-new-board');
+        if (!board) return;
+        let html = '';
+        let pendingNewCount = 0;
+
+        allOrders.forEach(o => {
+          let eligibleItems = [];
+          if (currentNewReturnsSubtab === 'pending') {
+            eligibleItems = o.items.filter(i => i.status === 'DEVOLUCION PENDIENTE');
+          } else {
+            eligibleItems = o.items.filter(i => i.status === 'DEVOLUCION');
+          }
+
+          const pendingInOrder = o.items.filter(i => i.status === 'DEVOLUCION PENDIENTE');
+          if (pendingInOrder.length > 0) pendingNewCount += pendingInOrder.length;
+
+          if (eligibleItems.length > 0) {
+            const itemsHtml = eligibleItems.map((i, idx) => {
+              const safeItemName = i.name.replace(/'/g, "\\'");
+              const itemTag = `newret-${o.reqId}-${idx}`;
+              const isPending = i.status === 'DEVOLUCION PENDIENTE';
+
+              let reasonText = '';
+              if (i.notesColO) {
+                reasonText = i.notesColO.replace(/SOLICITUD DEVOLUCIÓN NUEVA PARCIAL:\s*/i, '')
+                                        .replace(/SOLICITUD DEVOLUCIÓN NUEVA:\s*/i, '')
+                                        .replace(/DEVOLUCIÓN ACEPTADA:\s*/i, '').trim();
+              }
+              if (!reasonText && o.notes) {
+                reasonText = String(o.notes).trim();
+              }
+
+              if (!isPending) {
+                return `
+                  <div id="${itemTag}" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; padding-bottom: 12px; opacity: 0.5;">
+                    <div>
+                      <div style="font-size: 1.1rem; font-weight: 900; color: var(--text-white);">
+                        • ${i.name} <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">(x${i.qty})</span>
+                      </div>
+                      <div style="font-size: 0.85rem; color: var(--green); font-weight: 800; margin-left: 14px; margin-top: 4px;">
+                        ✓ REINTEGRADO A STOCK
+                      </div>
+                    </div>
+                    ${reasonText ? `
+                      <div style="max-width: 320px; font-size: 0.85rem; line-height: 1.4;">
+                        <span style="color: var(--orange); font-weight: 800;">Motivo:</span>
+                        <span style="color: var(--text-muted); font-weight: 600;"> ${reasonText}</span>
+                      </div>
+                    ` : ''}
+                  </div>`;
+              }
+
+              return `
+                <div id="${itemTag}" style="display:flex; justify-content:space-between; align-items:flex-start; gap: 20px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                  <div style="flex: 1;">
+                    <div style="font-size: 1.15rem; font-weight: 900; color: var(--text-white); letter-spacing: -0.3px;">
+                      • ${i.name} <span style="color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">(Cant. a devolver: x${i.qty})</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--orange); font-weight: 800; margin-left: 14px; margin-top: 4px;">
+                      ↳ Solicitado para devolución por el mecánico
+                    </div>
+                  </div>
+                  ${reasonText ? `
+                    <div style="min-width: 200px; max-width: 340px; font-size: 0.85rem; line-height: 1.4;">
+                      <span style="color: var(--orange); font-weight: 800;">Motivo:</span>
+                      <span style="color: var(--text-white); font-weight: 600;"> ${reasonText}</span>
+                    </div>
+                  ` : ''}
+                </div>`;
+            }).join('');
+
+            const savedOpId = pendingSelections[`newret_${o.reqId}`] || o.panolOpId || '';
+            const staffOptions = panolStaffList.map(s => `<option value="${s.id}" ${savedOpId === String(s.id) ? 'selected' : ''}>${s.name}</option>`).join('');
+
+            const pendingItems = eligibleItems.filter(i => i.status === 'DEVOLUCION PENDIENTE');
+            const actionButtons = pendingItems.map((i, idx) => {
+              const safeItemName = i.name.replace(/'/g, "\\'");
+              const itemTag = `newret-${o.reqId}-${idx}`;
+              return `
+                <button class="btn-ch ok" 
+                        onclick="confirmNewItemReturn('${o.reqId}', '${safeItemName}', ${i.qty}, '${itemTag}')"
+                        style="width: 100%; padding: 12px; font-size: 0.85rem; font-weight: 800; background: rgba(35, 134, 54, 0.25); color: var(--green); border: 1px solid var(--green); border-radius: 6px; cursor: pointer; transition: 0.2s;">
+                    ✓ REINTEGRAR A STOCK
+                </button>`;
+            }).join('');
+
+            html += `
+              <div class="card-horizontal" style="margin-bottom: 16px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);">
+                <div class="ch-left" style="min-width: 210px; padding: 20px; display: flex; flex-direction: column; justify-content: center; border-right: 1px dashed var(--border);">
+                  <div class="unit-plate" style="font-size: 1.4rem; font-weight: 900; color: var(--text-white);">${(o.unitInfo || '').split(/[\/+]/)[0].trim()}</div>
+                  <div class="ot-display" style="margin-top:4px; font-size:0.85rem; font-weight:700; color:var(--text-muted);">OT: ${o.otNumber || '--'}</div>
+                  <div style="margin-top:10px; font-size:0.85rem; color:var(--text); font-weight:700;">
+                    ${o.opInfo || 'Mecánico'}
+                  </div>
+                </div>
+                
+                <div class="ch-middle" style="padding: 20px; flex: 1; display: flex; flex-direction: column; justify-content: center;">
+                  ${itemsHtml}
+                </div>
+                
+                <div class="ch-right" style="min-width: 220px; padding: 20px; background: rgba(0,0,0,0.18); display: flex; flex-direction: column; gap: 12px; justify-content: center; border-left: 1px solid var(--border);">
+                  <select id="newret-op-${o.reqId}" class="panol-select" onchange="pendingSelections['newret_${o.reqId}'] = this.value" onfocus="pausePolling()" onblur="resumePolling()" style="width:100%;">
+                    <option value="" disabled ${!savedOpId ? 'selected' : ''}>👤 Revisa Pañolero...</option>
+                    ${staffOptions}
+                  </select>
+                  ${actionButtons}
+                </div>
+              </div>`;
+          }
+        });
+
+        const badgeEl = document.getElementById('newPendingBadge');
+        if (badgeEl) badgeEl.innerText = pendingNewCount;
+        const navBadgeEl = document.getElementById('returnsNewCount');
+        if (navBadgeEl) navBadgeEl.innerText = pendingNewCount;
+
+        if (!html) {
+          board.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">Sin devoluciones de nuevos</div><div class="empty-text">No hay repuestos nuevos pendientes en esta sección.</div></div>`;
+        } else {
+          board.innerHTML = html;
+        }
+      }
       
       function submitReturnAudit(reqId, itemName, status, declaredQty, itemTag) {
         const selectEl = document.getElementById(`ret-op-${reqId}`);
         const panolOpId = selectEl ? selectEl.value : null;
-
         if (!panolOpId) {
           if (selectEl) {
             selectEl.classList.remove('shake-error');
