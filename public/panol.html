@@ -317,8 +317,8 @@
       .qty-btn { width: 28px; height: 28px; border: 1px solid var(--border); background: rgba(255,255,255,0.05); color: var(--text-white); border-radius: 6px; font-size: 1rem; font-weight: 900; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; line-height: 1; }
       .qty-btn:hover { background: var(--blue); border-color: var(--blue); }
       .qty-btn:active { transform: scale(0.9); }
-      .qty-input { width: 42px; height: 28px; text-align: center; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text-white); font-size: 0.85rem; font-weight: 800; outline: none; -moz-appearance: textfield; }
-      .qty-input::-webkit-inner-spin-button, .qty-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+      .qty-input { width: 42px; height: 28px; text-align: center; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text-white); font-size: 0.85rem; font-weight: 800; outline: none; -moz-appearance: textfield; appearance: textfield; }
+      .qty-input::-webkit-inner-spin-button, .qty-input::-webkit-outer-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
       .qty-input:focus { border-color: var(--blue); }
       .stock-badge { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
       .stock-badge.low { color: var(--orange); background: rgba(245,158,11,0.1); }
