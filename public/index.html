@@ -9,7 +9,7 @@
   <script src="/js/client-shim.js"></script>
   
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#365BA5"> 
   
@@ -274,7 +274,7 @@
     #returnReasonInput { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; margin-top: 10px; outline: none; transition: 0.2s; }
     #returnReasonInput:focus { border-color: var(--blue); }
 
-/* --- DEPENDENT SEARCH LAYOUT (UX/UI Pr├ñgnanz) --- */
+/* --- DEPENDENT SEARCH LAYOUT (UX/UI Prägnanz) --- */
 .search-dependency-layout {
   display: flex;
   flex-direction: column;
@@ -323,7 +323,7 @@
   pointer-events: none;
 }
 
-/* Redise├▒o de resultados para el dropdown */
+/* Rediseño de resultados para el dropdown */
 .autocomplete-results {
   position: absolute;
   top: 100%;
@@ -369,8 +369,8 @@
     
     <div id="smartSheet" class="smart-sheet">
       <div class="sheet-header">
-        <div class="sheet-title">­ƒöö Mensajes <span id="sheetCount" style="background:var(--danger); color:white; padding:2px 6px; border-radius:10px; font-size:0.7rem;">0</span></div>
-        <button class="btn-close-sheet" onclick="closeInbox()">├ù</button>
+        <div class="sheet-title">🔔 Mensajes <span id="sheetCount" style="background:var(--danger); color:white; padding:2px 6px; border-radius:10px; font-size:0.7rem;">0</span></div>
+        <button class="btn-close-sheet" onclick="closeInbox()">×</button>
       </div>
       <div id="inboxContent" class="sheet-content">
       </div>
@@ -381,7 +381,7 @@
       <div id="login-section" class="card fade-in">
         <h3 style="margin-top:0; color:var(--dark)">Entrar</h3>
         <div class="input-group">
-          <label>Ingresa tu N┬░ de Operario</label>
+          <label>Ingresa tu N° de Operario</label>
           <input type="number" id="loginOpInput" placeholder="Ej. 104">
         </div>
         <button class="btn-main" onclick="performLogin()">Ingresar</button>
@@ -396,7 +396,7 @@
           </div>
           <div class="header-actions">
             <div class="notif-bell" onclick="openInbox()">
-              ­ƒöö
+              🔔
               <div id="bellBadge" class="notif-badge">0</div>
             </div>
             <button class="btn-logout" onclick="logout()">Salir</button>
@@ -404,8 +404,8 @@
         </div>
 
         <div class="tabs">
-          <button class="tab-btn active" onclick="switchTab('form')">­ƒôØ PEDIR</button>
-          <button class="tab-btn" onclick="switchTab('list')">­ƒôª MIS PEDIDOS</button>
+          <button class="tab-btn active" onclick="switchTab('form')">📝 PEDIR</button>
+          <button class="tab-btn" onclick="switchTab('list')">📦 MIS PEDIDOS</button>
         </div>
 
         <div id="view-form" class="card">
@@ -415,12 +415,12 @@
             <input type="hidden" id="activeOpId">
             <input type="hidden" id="activeMechName">
 
-<!-- B├║squeda por Patente -->
+<!-- Búsqueda por Patente -->
             <div class="input-group">
               <label>Unidad / Patente</label>
               <div class="autocomplete-container">
                 <input type="text" id="unitInput" 
-                       placeholder="Escribe Patente o ├║ltimos caracteres ej. XD" 
+                       placeholder="Escribe Patente o últimos caracteres ej. XD" 
                        autocomplete="off"
                        onkeyup="filterUnitInput(this.value, 'unitInput', 'unitSuggestions', 'UNIT')"
                        onblur="searchByField(this.value, 'UNIT')" 
@@ -429,12 +429,12 @@
               </div>
             </div>
 
-            <!-- B├║squeda por N┬░ de OT (Simetr├¡a UI) -->
+            <!-- Búsqueda por N° de OT (Simetría UI) -->
             <div class="input-group">
               <label>OT ASIGNADA</label>
               <div class="autocomplete-container">
                 <input type="text" id="otInput" 
-                       placeholder="Escribe el N┬░ de OT..." 
+                       placeholder="Escribe el N° de OT..." 
                        autocomplete="off"
                        onkeyup="filterUnitInput(this.value, 'otInput', 'otSuggestions', 'OT'); autoFillSemiOt();"
                        onblur="searchByField(this.value, 'OT'); autoFillSemiOt();" 
@@ -445,14 +445,14 @@
 
             <details id="semiDetails" style="background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px; margin-bottom: 20px;">
                 <summary style="font-size: 0.75rem; font-weight: 700; color: var(--blue); cursor: pointer; outline: none; list-style: none;">
-                    ­ƒÜø AGREGAR SEMI / ACOPLADO Ôû╝
+                    🚛 AGREGAR SEMI / ACOPLADO ▼
                 </summary>
                 <div style="margin-top: 15px; animation: fadeIn 0.3s;">
                     <div class="input-group" style="margin-bottom:10px;">
                         <label style="font-size:0.7rem;">Patente / Interno (Semi)</label>
                         <div class="autocomplete-container">
                             <input type="text" id="semiUnitInput" 
-                                   placeholder="Ej. 6040 / Terminaci├│n..." 
+                                   placeholder="Ej. 6040 / Terminación..." 
                                    autocomplete="off"
                                    onkeyup="filterUnitInput(this.value, 'semiUnitInput', 'semiSuggestions', 'SEMI')"
                                    onblur="searchByField(this.value, 'SEMI')"
@@ -461,7 +461,7 @@
                         </div>
                     </div>
                     <div class="input-group" style="margin-bottom:0;">
-                        <label style="font-size:0.7rem;">N┬░ OT (Semi)</label>
+                        <label style="font-size:0.7rem;">N° OT (Semi)</label>
                         <input type="text" id="semiOtInput" placeholder="Ej. 45002" style="font-size: 0.9rem; padding: 10px; background:white;">
                     </div>
                 </div>
@@ -474,7 +474,7 @@
      ========================================== -->
 <div class="search-dependency-layout">
   
-  <!-- PASO 1: Selector de Categor├¡a -->
+  <!-- PASO 1: Selector de Categoría -->
   <div class="search-group" id="category-search-container">
     <label for="category-select" class="search-label">1. Filtrar por Rubro (Opcional)</label>
     <div class="input-wrapper">
@@ -485,7 +485,7 @@
         autocomplete="off"
         style="transition: background-color 0.3s;"
       />
-      <span class="dropdown-arrow">Ôû╝</span>
+      <span class="dropdown-arrow">▼</span>
     </div>
     <ul id="category-results" class="autocomplete-results hidden"></ul>
   </div>
@@ -501,7 +501,7 @@
         autocomplete="off"
         required
       />
-      <span class="dropdown-arrow">Ôû╝</span>
+      <span class="dropdown-arrow">▼</span>
     </div>
     <ul id="product-results" class="autocomplete-results hidden"></ul>
   </div>
@@ -512,19 +512,19 @@
 
             <div class="input-group" style="margin-bottom: 5px;">
               <details id="notesDetails">
-                <summary>­ƒôØ AGREGAR NOTA / DETALLE</summary>
+                <summary>📝 AGREGAR NOTA / DETALLE</summary>
                 <div style="padding: 0 14px 14px 14px;">
-                  <textarea id="notesInput" rows="3" placeholder="Ej. Lado izquierdo, marca espec├¡fica..."></textarea>
+                  <textarea id="notesInput" rows="3" placeholder="Ej. Lado izquierdo, marca específica..."></textarea>
                 </div>
               </details>
             </div>
 
             <div id="destToggle" class="dest-toggle-container">
               <div id="optUnit" class="dest-option active" data-type="UNIT" onclick="setDestination('UNIT')">
-                ­ƒÜø TRACTOR
+                🚛 TRACTOR
               </div>
               <div id="optSemi" class="dest-option" data-type="SEMI" onclick="setDestination('SEMI')">
-                ­ƒôª SEMI
+                📦 SEMI
               </div>
             </div>
             
@@ -549,10 +549,10 @@
                 <h3 style="margin:0; font-size:1.1rem;">Mis Pedidos</h3>
                 <div style="display:flex; gap:10px;">
                     <button id="btnHistory" onclick="toggleHistoryMode()" style="background:transparent; border:1px solid #d1d5db; color:#6b7280; font-size:0.8rem; font-weight:700; padding:8px 12px; border-radius:6px; cursor:pointer;">
-                        ­ƒô£ HISTORIAL
+                        📜 HISTORIAL
                     </button>
                     <button onclick="refreshOrders()" style="background:none; border:none; color:var(--blue); font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:4px;">
-                        <span id="refreshIcon">­ƒöä</span> Actualizar
+                        <span id="refreshIcon">🔄</span> Actualizar
                     </button>
                 </div>
             </div>
@@ -565,8 +565,8 @@
     <div id="customModal" class="modal-overlay">
       <div class="modal-window">
         <div class="modal-header">
-          <span id="modalIcon" class="modal-icon">­ƒæï</span>
-          <h3 id="modalTitle" class="modal-title">Atenci├│n</h3>
+          <span id="modalIcon" class="modal-icon">👋</span>
+          <h3 id="modalTitle" class="modal-title">Atención</h3>
         </div>
         <div id="modalBody" class="modal-body">Mensaje...</div>
         <div class="modal-footer">
@@ -639,7 +639,7 @@
            div.innerHTML = `
               <div class="notif-header">
                  <span>${msg.unit}</span>
-                 <span style="color:#365BA5;">De: Coordinaci├│n</span>
+                 <span style="color:#365BA5;">De: Coordinación</span>
               </div>
               <div class="notif-body">${msg.body}</div>
               <input type="text" 
@@ -648,7 +648,7 @@
                      placeholder="Escribe tu respuesta..."
                      onkeydown="if(event.key==='Enter') resolveNotif('${msg.id}')">
               <button class="btn-resolve" onclick="resolveNotif('${msg.id}')">
-                 Ô£ô ENVIAR RESPUESTA
+                 ✓ ENVIAR RESPUESTA
               </button>
            `;
            container.appendChild(div);
@@ -661,7 +661,7 @@
         
         if(!responseText) {
            inputEl.style.borderColor = '#e74c3c';
-           inputEl.placeholder = 'ÔÜá´©Å Escribe una respuesta...';
+           inputEl.placeholder = '⚠️ Escribe una respuesta...';
            inputEl.focus();
            return;
         }
@@ -699,7 +699,7 @@
       function performLogin(autoId = null) {
         const id = autoId || document.getElementById('loginOpInput').value;
         const btn = document.querySelector('#login-section button');
-        if(!id) return showModal("Error", "Ingresa tu n├║mero de operario.", "Ôøö");
+        if(!id) return showModal("Error", "Ingresa tu número de operario.", "⛔");
         btn.textContent = "Verificando..."; btn.disabled = true;
         
         google.script.run.withSuccessHandler(config => {
@@ -707,7 +707,7 @@
             localStorage.setItem('mechanic_op', id);
             initApp(id, config);
           } else {
-            showModal("No Encontrado", config.error, "ÔØî");
+            showModal("No Encontrado", config.error, "❌");
             btn.textContent = "Ingresar"; btn.disabled = false;
           }
         }).getMechanicConfig(id);
@@ -736,7 +736,7 @@
       function fetchUnitCatalog() {
         google.script.run.withSuccessHandler(list => {
           dbUnitList = list;
-          console.log("­ƒÜø Fleet loaded:", dbUnitList.length);
+          console.log("🚛 Fleet loaded:", dbUnitList.length);
         }).getUnitCatalog();
       }
 
@@ -847,8 +847,8 @@
           const optUnit = document.getElementById('optUnit');
           const optSemi = document.getElementById('optSemi');
           
-          const uLabel = unitPlate ? `­ƒÜø ${unitPlate}` : '­ƒÜø TRACTOR';
-          const sLabel = semiPlate ? `­ƒôª ${semiPlate}` : '­ƒôª SEMI';
+          const uLabel = unitPlate ? `🚛 ${unitPlate}` : '🚛 TRACTOR';
+          const sLabel = semiPlate ? `📦 ${semiPlate}` : '📦 SEMI';
 
           optUnit.innerText = uLabel;
           optSemi.innerText = sLabel;
@@ -869,7 +869,7 @@
         const container = document.getElementById('location-container');
         if (!boxes || boxes.length === 0) { container.innerHTML = ""; currentBox = ""; return; }
         currentBox = boxes[0];
-        let html = `<div style="font-size:0.7rem; font-weight:700; color:#888; text-transform:uppercase;">­ƒôì Tu Ubicaci├│n:</div>
+        let html = `<div style="font-size:0.7rem; font-weight:700; color:#888; text-transform:uppercase;">📍 Tu Ubicación:</div>
                     <div class="box-selector">`;
         boxes.forEach((box, index) => {
            const activeClass = index === 0 ? 'active' : '';
@@ -887,7 +887,7 @@
 
       // --- LOGOUT ---
       function logout() {
-          showModal("Cerrar Sesi├│n", "┬┐Quieres salir?", "­ƒæï", true, () => {
+          showModal("Cerrar Sesión", "¿Quieres salir?", "👋", true, () => {
             if (heartbeatTimer) clearInterval(heartbeatTimer);
             if (msgTimer) clearInterval(msgTimer);
             localStorage.clear(); 
@@ -908,7 +908,7 @@
           });
       }
 
-      // --- AUTO-FILL SEMI OT (829.txt Punto 2: N┬░ OT Semi predeterminado: 1 n├║mero m├ís que OT ASIGNADA) ---
+      // --- AUTO-FILL SEMI OT (829.txt Punto 2: N° OT Semi predeterminado: 1 número más que OT ASIGNADA) ---
       function autoFillSemiOt(force = false) {
           const otInput = document.getElementById('otInput');
           const semiOtInput = document.getElementById('semiOtInput');
@@ -943,34 +943,34 @@
           const semiOtInput = document.getElementById('semiOtInput'); 
           const detailsEl = document.getElementById('semiDetails');
 
-          // 2. UX: Feedback inmediato de b├║squeda (Espejo bidireccional)
+          // 2. UX: Feedback inmediato de búsqueda (Espejo bidireccional)
           if (type === 'UNIT') otInput.placeholder = "Buscando...";
           if (type === 'OT') unitInput.placeholder = "Buscando...";
           if (type === 'SEMI') semiOtInput.placeholder = "Buscando...";
           if (type === 'SEMI_OT') semiUnitInput.placeholder = "Buscando...";
 
-          // 3. Petici├│n al Servidor
+          // 3. Petición al Servidor
           google.script.run.withSuccessHandler(res => {
               if (res && res.success) {
                   isPopulating = true;
                   
-                  // --- L├│gica del TRACTOR (Unidad / OT) ---
+                  // --- Lógica del TRACTOR (Unidad / OT) ---
                   if (res.unit || res.ot) {
                       if (res.unit) unitInput.value = res.unit;
                       if (res.ot) otInput.value = res.ot;
                       
                       otInput.style.color = res.ot ? "#238636" : "#555";
                       
-                      // Ley de Cierre: Resaltamos visualmente el campo que el sistema complet├│ por el usuario
+                      // Ley de Cierre: Resaltamos visualmente el campo que el sistema completó por el usuario
                       if (type === 'UNIT' && res.ot) flashField(otInput, "#e6fffa");
                       if (type === 'OT' && res.unit) flashField(unitInput, "#e6fffa");
                   }
 
-                  // --- L├│gica del SEMI (Unidad / OT) ---
+                  // --- Lógica del SEMI (Unidad / OT) ---
                   if (res.semi || res.semiOt) {
                       if (res.semi) semiUnitInput.value = res.semi;
                       
-                      // Si viene una OT de Semi espec├¡fica diferente a la OT principal, usarla; si es id├®ntica, autoFillSemiOt la incrementar├í +1
+                      // Si viene una OT de Semi específica diferente a la OT principal, usarla; si es idéntica, autoFillSemiOt la incrementará +1
                       if (res.semiOt && String(res.semiOt).trim() !== String(res.ot || '').trim()) {
                           semiOtInput.value = res.semiOt;
                           semiOtInput.style.backgroundColor = "#f0fdf4";
@@ -980,7 +980,7 @@
                       if (type === 'SEMI' && res.semiOt) flashField(semiOtInput, "#e6fffa");
                       if (type === 'SEMI_OT' && res.semi) flashField(semiUnitInput, "#e6fffa");
 
-                      // Animaci├│n del contenedor de detalles
+                      // Animación del contenedor de detalles
                       if(!detailsEl.open) {
                           detailsEl.open = true;
                           detailsEl.style.borderColor = "#238636"; 
@@ -995,7 +995,7 @@
                       updateDestToggle(res.unit, null);
                   }
 
-                  // 829.txt: N┬░ OT (Semi) predeterminado +1 n├║mero m├ís que OT ASIGNADA
+                  // 829.txt: N° OT (Semi) predeterminado +1 número más que OT ASIGNADA
                   autoFillSemiOt(true);
 
                   isPopulating = false;
@@ -1009,7 +1009,7 @@
                   // Even if not found in DB, check if we need to show toggle based on inputs
                   updateDestToggle(unitInput.value, semiUnitInput.value);
               }
-          }).findUnitOrOt(val, type); // Pasamos 'type' para que el backend sepa qu├® columna priorizar en la b├║squeda
+          }).findUnitOrOt(val, type); // Pasamos 'type' para que el backend sepa qué columna priorizar en la búsqueda
           
           // Immediate check for manual entry before DB returns
           updateDestToggle(unitInput.value, semiUnitInput.value);
@@ -1029,7 +1029,7 @@
           const otVal = document.getElementById('otInput').value; 
           const noteVal = document.getElementById('notesInput').value;
 
-          if (!otVal || otVal.includes("SIN")) return showModal("Falta OT", "La unidad/OT no es v├ílida.", "ÔÜá´©Å");
+          if (!otVal || otVal.includes("SIN")) return showModal("Falta OT", "La unidad/OT no es válida.", "⚠️");
           if (!itemVal) return;
 
           const destType = document.getElementById('currentItemDest').value;
@@ -1042,8 +1042,8 @@
             destLabel = "SEMI";
           }
 
-          // === DISE├æO DE SERVICIO: DETECCI├ôN DE CANJE ===
-          // Buscamos si el ├¡tem seleccionado requiere canje seg├║n la DB
+          // === DISEÑO DE SERVICIO: DETECCIÓN DE CANJE ===
+          // Buscamos si el ítem seleccionado requiere canje según la DB
           const foundItem = dbItems.find(i => (i.name || i) === itemVal);
           const reqCanje = foundItem ? (foundItem.requiereCanje === true || String(foundItem.requiereCanje).toUpperCase() === 'TRUE') : false;
 
@@ -1117,11 +1117,11 @@
                 <div style="font-size:0.75rem; color:#888;">${obj.notes || ''}</div>
               </div>
               <div class="qty-selector">
-                <button class="btn-qty" type="button" onclick="updateCartQty(${index}, -1)">ÔêÆ</button>
+                <button class="btn-qty" type="button" onclick="updateCartQty(${index}, -1)">−</button>
                 <span class="qty-display">${obj.qty}</span>
                 <button class="btn-qty" type="button" onclick="updateCartQty(${index}, 1)">+</button>
               </div>
-              <button class="btn-remove" onclick="removeFromCart(${index})">├ù</button>
+              <button class="btn-remove" onclick="removeFromCart(${index})">×</button>
             `;
             container.appendChild(div);
           });
@@ -1142,26 +1142,26 @@
 // 1. EL INTERCEPTOR
 function submitBatchOrder() {
     if(document.getElementById('itemInput').value) addToCart({ preventDefault: () => {} });
-    if(cartItems.length === 0) return showModal("Vac├¡o", "Agrega al menos un repuesto.", "ÔÜá´©Å");
+    if(cartItems.length === 0) return showModal("Vacío", "Agrega al menos un repuesto.", "⚠️");
 
-    // Filtramos cu├íles piezas del carrito son de recambio obligatorio
+    // Filtramos cuáles piezas del carrito son de recambio obligatorio
     const itemsCanje = cartItems.filter(i => i.requiereCanje);
     
     if (itemsCanje.length > 0) {
-        promptCanje(itemsCanje); // Frenamos el flujo y exigimos justificaci├│n
+        promptCanje(itemsCanje); // Frenamos el flujo y exigimos justificación
     } else {
         executeSubmit(); // Flujo normal sin fricciones
     }
 }
 
-// 2. LA INTERFAZ DE FRICCI├ôN ADAPTATIVA (Gestalt: Regi├│n Com├║n)
+// 2. LA INTERFAZ DE FRICCIÓN ADAPTATIVA (Gestalt: Región Común)
 function promptCanje(itemsCanje) {
     let html = `
     <div style="text-align:left; font-size:0.85rem; color:#555; margin-bottom:15px; font-weight:600;">
-      Por protocolo, estos repuestos requieren la devoluci├│n de la pieza da├▒ada a Pa├▒ol.
+      Por protocolo, estos repuestos requieren la devolución de la pieza dañada a Pañol.
     </div>
     <div id="canjeErrors" style="color:var(--danger); font-size:0.8rem; margin-bottom:10px; font-weight:800; display:none;">
-      ÔÜá´©Å Justifica las piezas faltantes.
+      ⚠️ Justifica las piezas faltantes.
     </div>`;
 
     itemsCanje.forEach((item, idx) => {
@@ -1171,10 +1171,10 @@ function promptCanje(itemsCanje) {
         html += `
           <div style="background: rgba(245, 158, 11, 0.05); border: 1px solid var(--orange); padding: 12px; border-radius: 8px; margin-bottom: 10px; text-align:left;">
             <div style="font-weight: 800; color: var(--dark); margin-bottom: 8px; font-size:0.9rem;">
-              ­ƒö© ${item.displayItem} (Cant: ${qty})
+              🔸 ${item.displayItem} (Cant: ${qty})
             </div>`;
         
-        // DISE├æO DE SERVICIO: Adaptaci├│n de UI seg├║n Cantidad
+        // DISEÑO DE SERVICIO: Adaptación de UI según Cantidad
         if (qty === 1) {
             html += `
             <div style="display: flex; gap: 10px; margin-bottom:5px;">
@@ -1188,14 +1188,14 @@ function promptCanje(itemsCanje) {
               </label>
             </div>`;
         } else {
-            // Dropdown de cantidad (Poka-Yoke: no permite m├ís del m├íximo)
+            // Dropdown de cantidad (Poka-Yoke: no permite más del máximo)
             let optionsHtml = '';
             for(let i = qty; i >= 0; i--) {
                 optionsHtml += `<option value="${i}">${i}</option>`;
             }
             html += `
             <div style="display: flex; align-items: center; gap: 10px; margin-bottom:5px;">
-              <label style="font-size: 0.85rem; color:var(--dark); font-weight:700;">┬┐Cu├íntas entregas?</label>
+              <label style="font-size: 0.85rem; color:var(--dark); font-weight:700;">¿Cuántas entregas?</label>
               <select id="select_${safeId}" style="padding:6px 12px; border-radius:6px; border:2px solid var(--border); font-weight:800; outline:none; background:white; color:var(--blue);" onchange="toggleMotivo('${safeId}', ${qty})">
                 ${optionsHtml}
               </select>
@@ -1203,14 +1203,14 @@ function promptCanje(itemsCanje) {
         }
         
         html += `
-            <input type="text" id="motivo_${safeId}" placeholder="┬┐Por qu├® no entregas todo?" style="display: none; width: 100%; border: 2px solid #e0e0e0; padding: 10px; border-radius: 6px; font-size: 0.85rem; outline:none; box-sizing:border-box; margin-top:8px;">
+            <input type="text" id="motivo_${safeId}" placeholder="¿Por qué no entregas todo?" style="display: none; width: 100%; border: 2px solid #e0e0e0; padding: 10px; border-radius: 6px; font-size: 0.85rem; outline:none; box-sizing:border-box; margin-top:8px;">
           </div>
         `;
     });
 
-    document.getElementById('modalTitle').innerText = "ÔÖ╗´©Å Canje Obligatorio";
+    document.getElementById('modalTitle').innerText = "♻️ Canje Obligatorio";
     document.getElementById('modalBody').innerHTML = html;
-    document.getElementById('modalIcon').innerText = "­ƒôª";
+    document.getElementById('modalIcon').innerText = "📦";
     
     const btnCancel = document.getElementById('modalBtnCancel');
     const btnConfirm = document.getElementById('modalBtnConfirm');
@@ -1229,7 +1229,7 @@ function promptCanje(itemsCanje) {
             const qty = parseInt(item.qty, 10);
             let returnedCount = 0;
 
-            // 1. Extraemos cu├íntos devuelve realmente
+            // 1. Extraemos cuántos devuelve realmente
             if (qty === 1) {
                 const radioVal = document.querySelector(`input[name="${safeId}"]:checked`).value;
                 returnedCount = (radioVal === 'OK') ? 1 : 0;
@@ -1274,7 +1274,7 @@ function promptCanje(itemsCanje) {
     document.getElementById('customModal').classList.add('open');
 }
 
-// Helper Din├ímico Adaptativo
+// Helper Dinámico Adaptativo
 function toggleMotivo(safeId, maxQty) {
     const inputEl = document.getElementById(`motivo_${safeId}`);
     let isMissing = false;
@@ -1291,8 +1291,8 @@ function toggleMotivo(safeId, maxQty) {
 
     if (isMissing) {
         inputEl.style.display = 'block';
-        // UX: El placeholder cambia din├ímicamente seg├║n cu├íntas falten
-        inputEl.placeholder = maxQty > 1 ? `Motivo de las ${missingCount} faltantes...` : "┬┐Por qu├® no la tienes?";
+        // UX: El placeholder cambia dinámicamente según cuántas falten
+        inputEl.placeholder = maxQty > 1 ? `Motivo de las ${missingCount} faltantes...` : "¿Por qué no la tienes?";
         inputEl.focus();
     } else {
         inputEl.style.display = 'none';
@@ -1301,7 +1301,7 @@ function toggleMotivo(safeId, maxQty) {
 }
 
 
-// 3. EL EJECUTOR (Env├¡o al Backend)
+// 3. EL EJECUTOR (Envío al Backend)
 function executeSubmit() {
     const btn = document.getElementById('submitBtn');
     btn.disabled = true; btn.textContent = "ENVIANDO...";
@@ -1337,7 +1337,7 @@ function executeSubmit() {
     google.script.run.withSuccessHandler((res) => {
           btn.disabled = false;
           if(res.success) {
-            showModal("Pedido Enviado", "Tu pedido fue registrado.", "Ô£à");
+            showModal("Pedido Enviado", "Tu pedido fue registrado.", "✅");
             cartItems = []; renderCart();
             document.getElementById('unitInput').value = "";
             document.getElementById('otInput').value = "";
@@ -1349,7 +1349,7 @@ function executeSubmit() {
             updateDestToggle(null, null);
             switchTab('list');
           } else {
-            showModal("Error", res.error, "Ôøö");
+            showModal("Error", res.error, "⛔");
           }
       }).submitBatchRequest(payload);
 }
@@ -1406,12 +1406,12 @@ function executeSubmit() {
               btn.style.background = "#e8f0fe";
               btn.style.color = "#365BA5";
               btn.style.borderColor = "#365BA5";
-              btn.innerText = "­ƒæñ MIS PEDIDOS";
+              btn.innerText = "👤 MIS PEDIDOS";
           } else {
               btn.style.background = "#f3f4f6";
               btn.style.color = "#374151";
               btn.style.borderColor = "#9ca3af";
-              btn.innerText = "­ƒîÉ TODOS (TALLER)";
+              btn.innerText = "🌐 TODOS (TALLER)";
           }
           applyOrderFilters();
       }
@@ -1420,9 +1420,9 @@ function executeSubmit() {
           showHistory = !showHistory; 
           const btn = document.getElementById('btnHistory');
           if(showHistory) {
-              btn.style.background = "#e5e7eb"; btn.style.color = "#374151"; btn.innerText = "ÔÜí VER ACTIVOS";
+              btn.style.background = "#e5e7eb"; btn.style.color = "#374151"; btn.innerText = "⚡ VER ACTIVOS";
           } else {
-              btn.style.background = "transparent"; btn.style.color = "#6b7280"; btn.innerText = "­ƒô£ HISTORIAL";
+              btn.style.background = "transparent"; btn.style.color = "#6b7280"; btn.innerText = "📜 HISTORIAL";
           }
           applyOrderFilters();
       }
@@ -1445,7 +1445,7 @@ function executeSubmit() {
 
         let filtered = orders.slice();
 
-        // 1. Delimitaci├│n por usuario (Mis Pedidos vs Todos)
+        // 1. Delimitación por usuario (Mis Pedidos vs Todos)
         if (userScopeOnly && (currentOpId || currentMechName)) {
             filtered = filtered.filter(o => {
                 const rowOpId = String(o.opId || '').trim();
@@ -1475,8 +1475,8 @@ function executeSubmit() {
 
         if (!filtered || filtered.length === 0) {
           const msg = showHistory 
-            ? "­ƒô£ Sin historial reciente que coincida." 
-            : (userScopeOnly ? "Ô£à No ten├®s pedidos pendientes." : "Ô£à Sin pedidos pendientes en el taller.");
+            ? "📜 Sin historial reciente que coincida." 
+            : (userScopeOnly ? "✅ No tenés pedidos pendientes." : "✅ Sin pedidos pendientes en el taller.");
           container.innerHTML = `<div style='text-align:center; padding:40px 20px; color:#999; font-weight:500;'>${msg}</div>`;
           return;
         }
@@ -1489,24 +1489,24 @@ function executeSubmit() {
           
           if (o.status === "LISTO") {
             statusClass = "status-LISTO";
-            statusBadge = `<span class="status-badge badge-LISTO">ÔÜí LISTO PARA RETIRAR</span>`;
-            action = `<span style="font-size:0.8rem; color:#27ae60; font-weight:700;">Disponible en pa├▒ol</span>`;
+            statusBadge = `<span class="status-badge badge-LISTO">⚡ LISTO PARA RETIRAR</span>`;
+            action = `<span style="font-size:0.8rem; color:#27ae60; font-weight:700;">Disponible en pañol</span>`;
           
           } else if (o.status === "ENTREGADO") {
              statusClass = ""; 
-             statusBadge = `<span class="status-badge" style="background:#f3f4f6; color:#555;">Ô£à RECIBIDO</span>`;
+             statusBadge = `<span class="status-badge" style="background:#f3f4f6; color:#555;">✅ RECIBIDO</span>`;
              action = `<button class="btn-action-secondary" onclick="tryReturn('${o.reqId}')">
-                         <span>Ôå®´©Å</span> DEVOLVER
+                         <span>↩️</span> DEVOLVER
                        </button>`;
           
           } else if (o.status === "DEVOLUCION") {
              statusClass = "";
-             statusBadge = `<span class="status-badge" style="background:#fff5f5; color:#e74c3c;">Ôå®´©Å DEVOLUCI├ôN EN CURSO</span>`;
+             statusBadge = `<span class="status-badge" style="background:#fff5f5; color:#e74c3c;">↩️ DEVOLUCIÓN EN CURSO</span>`;
              action = `<span style="font-size:0.75rem; color:#e74c3c; font-weight:600;">Stock restaurado</span>`;
           
           } else {
-            statusBadge = `<span class="status-badge badge-PENDIENTE">ÔÅ│ EN PREPARACI├ôN</span>`;
-            action = `<span style="font-size:0.8rem; color:#aaa; font-weight:500;">Esperando a Pa├▒ol...</span>`;
+            statusBadge = `<span class="status-badge badge-PENDIENTE">⏳ EN PREPARACIÓN</span>`;
+            action = `<span style="font-size:0.8rem; color:#aaa; font-weight:500;">Esperando a Pañol...</span>`;
           }
 
           let bgStyle = (o.status === "ENTREGADO" || o.status === "DEVOLUCION") ? "background:#fafafa; border-left:4px solid #ccc;" : "";
@@ -1517,20 +1517,20 @@ function executeSubmit() {
             const devBadge = isReturned ? `<span style="margin-left:6px; font-size:0.7rem; color:#e74c3c;">(Devuelto)</span>` : "";
             
             return `<div style="font-weight:800; font-size:1.05rem; margin-top:6px; ${strikeStyle}">
-               ÔÇó ${i.name} 
+               • ${i.name} 
                <span style="margin-left:6px; background:#e2e5e9; padding:2px 6px; border-radius:4px; font-size:0.8rem; text-decoration:none !important; color:#555;">x${i.qty}</span>
                ${devBadge}
              </div>`;
           }).join('');
 
-          const mechTag = (!userScopeOnly && o.opInfo) ? `<div style="font-size:0.75rem; color:var(--blue); font-weight:700; margin-top:2px;">­ƒæñ ${o.opInfo}</div>` : '';
+          const mechTag = (!userScopeOnly && o.opInfo) ? `<div style="font-size:0.75rem; color:var(--blue); font-weight:700; margin-top:2px;">👤 ${o.opInfo}</div>` : '';
 
           html += `<div class="order-item ${statusClass}" style="${bgStyle}">
               <div style="flex-grow:1; margin-right:15px;">
                 ${statusBadge}
                 ${mechTag}
                 <div style="margin-bottom:8px;">${itemsHtml}</div>
-                <div style="font-size:0.8rem; color:#888;">OT ${o.otNumber || 'N/A'} ${o.unitInfo ? 'ÔÇó ' + o.unitInfo : ''}</div>
+                <div style="font-size:0.8rem; color:#888;">OT ${o.otNumber || 'N/A'} ${o.unitInfo ? '• ' + o.unitInfo : ''}</div>
               </div>
               <div>${action}</div>
             </div>`;
@@ -1539,46 +1539,46 @@ function executeSubmit() {
         container.innerHTML = html;
       }
 
-      /* === [DESHABILITADO] Funci├│n tryPickup (Reactivar si se habilita el bot├│n YA LO TENGO) ===
+      /* === [DESHABILITADO] Función tryPickup (Reactivar si se habilita el botón YA LO TENGO) ===
       function tryPickup(reqId) {
-        showModal("Confirmar Retiro", "Quedar├í regitrado a su nombre.", "­ƒôª", true, () => {
+        showModal("Confirmar Retiro", "Quedará regitrado a su nombre.", "📦", true, () => {
             document.getElementById('orders-container').innerHTML = "<div style='text-align:center; padding:20px;'>Procesando...</div>";
             google.script.run.withSuccessHandler(() => refreshOrders()).markAsDelivered(reqId);
         });
       }
       ======================================================================================== */
 
-// === REEMPLAZAR EN Index.html (App Mec├ínicos) ===
+// === REEMPLAZAR EN Index.html (App Mecánicos) ===
 
 function tryReturn(reqId) {
   const order = allLoadedOrders.find(o => o.reqId === reqId);
   if (!order) return;
 
-  // Solo mostramos repuestos que est├ín en estado ENTREGADO
+  // Solo mostramos repuestos que están en estado ENTREGADO
   const returnableItems = order.items.filter(i => i.status === "ENTREGADO");
 
   if (returnableItems.length === 0) {
-     showModal("Atenci├│n", "Ya no hay repuestos para devolver en este pedido.", "ÔÜá´©Å");
+     showModal("Atención", "Ya no hay repuestos para devolver en este pedido.", "⚠️");
      return;
   }
 
-  // Sanitizaci├│n e inyecci├│n de cantidad m├íxima como atributo 'data-qty'
+  // Sanitización e inyección de cantidad máxima como atributo 'data-qty'
   const optionsHtml = returnableItems.map(i => {
     const safeName = i.name.replace(/"/g, '&quot;');
     return `<option value="${safeName}" data-qty="${i.qty}">${i.name} (Max: ${i.qty})</option>`;
   }).join('');
 
-  // UX/UI: Flujo vertical (Regi├│n Com├║n). Selecci├│n -> Cantidad -> Motivo
+  // UX/UI: Flujo vertical (Región Común). Selección -> Cantidad -> Motivo
   const htmlContent = `
     <div style="text-align:left; font-size:0.85rem; color:#555; margin-bottom:6px; font-weight:800;">
-      1. ┬┐Qu├® repuesto deseas devolver?
+      1. ¿Qué repuesto deseas devolver?
     </div>
     <select id="returnItemSelect" style="width:100%; padding:12px; margin-bottom:15px; border-radius:8px; border:2px solid #e0e0e0; font-size:0.9rem; outline:none;" onchange="updateReturnQtyMax(this)">
       ${optionsHtml}
     </select>
 
     <div style="text-align:left; font-size:0.85rem; color:#555; margin-bottom:6px; font-weight:800;">
-      2. ┬┐Cu├íntas unidades devuelves?
+      2. ¿Cuántas unidades devuelves?
     </div>
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
        <input type="number" id="returnQtyInput" min="1" max="${returnableItems[0].qty}" value="${returnableItems[0].qty}" style="width:100px; padding:12px; border-radius:8px; border:2px solid #e0e0e0; font-size:1rem; outline:none; text-align:center; font-weight:700; color:var(--blue);">
@@ -1591,7 +1591,7 @@ function tryReturn(reqId) {
     <input type="text" id="returnReasonInput" placeholder="Ej. Pieza equivocada, Defecto..." style="width:100%; padding:12px; border-radius:8px; border:2px solid #e0e0e0; font-size:0.9rem; outline:none;">
   `;
 
-  showModal("Devoluci├│n Parcial", htmlContent, "Ôå®´©Å", true, () => {
+  showModal("Devolución Parcial", htmlContent, "↩️", true, () => {
     const itemEl = document.getElementById('returnItemSelect');
     const qtyEl = document.getElementById('returnQtyInput');
     const inputEl = document.getElementById('returnReasonInput');
@@ -1601,20 +1601,20 @@ function tryReturn(reqId) {
     let reason = inputEl ? inputEl.value.trim() : "Sin motivo especificado";
 
     if (!itemName || isNaN(returnQty) || returnQty < 1) {
-         showModal("Error", "Cantidad inv├ílida.", "ÔÜá´©Å");
+         showModal("Error", "Cantidad inválida.", "⚠️");
          return;
     }
 
-    document.getElementById('orders-container').innerHTML = "<div style='text-align:center; padding:40px 20px; color:#9ca3af; font-weight:600;'>Procesando devoluci├│n en Pa├▒ol...</div>";
+    document.getElementById('orders-container').innerHTML = "<div style='text-align:center; padding:40px 20px; color:#9ca3af; font-weight:600;'>Procesando devolución en Pañol...</div>";
     
     google.script.run.withSuccessHandler((res) => {
       if(res.success) {
         refreshOrders();
       } else {
-        showModal("Error", res.error || "No se pudo registrar la devoluci├│n.", "Ôøö");
+        showModal("Error", res.error || "No se pudo registrar la devolución.", "⛔");
         refreshOrders(); 
       }
-    // Pasamos el nuevo par├ímetro 'returnQty' al Backend
+    // Pasamos el nuevo parámetro 'returnQty' al Backend
     }).requestRefund(reqId, itemName, reason, returnQty);
   });
 }
@@ -1647,7 +1647,7 @@ let isItemValid = false;
 
 const getUniqueCategories = () => [...new Set(dbItems.map(item => item.category || "GENERAL"))].sort();
 
-// --- L├ôGICA DE CATEGOR├ìAS (De Arriba hacia Abajo) ---
+// --- LÓGICA DE CATEGORÍAS (De Arriba hacia Abajo) ---
 categorySelect.addEventListener('focus', () => renderCategories(categorySelect.value.toLowerCase().trim()));
 categorySelect.addEventListener('click', () => renderCategories(categorySelect.value.toLowerCase().trim()));
 categorySelect.addEventListener('input', (e) => {
@@ -1659,7 +1659,7 @@ function renderCategories(query) {
   categoryResults.innerHTML = '';
   const categories = getUniqueCategories();
   
-  // Filtro SIN L├ìMITES
+  // Filtro SIN LÍMITES
   const matches = categories.filter(cat => cat.toLowerCase().includes(query));
 
   if (matches.length > 0) {
@@ -1673,10 +1673,10 @@ function renderCategories(query) {
         isCategoryValid = true;
         categoryResults.classList.add('hidden');
         
-        // Acotamos los productos a esta categor├¡a
+        // Acotamos los productos a esta categoría
         currentFilteredProducts = dbItems.filter(item => (item.category || "GENERAL") === cat);
         
-        // UX: Foco autom├ítico al paso 2
+        // UX: Foco automático al paso 2
         itemInput.value = ''; 
         isItemValid = false;
         itemInput.focus();
@@ -1689,7 +1689,7 @@ function renderCategories(query) {
   }
 }
 
-// --- L├ôGICA DE REPUESTOS (Bidireccional / De Abajo hacia Arriba) ---
+// --- LÓGICA DE REPUESTOS (Bidireccional / De Abajo hacia Arriba) ---
 itemInput.addEventListener('focus', () => renderProducts(itemInput.value.toLowerCase().trim()));
 itemInput.addEventListener('click', () => renderProducts(itemInput.value.toLowerCase().trim()));
 itemInput.addEventListener('input', (e) => {
@@ -1700,10 +1700,10 @@ itemInput.addEventListener('input', (e) => {
 function renderProducts(query) {
   productResults.innerHTML = '';
   
-  // Si hay rubro v├ílido, busca en ese subgrupo. Si no, busca en TODA la base (dbItems)
+  // Si hay rubro válido, busca en ese subgrupo. Si no, busca en TODA la base (dbItems)
   const sourceList = isCategoryValid ? currentFilteredProducts : dbItems;
   
-  // Filtro SIN L├ìMITES
+  // Filtro SIN LÍMITES
   const matches = sourceList.filter(item => {
     const itemName = item.name || item; 
     return itemName.toLowerCase().includes(query);
@@ -1718,8 +1718,8 @@ function renderProducts(query) {
       const regex = new RegExp(`(${query})`, "gi");
       const highlightedName = query ? itemName.replace(regex, "<strong style='color: var(--blue);'>$1</strong>") : itemName;
       
-      // UX Contextual: Si es b├║squeda global, mostramos el rubro abajo en gris para diferenciar repuestos similares
-      const catContext = !isCategoryValid ? `<span style="display:block; font-size:0.7rem; color:var(--text-muted); margin-top:2px;">­ƒôé ${itemCat}</span>` : '';
+      // UX Contextual: Si es búsqueda global, mostramos el rubro abajo en gris para diferenciar repuestos similares
+      const catContext = !isCategoryValid ? `<span style="display:block; font-size:0.7rem; color:var(--text-muted); margin-top:2px;">📂 ${itemCat}</span>` : '';
       li.innerHTML = `${highlightedName} ${catContext}`;
       
       li.addEventListener('click', () => {
@@ -1728,13 +1728,13 @@ function renderProducts(query) {
         isItemValid = true;
         productResults.classList.add('hidden');
         
-        // 2. MAGIA BIDIRECCIONAL: Si no hab├¡a rubro, rellenarlo autom├íticamente hacia arriba
+        // 2. MAGIA BIDIRECCIONAL: Si no había rubro, rellenarlo automáticamente hacia arriba
         if (!isCategoryValid) {
             categorySelect.value = itemCat;
             isCategoryValid = true;
             currentFilteredProducts = dbItems.filter(i => (i.category || "GENERAL") === itemCat);
             
-            // Poka-Yoke visual: Parpadeo verde para confirmar que el sistema rellen├│ el dato
+            // Poka-Yoke visual: Parpadeo verde para confirmar que el sistema rellenó el dato
             const originalBg = categorySelect.style.backgroundColor;
             categorySelect.style.backgroundColor = "#e6fffa"; // Verde tenue
             categorySelect.style.borderColor = "var(--green)";
@@ -1760,7 +1760,7 @@ document.addEventListener('click', function(e) {
 
   if (!isClickInsideCat) {
     categoryResults.classList.add('hidden');
-    // Si sale dejando un rubro inv├ílido, lo borramos pero dejamos libre el input de Repuestos
+    // Si sale dejando un rubro inválido, lo borramos pero dejamos libre el input de Repuestos
     if (!isCategoryValid && categorySelect.value !== '') {
       categorySelect.value = '';
       currentFilteredProducts = dbItems; 
@@ -1769,7 +1769,7 @@ document.addEventListener('click', function(e) {
 
   if (!isClickInsideProd) {
     productResults.classList.add('hidden');
-    // Si sale dejando un repuesto inv├ílido, lo borramos
+    // Si sale dejando un repuesto inválido, lo borramos
     if (!isItemValid && itemInput.value !== '') {
         itemInput.value = '';
     }
