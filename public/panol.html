@@ -1058,6 +1058,45 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
         }
       }
 
+      function formatLocationBox(unitInfo, firstItemLoc) {
+        let rawLoc = '';
+        const uStr = String(unitInfo || '').trim();
+
+        // 1. Matchear ubicación entre corchetes ej: [BOX 25]
+        const bracketMatch = uStr.match(/\[(.*?)\]/);
+        if (bracketMatch && bracketMatch[1] && !/^[A-Z0-9]{6,8}$/i.test(bracketMatch[1].trim())) {
+          rawLoc = bracketMatch[1].trim();
+        }
+        // 2. Matchear "BOX <numero>" directo en unitInfo
+        if (!rawLoc) {
+          const boxMatch = uStr.match(/BOX\s*\d+/i);
+          if (boxMatch) rawLoc = boxMatch[0].trim();
+        }
+        // 3. Matchear ubicación de estantería o ítem si no es S/D
+        if (!rawLoc && firstItemLoc && firstItemLoc !== 'S/D') {
+          rawLoc = String(firstItemLoc).trim();
+        }
+        // 4. Fallback si no hay BOX definido
+        if (!rawLoc) {
+          rawLoc = 'BOX --';
+        }
+
+        let label = 'BOX';
+        let number = '';
+
+        if (/BOX/i.test(rawLoc)) {
+          label = 'BOX';
+          const numMatch = rawLoc.match(/BOX\s*(\d+)/i);
+          number = numMatch ? numMatch[1] : rawLoc.replace(/BOX/i, '').trim();
+        } else {
+          const parts = rawLoc.split(/[\s-]+/);
+          label = parts[0] ? parts[0].toUpperCase() : 'LOC';
+          number = parts.slice(1).join(' ');
+        }
+
+        return { label, number };
+      }
+
       function renderReturnsBoard() {
         const board = document.getElementById('returns-board');
         let html = '';
@@ -1152,26 +1191,16 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
             const savedOpId = pendingSelections[`ret_${o.reqId}`] || o.panolOpId || '';
             const staffOptions = panolStaffList.map(s => `<option value="${s.id}" ${savedOpId === String(s.id) ? 'selected' : ''}>${s.name}</option>`).join('');
 
-            let plateLabel = 'BOX';
-            let plateNumber = '25';
-            const rawUnit = String(o.unitInfo || '').trim();
-            if (/BOX/i.test(rawUnit)) {
-              plateLabel = 'BOX';
-              const match = rawUnit.match(/BOX\s*(\d+)/i);
-              plateNumber = match ? match[1] : rawUnit.replace(/BOX/i, '').trim();
-            } else if (rawUnit) {
-              const parts = rawUnit.split(/[\/+]/);
-              plateLabel = parts[0].trim();
-              plateNumber = parts[1] ? parts[1].trim() : '';
-            }
+            const firstItemLoc = returnItems[0] ? returnItems[0].loc : '';
+            const locObj = formatLocationBox(o.unitInfo, firstItemLoc);
 
             html += `
               <div class="card-horizontal" id="ret-card-${o.reqId}" style="margin-bottom: 16px; border-radius: 10px; background: #0f172a; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center;">
                 <div class="ch-left" style="padding: 16px 20px; display: flex; align-items: center; border-right: 1px dashed rgba(255,255,255,0.15); min-width: 250px;">
                   <div style="display: flex; gap: 14px; align-items: center;">
                     <div style="display: flex; flex-direction: column; align-items: flex-start; justify-content: center;">
-                      <span style="font-size: 1.5rem; font-weight: 900; line-height: 1; color: var(--text-white); text-transform: uppercase;">${plateLabel}</span>
-                      ${plateNumber ? `<span style="font-size: 2.2rem; font-weight: 900; line-height: 1; color: var(--text-white); margin-top: 2px;">${plateNumber}</span>` : ''}
+                      <span style="font-size: 1.5rem; font-weight: 900; line-height: 1; color: var(--text-white); text-transform: uppercase;">${locObj.label}</span>
+                      ${locObj.number ? `<span style="font-size: 2.2rem; font-weight: 900; line-height: 1; color: var(--text-white); margin-top: 2px;">${locObj.number}</span>` : ''}
                     </div>
                     <div style="display: flex; flex-direction: column; justify-content: center; gap: 4px;">
                       <div style="font-size: 0.85rem; font-weight: 700; color: #94a3b8;">
@@ -1294,26 +1323,16 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
                 </button>`;
             }).join('');
 
-            let plateLabel = 'BOX';
-            let plateNumber = '25';
-            const rawUnit = String(o.unitInfo || '').trim();
-            if (/BOX/i.test(rawUnit)) {
-              plateLabel = 'BOX';
-              const match = rawUnit.match(/BOX\s*(\d+)/i);
-              plateNumber = match ? match[1] : rawUnit.replace(/BOX/i, '').trim();
-            } else if (rawUnit) {
-              const parts = rawUnit.split(/[\/+]/);
-              plateLabel = parts[0].trim();
-              plateNumber = parts[1] ? parts[1].trim() : '';
-            }
+            const firstItemLoc = eligibleItems[0] ? eligibleItems[0].loc : '';
+            const locObj = formatLocationBox(o.unitInfo, firstItemLoc);
 
             html += `
               <div class="card-horizontal" style="margin-bottom: 16px; border-radius: 10px; background: #0f172a; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center;">
                 <div class="ch-left" style="padding: 16px 20px; display: flex; align-items: center; border-right: 1px dashed rgba(255,255,255,0.15); min-width: 250px;">
                   <div style="display: flex; gap: 14px; align-items: center;">
                     <div style="display: flex; flex-direction: column; align-items: flex-start; justify-content: center;">
-                      <span style="font-size: 1.5rem; font-weight: 900; line-height: 1; color: var(--text-white); text-transform: uppercase;">${plateLabel}</span>
-                      ${plateNumber ? `<span style="font-size: 2.2rem; font-weight: 900; line-height: 1; color: var(--text-white); margin-top: 2px;">${plateNumber}</span>` : ''}
+                      <span style="font-size: 1.5rem; font-weight: 900; line-height: 1; color: var(--text-white); text-transform: uppercase;">${locObj.label}</span>
+                      ${locObj.number ? `<span style="font-size: 2.2rem; font-weight: 900; line-height: 1; color: var(--text-white); margin-top: 2px;">${locObj.number}</span>` : ''}
                     </div>
                     <div style="display: flex; flex-direction: column; justify-content: center; gap: 4px;">
                       <div style="font-size: 0.85rem; font-weight: 700; color: #94a3b8;">
