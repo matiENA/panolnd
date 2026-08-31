@@ -8,5 +8,9 @@ services:
     envVars:
       - key: SPREADSHEET_ID
         value: 1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc
+      - key: SOURCE_SPREADSHEET_ID
+        value: 1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk
+      - key: OT_SYNC_INTERVAL_MINUTES
+        value: 2
       - key: NODE_ENV
         value: production

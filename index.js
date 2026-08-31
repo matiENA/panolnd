@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { Server } = require('socket.io');
 const { google } = require('googleapis');
 const { extractCleanPlate } = require('./plateNormalizer');
+const { extractPlates, processSingleOtUpdate, syncFullOtDatabase } = require('./otSyncService');
 
 const app = express();
 app.use(cors());
@@ -76,6 +77,8 @@ io.use((socket, next) => {
 
 // === 1. CREDENCIALES CENTRALIZADAS CON GOOGLE SHEETS ===
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc';
+const SOURCE_SPREADSHEET_ID = process.env.SOURCE_SPREADSHEET_ID || '1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk';
+const OT_SYNC_INTERVAL_MINUTES = parseInt(process.env.OT_SYNC_INTERVAL_MINUTES || '2', 10);
 
 const DEFAULT_SERVICE_ACCOUNT = {
   type: "service_account",
@@ -979,6 +982,15 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
       const users = { "1": "Ema", "6": "Matias" };
       result = users[key] || ("Operador " + key);
     }
+    else if (action === 'syncOtList') {
+      console.log('🔄 Ejecutando sincronización masiva de OTs vía RPC...');
+      result = await syncFullOtDatabase({
+        sheetsClient: sheets,
+        sourceSpreadsheetId: SOURCE_SPREADSHEET_ID,
+        targetSpreadsheetId: SPREADSHEET_ID
+      });
+      io.emit('ot_sync_completed', result);
+    }
     else {
       // Fallback genérico
       result = { success: true };
@@ -997,6 +1009,61 @@ app.get('/api/orders', async (req, res) => {
   res.json(orders);
 });
 
+// === 4.1 WEBHOOK NUEVA OT (APPS SCRIPT INTEGRATION) ===
+app.post('/webhook/nueva-ot', async (req, res) => {
+  try {
+    const dirtyPlate = req.body.dirtyPlate || req.body.rawPlate || req.body.plate || '';
+    const otNumber = req.body.otNumber || req.body.newOt || req.body.ot || '';
+
+    console.log(`📥 Webhook /webhook/nueva-ot recibido: dirtyPlate="${dirtyPlate}", otNumber="${otNumber}"`);
+
+    const result = await processSingleOtUpdate({
+      sheetsClient: sheets,
+      targetSpreadsheetId: SPREADSHEET_ID,
+      dirtyPlate: dirtyPlate,
+      otNumber: otNumber
+    });
+
+    if (result.success) {
+      // Notificar a todos los navegadores/dashboards conectados en tiempo real vía WebSocket
+      io.emit('ot_updated', {
+        action: result.action,
+        matchedPlate: result.matchedPlate,
+        matchedType: result.matchedType,
+        otNumber: result.otNumber,
+        detectedPlates: result.detectedPlates,
+        timestamp: result.timestamp
+      });
+
+      console.log(`✅ Webhook /webhook/nueva-ot completado: ${result.action} para ${result.matchedPlate} (OT ${result.otNumber})`);
+      res.status(200).json(result);
+    } else {
+      console.warn(`⚠️ Webhook /webhook/nueva-ot no aplicado: ${result.error}`);
+      res.status(400).json(result);
+    }
+  } catch (err) {
+    console.error('❌ Error procesando /webhook/nueva-ot:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Endpoint manual / cron para sincronización masiva de OTs
+app.all('/api/sync-ots', async (req, res) => {
+  try {
+    console.log('🔄 Disparando sincronización masiva de OTs desde /api/sync-ots...');
+    const result = await syncFullOtDatabase({
+      sheetsClient: sheets,
+      sourceSpreadsheetId: SOURCE_SPREADSHEET_ID,
+      targetSpreadsheetId: SPREADSHEET_ID
+    });
+    io.emit('ot_sync_completed', result);
+    res.json(result);
+  } catch (err) {
+    console.error('❌ Error en /api/sync-ots:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Health check
 app.get('/ping', (req, res) => res.send('PONG'));
 
@@ -1005,9 +1072,40 @@ io.on('connection', (socket) => {
   socket.emit('orders_sync', ordersCache);
 });
 
-// === 6. ARRANQUE DEL SERVIDOR ===
+// === 6. PROGRAMACIÓN DE TAREAS Y ARRANQUE DEL SERVIDOR ===
+// Sincronización periódica de OTs como salvaguarda / backup (por defecto cada 2 min)
+if (OT_SYNC_INTERVAL_MINUTES > 0) {
+  const syncIntervalMs = OT_SYNC_INTERVAL_MINUTES * 60 * 1000;
+  setInterval(async () => {
+    try {
+      console.log(`⏰ Ejecución programada de sincronización de OTs (cada ${OT_SYNC_INTERVAL_MINUTES} min)...`);
+      const result = await syncFullOtDatabase({
+        sheetsClient: sheets,
+        sourceSpreadsheetId: SOURCE_SPREADSHEET_ID,
+        targetSpreadsheetId: SPREADSHEET_ID
+      });
+      io.emit('ot_sync_completed', result);
+    } catch (e) {
+      console.error('❌ Error en sincronización programada de OTs:', e.message);
+    }
+  }, syncIntervalMs);
+}
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
   console.log('🚀 Servidor Monolito Pañol activo en puerto ' + PORT);
   await syncDataFromSheets();
+
+  // Sincronización inicial de OTs al arrancar
+  try {
+    console.log('🚀 Ejecutando sincronización inicial de OTs al arrancar servidor...');
+    const otSyncRes = await syncFullOtDatabase({
+      sheetsClient: sheets,
+      sourceSpreadsheetId: SOURCE_SPREADSHEET_ID,
+      targetSpreadsheetId: SPREADSHEET_ID
+    });
+    console.log('✅ Sincronización inicial de OTs finalizada:', otSyncRes);
+  } catch (e) {
+    console.error('⚠️ Advertencia: No se pudo completar sincronización inicial de OTs:', e.message);
+  }
 });
