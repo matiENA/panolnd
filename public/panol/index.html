@@ -1058,25 +1058,37 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
         }
       }
 
-      function formatLocationBox(unitInfo, firstItemLoc) {
+      function formatLocationBox(unitInfo, firstItemLoc, opInfo) {
         let rawLoc = '';
         const uStr = String(unitInfo || '').trim();
+        const opStr = String(opInfo || '').trim();
 
-        // 1. Matchear ubicación entre corchetes ej: [BOX 25]
-        const bracketMatch = uStr.match(/\[(.*?)\]/);
-        if (bracketMatch && bracketMatch[1] && !/^[A-Z0-9]{6,8}$/i.test(bracketMatch[1].trim())) {
-          rawLoc = bracketMatch[1].trim();
+        // 1. Matchear ubicación entre corchetes ej: [BOX 25] en opInfo
+        const opBracket = opStr.match(/\[(.*?)\]/);
+        if (opBracket && opBracket[1]) {
+          rawLoc = opBracket[1].trim();
         }
-        // 2. Matchear "BOX <numero>" directo en unitInfo
+
+        // 2. Matchear ubicación entre corchetes ej: [BOX 25] en unitInfo (que no sea patente vehicular)
         if (!rawLoc) {
-          const boxMatch = uStr.match(/BOX\s*\d+/i);
+          const bracketMatch = uStr.match(/\[(.*?)\]/);
+          if (bracketMatch && bracketMatch[1] && !/^[A-Z0-9]{6,8}$/i.test(bracketMatch[1].trim())) {
+            rawLoc = bracketMatch[1].trim();
+          }
+        }
+
+        // 3. Matchear "BOX <numero>" directo en unitInfo u opInfo
+        if (!rawLoc) {
+          const boxMatch = (uStr + ' ' + opStr).match(/BOX\s*\d+/i);
           if (boxMatch) rawLoc = boxMatch[0].trim();
         }
-        // 3. Matchear ubicación de estantería o ítem si no es S/D
+
+        // 4. Matchear ubicación de estantería o ítem si no es S/D
         if (!rawLoc && firstItemLoc && firstItemLoc !== 'S/D') {
           rawLoc = String(firstItemLoc).trim();
         }
-        // 4. Fallback si no hay BOX definido
+
+        // 5. Fallback si no hay BOX definido
         if (!rawLoc) {
           rawLoc = 'BOX --';
         }
@@ -1192,7 +1204,8 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
             const staffOptions = panolStaffList.map(s => `<option value="${s.id}" ${savedOpId === String(s.id) ? 'selected' : ''}>${s.name}</option>`).join('');
 
             const firstItemLoc = returnItems[0] ? returnItems[0].loc : '';
-            const locObj = formatLocationBox(o.unitInfo, firstItemLoc);
+            const locObj = formatLocationBox(o.unitInfo, firstItemLoc, o.opInfo);
+            const cleanMechName = String(o.opInfo || 'MECÁNICO').replace(/\[.*?\]/g, '').trim();
 
             html += `
               <div class="card-horizontal" id="ret-card-${o.reqId}" style="margin-bottom: 16px; border-radius: 10px; background: #0f172a; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center;">
@@ -1207,7 +1220,7 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
                         OT: ${o.otNumber || '--'}
                       </div>
                       <div style="font-size: 0.85rem; font-weight: 800; color: #e2e8f0; text-transform: uppercase;">
-                        ${o.opInfo || 'MECÁNICO'}
+                        ${cleanMechName}
                       </div>
                     </div>
                   </div>
@@ -1324,7 +1337,8 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
             }).join('');
 
             const firstItemLoc = eligibleItems[0] ? eligibleItems[0].loc : '';
-            const locObj = formatLocationBox(o.unitInfo, firstItemLoc);
+            const locObj = formatLocationBox(o.unitInfo, firstItemLoc, o.opInfo);
+            const cleanMechName = String(o.opInfo || 'MECÁNICO').replace(/\[.*?\]/g, '').trim();
 
             html += `
               <div class="card-horizontal" style="margin-bottom: 16px; border-radius: 10px; background: #0f172a; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center;">
@@ -1339,7 +1353,7 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
                         OT: ${o.otNumber || '--'}
                       </div>
                       <div style="font-size: 0.85rem; font-weight: 800; color: #e2e8f0; text-transform: uppercase;">
-                        ${o.opInfo || 'MECÁNICO'}
+                        ${cleanMechName}
                       </div>
                     </div>
                   </div>
