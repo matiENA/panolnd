@@ -446,7 +446,7 @@ app.post('/api/rpc', async (req, res) => {
       let updated = false;
 
       if (sheets) {
-        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A1:R500' });
+        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A:R' });
         const rows = transRes.data.values || [];
         for (let i = 1; i < rows.length; i++) {
           const rReq = String(rows[i][1] || '').trim();
@@ -475,7 +475,7 @@ app.post('/api/rpc', async (req, res) => {
           }
         }
       }
-      await syncDataFromSheets();
+      await syncDataFromSheets(true);
       io.emit('orders_sync', ordersCache);
       result = { success: updated };
     }
@@ -485,7 +485,7 @@ app.post('/api/rpc', async (req, res) => {
       let updated = false;
 
       if (sheets) {
-        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A1:R500' });
+        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A:R' });
         const rows = transRes.data.values || [];
         for (let i = 1; i < rows.length; i++) {
           const rReq = String(rows[i][1] || '').trim();
@@ -502,7 +502,7 @@ app.post('/api/rpc', async (req, res) => {
           }
         }
       }
-      await syncDataFromSheets();
+      await syncDataFromSheets(true);
       io.emit('orders_sync', ordersCache);
       result = { success: updated };
     }
@@ -513,7 +513,7 @@ app.post('/api/rpc', async (req, res) => {
       let updated = false;
 
       if (sheets && qty > 0) {
-        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A1:R500' });
+        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A:R' });
         const rows = transRes.data.values || [];
         let contextRow = null;
 
@@ -558,7 +558,7 @@ app.post('/api/rpc', async (req, res) => {
           updated = true;
         }
       }
-      await syncDataFromSheets();
+      await syncDataFromSheets(true);
       io.emit('orders_sync', ordersCache);
       result = { success: updated };
     }
@@ -582,7 +582,7 @@ app.post('/api/rpc', async (req, res) => {
 
       let updated = false;
       if (sheets) {
-        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A1:R500' });
+        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A:R' });
         const rows = transRes.data.values || [];
 
         for (let i = 1; i < rows.length; i++) {
@@ -593,10 +593,9 @@ app.post('/api/rpc', async (req, res) => {
 
           if (reqMatch && itemMatch) {
             const rowNum = i + 1;
-            const estadoCanjeColQ = String(rows[i][16] || '').trim();
             const confirmacionColR = String(rows[i][17] || '').trim();
 
-            if (estadoCanjeColQ !== '' && !confirmacionColR.includes('OK') && !confirmacionColR.includes('INCOMPLETO')) {
+            if (!confirmacionColR.includes('OK') && !confirmacionColR.includes('INCOMPLETO')) {
               let finalAuditString;
               if (status === 'INCOMPLETO' && declaredQty !== null && declaredQty !== undefined) {
                 const originalQty = Number(rows[i][7]) || 0;
@@ -617,7 +616,7 @@ app.post('/api/rpc', async (req, res) => {
           }
         }
       }
-      await syncDataFromSheets();
+      await syncDataFromSheets(true);
       io.emit('orders_sync', ordersCache);
       result = { success: updated };
     }
@@ -629,7 +628,7 @@ app.post('/api/rpc', async (req, res) => {
       let updated = false;
 
       if (sheets) {
-        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A1:R500' });
+        const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A:R' });
         const rows = transRes.data.values || [];
 
         for (let i = 1; i < rows.length; i++) {
@@ -662,7 +661,7 @@ app.post('/api/rpc', async (req, res) => {
           }
         }
       }
-      await syncDataFromSheets();
+      await syncDataFromSheets(true);
       io.emit('orders_sync', ordersCache);
       result = { success: updated };
     }

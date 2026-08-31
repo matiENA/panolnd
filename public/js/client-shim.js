@@ -45,7 +45,13 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: prop, args: args })
           })
-          .then(res => res.json())
+          .then(async res => {
+            if (!res.ok) {
+              const errBody = await res.text().catch(() => '');
+              throw new Error(`HTTP ${res.status}: ${res.statusText || 'Error del Servidor'}`);
+            }
+            return res.json();
+          })
           .then(data => {
             if (data.error) {
               if (failureCb) failureCb(new Error(data.error));
