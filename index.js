@@ -248,6 +248,13 @@ async function checkAutoDeliveredOrders() {
 setInterval(checkAutoDeliveredOrders, 10000);
 
 // === 3. RUTAS ESTÁTICAS DEL MONOLITO Y QUERY PARAMS ===
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
 app.get('/', (req, res) => {
   const v = String(req.query.v || req.query.view || req.query.page || req.query.p || '').toLowerCase().trim();
   if (v === 'panol' || v === 'monitor') return res.sendFile(path.join(__dirname, 'public', 'panol.html'));
@@ -264,7 +271,7 @@ app.get('/client-shim.js', (req, res) => res.sendFile(path.join(__dirname, 'publ
 app.get('/js/client-shim.js', (req, res) => res.sendFile(path.join(__dirname, 'public', 'client-shim.js')));
 
 // Servidor de archivos estáticos (JS, CSS, imágenes) deshabilitando index automático
-app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+app.use(express.static(path.join(__dirname, 'public'), { index: false, etag: false }));
 
 async function updateStockByName(itemName, deltaQty) {
   if (!sheets || !itemName || !deltaQty) return;
