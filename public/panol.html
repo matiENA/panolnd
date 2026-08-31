@@ -317,9 +317,10 @@
       .qty-btn { width: 28px; height: 28px; border: 1px solid var(--border); background: rgba(255,255,255,0.05); color: var(--text-white); border-radius: 6px; font-size: 1rem; font-weight: 900; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; line-height: 1; }
       .qty-btn:hover { background: var(--blue); border-color: var(--blue); }
       .qty-btn:active { transform: scale(0.9); }
-      .qty-input { width: 42px; height: 28px; text-align: center; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text-white); font-size: 0.85rem; font-weight: 800; outline: none; -moz-appearance: textfield; appearance: textfield; }
+      .qty-input { width: 42px; height: 28px; text-align: center; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text-white); font-size: 0.85rem; font-weight: 800; outline: none; -moz-appearance: textfield; appearance: textfield; transition: border-color 0.15s, background-color 0.15s; }
       .qty-input::-webkit-inner-spin-button, .qty-input::-webkit-outer-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
       .qty-input:focus { border-color: var(--blue); }
+      .qty-input.modified { border-color: var(--orange); background: rgba(245, 158, 11, 0.08); color: #fbbf24; }
       .stock-badge { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
       .stock-badge.low { color: var(--orange); background: rgba(245,158,11,0.1); }
       .stock-badge.out { color: var(--red); background: rgba(218,54,51,0.1); }
@@ -464,6 +465,7 @@
       let expandedCards = new Set();
       let panolStaffList = []; 
       let pendingSelections = {}; 
+      let pendingQtyEdits = {};
       let dirtyOrders = {};
       let undoTimers = {};
       let filters = { status: 'ALL', product: 'ALL', search: '' };
@@ -630,10 +632,13 @@
           if (isPendiente) {
             const currentStock = item.stock || 0;
             const stockClass = currentStock <= 0 ? 'out' : currentStock <= 3 ? 'low' : '';
+            const isModified = pendingQtyEdits[o.reqId] && pendingQtyEdits[o.reqId][item.name.toLowerCase()] !== undefined;
+            const modifiedClass = isModified ? ' modified' : '';
             qtyHtml = `
               <div class="item-edit-controls">
                 <button class="qty-btn" onclick="changeItemQty('${o.reqId}','${safeItemName}',${item.qty},-1)" title="Reducir">−</button>
-                <input type="number" class="qty-input" id="qi-${o.reqId}-${idx}" value="${item.qty}" min="1"
+                <input type="number" class="qty-input${modifiedClass}" id="qi-${o.reqId}-${idx}" value="${item.qty}" min="1"
+                       oninput="saveItemQtyDraft('${o.reqId}','${safeItemName}',this.value)"
                        onchange="updateItemQty('${o.reqId}','${safeItemName}',this.value,${item.qty})"
                        onfocus="pausePolling()" onblur="resumePolling()">
                 <button class="qty-btn" onclick="changeItemQty('${o.reqId}','${safeItemName}',${item.qty},1)" title="Aumentar">+</button>
@@ -834,6 +839,7 @@
         google.script.run
           .withSuccessHandler(() => {
             delete pendingSelections[reqId];
+            delete pendingQtyEdits[reqId];
             loadData();
             resumePolling();
           })
@@ -1016,10 +1022,41 @@
 
       function onDataReceived(orders) {
         allOrders = orders || [];
+
+        // Fusionar borradores locales de edición de cantidades (pendingQtyEdits)
+        allOrders.forEach(o => {
+          const edits = pendingQtyEdits[o.reqId];
+          if (edits && Array.isArray(o.items)) {
+            o.items.forEach(item => {
+              const key = String(item.name).trim().toLowerCase();
+              if (edits[key] !== undefined) {
+                item.qty = edits[key];
+              }
+            });
+          }
+        });
+
         checkForNewCardsAlert(allOrders);
         updateStats();
         
+        // Preservar foco y cursor si el pañolero está tipeando en un input de cantidad
+        const activeEl = document.activeElement;
+        const activeId = activeEl && activeEl.classList && activeEl.classList.contains('qty-input') ? activeEl.id : null;
+        const selStart = activeEl && activeEl.selectionStart !== undefined ? activeEl.selectionStart : null;
+        const selEnd = activeEl && activeEl.selectionEnd !== undefined ? activeEl.selectionEnd : null;
+
         applyFilters(); 
+
+        if (activeId) {
+          const restoredEl = document.getElementById(activeId);
+          if (restoredEl) {
+            restoredEl.focus();
+            if (selStart !== null && selEnd !== null) {
+              try { restoredEl.setSelectionRange(selStart, selEnd); } catch(e) {}
+            }
+          }
+        }
+
         renderReturnsBoard();
         renderReturnsNewBoard();
         updateClock();
@@ -1453,10 +1490,25 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
         });
       }
 
+      function saveItemQtyDraft(reqId, itemName, val) {
+        const num = Number(val);
+        if (isNaN(num) || num < 0) return;
+        const key = String(itemName).trim().toLowerCase();
+        if (!pendingQtyEdits[reqId]) pendingQtyEdits[reqId] = {};
+        pendingQtyEdits[reqId][key] = num;
+
+        const order = allOrders.find(o => String(o.reqId) === String(reqId));
+        if (order) {
+          const item = order.items.find(i => String(i.name).trim().toLowerCase() === key);
+          if (item) item.qty = num;
+        }
+      }
+
       function changeItemQty(reqId, itemName, currentQty, delta) {
         const order = allOrders.find(o => String(o.reqId) === String(reqId));
         if (!order) return;
-        const item = order.items.find(i => String(i.name).toLowerCase() === String(itemName).toLowerCase());
+        const key = String(itemName).trim().toLowerCase();
+        const item = order.items.find(i => String(i.name).trim().toLowerCase() === key);
         if (!item) return;
 
         const newQty = Math.max(0, Number(item.qty) + delta);
@@ -1466,6 +1518,8 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
         }
 
         item.qty = newQty;
+        if (!pendingQtyEdits[reqId]) pendingQtyEdits[reqId] = {};
+        pendingQtyEdits[reqId][key] = newQty;
         applyFilters();
       }
 
@@ -1474,9 +1528,13 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
         if (isNaN(newQty) || newQty < 0) return;
         if (newQty === 0) { removeItem(reqId, itemName); return; }
 
+        const key = String(itemName).trim().toLowerCase();
+        if (!pendingQtyEdits[reqId]) pendingQtyEdits[reqId] = {};
+        pendingQtyEdits[reqId][key] = newQty;
+
         const order = allOrders.find(o => String(o.reqId) === String(reqId));
         if (order) {
-          const item = order.items.find(i => String(i.name).toLowerCase() === String(itemName).toLowerCase());
+          const item = order.items.find(i => String(i.name).trim().toLowerCase() === key);
           if (item) item.qty = newQty;
         }
         applyFilters();
@@ -1494,10 +1552,18 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
       function confirmRemoveItem(reqId, itemName) {
         closePanolModal();
 
+        const key = String(itemName).trim().toLowerCase();
+        if (pendingQtyEdits[reqId]) {
+          delete pendingQtyEdits[reqId][key];
+          if (Object.keys(pendingQtyEdits[reqId]).length === 0) {
+            delete pendingQtyEdits[reqId];
+          }
+        }
+
         const orderIndex = allOrders.findIndex(o => String(o.reqId) === String(reqId));
         if (orderIndex !== -1) {
           allOrders[orderIndex].items = allOrders[orderIndex].items.filter(
-            i => String(i.name).toLowerCase() !== String(itemName).toLowerCase()
+            i => String(i.name).trim().toLowerCase() !== key
           );
           if (allOrders[orderIndex].items.length === 0) {
             allOrders.splice(orderIndex, 1);
