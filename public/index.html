@@ -1634,7 +1634,7 @@ window.updateReturnQtyMax = function(selectEl) {
 };
 
 // ===========================================
-// SELECTORES BIDIRECCIONALES Y GLOBALES
+// SELECTORES BIDIRECCIONALES Y GLOBALES (OPTIMIZADOS)
 // ===========================================
 const categorySelect = document.getElementById('category-select');
 const categoryResults = document.getElementById('category-results');
@@ -1644,6 +1644,10 @@ const productResults = document.getElementById('product-results');
 let currentFilteredProducts = [];
 let isCategoryValid = false;
 let isItemValid = false;
+let catDebounceTimer = null;
+let prodDebounceTimer = null;
+
+const escapeRegex = str => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const getUniqueCategories = () => [...new Set(dbItems.map(item => item.category || "GENERAL"))].sort();
 
@@ -1652,21 +1656,27 @@ categorySelect.addEventListener('focus', () => renderCategories(categorySelect.v
 categorySelect.addEventListener('click', () => renderCategories(categorySelect.value.toLowerCase().trim()));
 categorySelect.addEventListener('input', (e) => {
   isCategoryValid = false;
-  renderCategories(e.target.value.toLowerCase().trim());
+  clearTimeout(catDebounceTimer);
+  catDebounceTimer = setTimeout(() => {
+    renderCategories(e.target.value.toLowerCase().trim());
+  }, 100);
 });
 
 function renderCategories(query) {
   categoryResults.innerHTML = '';
   const categories = getUniqueCategories();
   
-  // Filtro SIN LÍMITES
-  const matches = categories.filter(cat => cat.toLowerCase().includes(query));
+  const matches = query ? categories.filter(cat => cat.toLowerCase().includes(query)) : categories;
 
   if (matches.length > 0) {
-    matches.forEach(cat => {
+    const fragment = document.createDocumentFragment();
+    const maxResults = 30;
+    const visibleMatches = matches.slice(0, maxResults);
+    const regex = query ? new RegExp(`(${escapeRegex(query)})`, "gi") : null;
+
+    visibleMatches.forEach(cat => {
       const li = document.createElement('li');
-      const regex = new RegExp(`(${query})`, "gi");
-      li.innerHTML = query ? cat.replace(regex, "<strong style='color: var(--blue);'>$1</strong>") : cat;
+      li.innerHTML = regex ? cat.replace(regex, "<strong style='color: var(--blue);'>$1</strong>") : cat;
       
       li.addEventListener('click', () => {
         categorySelect.value = cat;
@@ -1681,8 +1691,17 @@ function renderCategories(query) {
         isItemValid = false;
         itemInput.focus();
       });
-      categoryResults.appendChild(li);
+      fragment.appendChild(li);
     });
+
+    if (matches.length > maxResults) {
+      const extraLi = document.createElement('li');
+      extraLi.style.cssText = "color: var(--text-muted); font-size: 0.75rem; text-align: center; cursor: default; background: #f8f9fa; border-top: 1px dashed #cbd5e1; padding: 6px;";
+      extraLi.innerText = `... y ${matches.length - maxResults} rubros más (escribe para acotar)`;
+      fragment.appendChild(extraLi);
+    }
+
+    categoryResults.appendChild(fragment);
     categoryResults.classList.remove('hidden');
   } else {
     categoryResults.classList.add('hidden');
@@ -1694,7 +1713,10 @@ itemInput.addEventListener('focus', () => renderProducts(itemInput.value.toLower
 itemInput.addEventListener('click', () => renderProducts(itemInput.value.toLowerCase().trim()));
 itemInput.addEventListener('input', (e) => {
   isItemValid = false;
-  renderProducts(e.target.value.toLowerCase().trim());
+  clearTimeout(prodDebounceTimer);
+  prodDebounceTimer = setTimeout(() => {
+    renderProducts(e.target.value.toLowerCase().trim());
+  }, 100);
 });
 
 function renderProducts(query) {
@@ -1703,20 +1725,28 @@ function renderProducts(query) {
   // Si hay rubro válido, busca en ese subgrupo. Si no, busca en TODA la base (dbItems)
   const sourceList = isCategoryValid ? currentFilteredProducts : dbItems;
   
-  // Filtro SIN LÍMITES
-  const matches = sourceList.filter(item => {
+  // Búsqueda rápida
+  const matches = [];
+  for (let i = 0; i < sourceList.length; i++) {
+    const item = sourceList[i];
     const itemName = item.name || item; 
-    return itemName.toLowerCase().includes(query);
-  });
+    if (!query || itemName.toLowerCase().includes(query)) {
+      matches.push(item);
+    }
+  }
 
   if (matches.length > 0) {
-    matches.forEach(match => {
+    const fragment = document.createDocumentFragment();
+    const maxResults = 40; // Límite para evitar violaciones de click handler y bloqueo de DOM
+    const visibleMatches = matches.slice(0, maxResults);
+    const regex = query ? new RegExp(`(${escapeRegex(query)})`, "gi") : null;
+
+    visibleMatches.forEach(match => {
       const itemName = match.name || match;
       const itemCat = match.category || "GENERAL";
       
       const li = document.createElement('li');
-      const regex = new RegExp(`(${query})`, "gi");
-      const highlightedName = query ? itemName.replace(regex, "<strong style='color: var(--blue);'>$1</strong>") : itemName;
+      const highlightedName = regex ? itemName.replace(regex, "<strong style='color: var(--blue);'>$1</strong>") : itemName;
       
       // UX Contextual: Si es búsqueda global, mostramos el rubro abajo en gris para diferenciar repuestos similares
       const catContext = !isCategoryValid ? `<span style="display:block; font-size:0.7rem; color:var(--text-muted); margin-top:2px;">📂 ${itemCat}</span>` : '';
@@ -1744,8 +1774,17 @@ function renderProducts(query) {
             }, 600);
         }
       });
-      productResults.appendChild(li);
+      fragment.appendChild(li);
     });
+
+    if (matches.length > maxResults) {
+      const extraLi = document.createElement('li');
+      extraLi.style.cssText = "color: var(--text-muted); font-size: 0.75rem; text-align: center; cursor: default; background: #f8f9fa; border-top: 1px dashed #cbd5e1; padding: 6px;";
+      extraLi.innerText = `... y ${matches.length - maxResults} repuestos más (escribe para acotar)`;
+      fragment.appendChild(extraLi);
+    }
+
+    productResults.appendChild(fragment);
     productResults.classList.remove('hidden');
   } else {
     productResults.innerHTML = `<li style="color: #999; cursor: default;">Sin coincidencias</li>`;
