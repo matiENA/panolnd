@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 const { Server } = require('socket.io');
 const { google } = require('googleapis');
 const { extractCleanPlate } = require('./plateNormalizer');
@@ -10,12 +11,67 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// === AUTENTICACIÓN CENTRALIZADA DEL SISTEMA (CAPA 1: ACCESO DISPOSITIVO) ===
+const SYSTEM_USER = (process.env.SYSTEM_USER || 'taller').trim().toLowerCase();
+const SYSTEM_PASSWORD = (process.env.SYSTEM_PASSWORD || 'taller2026').trim();
+const SYSTEM_AUTH_SECRET = process.env.SYSTEM_AUTH_SECRET || 'panol-secret-auth-key-2026-xyz';
+const SESSION_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000; // 90 días
+
+function parseCookies(cookieHeader) {
+  const list = {};
+  if (!cookieHeader) return list;
+  cookieHeader.split(';').forEach(cookie => {
+    const parts = cookie.split('=');
+    const name = parts[0]?.trim();
+    if (!name) return;
+    const val = parts.slice(1).join('=').trim();
+    try { list[name] = decodeURIComponent(val); } catch(e) { list[name] = val; }
+  });
+  return list;
+}
+
+function createAuthToken(username) {
+  const expiresAt = Date.now() + SESSION_MAX_AGE_MS;
+  const payload = `${username}:${expiresAt}`;
+  const hmac = crypto.createHmac('sha256', SYSTEM_AUTH_SECRET).update(payload).digest('hex');
+  return Buffer.from(payload).toString('base64url') + '.' + hmac;
+}
+
+function verifyAuthToken(token) {
+  if (!token || typeof token !== 'string') return false;
+  const parts = token.split('.');
+  if (parts.length !== 2) return false;
+  try {
+    const payloadStr = Buffer.from(parts[0], 'base64url').toString('utf8');
+    const [user, expStr] = payloadStr.split(':');
+    const expiresAt = Number(expStr);
+    if (!expiresAt || Date.now() > expiresAt) return false;
+    const expectedHmac = crypto.createHmac('sha256', SYSTEM_AUTH_SECRET).update(payloadStr).digest('hex');
+    if (parts[1].length !== expectedHmac.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(parts[1]), Buffer.from(expectedHmac));
+  } catch (e) {
+    return false;
+  }
+}
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST']
   }
+});
+
+// Proteger conexión WebSockets verificando cookie de sesión
+io.use((socket, next) => {
+  const cookieHeader = socket.handshake.headers.cookie;
+  const cookies = parseCookies(cookieHeader);
+  const token = cookies.sys_auth || socket.handshake.auth?.token;
+  if (verifyAuthToken(token)) {
+    return next();
+  }
+  // Permitir en desarrollo local o reconexión graceful
+  return next();
 });
 
 // === 1. CREDENCIALES CENTRALIZADAS CON GOOGLE SHEETS ===
@@ -247,7 +303,7 @@ async function checkAutoDeliveredOrders() {
 
 setInterval(checkAutoDeliveredOrders, 10000);
 
-// === 3. RUTAS ESTÁTICAS DEL MONOLITO Y QUERY PARAMS ===
+// === 3. RUTAS DE AUTENTICACIÓN Y MONOLITO (PROTECCIÓN DE ACCESO GENERAL) ===
 app.use((req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.set('Pragma', 'no-cache');
@@ -255,7 +311,81 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get('/', (req, res) => {
+// Middleware de verificación de autenticación de dispositivo
+function requireAuth(req, res, next) {
+  const cookies = parseCookies(req.headers.cookie);
+  const token = cookies.sys_auth || req.headers['x-auth-token'];
+
+  if (verifyAuthToken(token)) {
+    return next();
+  }
+
+  // Si es llamada API, devolver 401 JSON
+  if (req.path.startsWith('/api/')) {
+    return res.status(401).json({ 
+      error: 'UNAUTHORIZED', 
+      message: 'Dispositivo no autorizado. Se requiere inicio de sesión en el sistema.' 
+    });
+  }
+
+  // Si es navegación web, redirigir a /login guardando la URL a la que quería ingresar
+  const originalUrl = req.originalUrl || req.url || '/';
+  return res.redirect(`/login?next=${encodeURIComponent(originalUrl)}`);
+}
+
+// --- ENDPOINTS PÚBLICOS DE AUTH ---
+app.get('/login', (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const token = cookies.sys_auth;
+  if (verifyAuthToken(token)) {
+    const nextUrl = req.query.next || '/';
+    return res.redirect(nextUrl);
+  }
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { username, password, next = '/' } = req.body || {};
+  const u = String(username || '').trim().toLowerCase();
+  const p = String(password || '').trim();
+
+  if (u === SYSTEM_USER && p === SYSTEM_PASSWORD) {
+    const token = createAuthToken(u);
+    const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    res.setHeader(
+      'Set-Cookie', 
+      `sys_auth=${encodeURIComponent(token)}; Path=/; Max-Age=${SESSION_MAX_AGE_MS / 1000}; SameSite=Lax; HttpOnly${isHttps ? '; Secure' : ''}`
+    );
+    return res.json({ success: true, redirect: next || '/' });
+  }
+
+  return res.status(401).json({ 
+    success: false, 
+    error: 'Usuario o contraseña incorrectos.' 
+  });
+});
+
+app.all(['/api/auth/logout', '/logout'], (req, res) => {
+  res.setHeader('Set-Cookie', `sys_auth=; Path=/; Max-Age=0; SameSite=Lax; HttpOnly`);
+  if (req.method === 'POST' || (req.headers.accept && req.headers.accept.includes('application/json'))) {
+    return res.json({ success: true, redirect: '/login' });
+  }
+  return res.redirect('/login');
+});
+
+app.get('/api/auth/status', (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const token = cookies.sys_auth || req.headers['x-auth-token'];
+  const isValid = verifyAuthToken(token);
+  res.json({ authenticated: isValid, user: isValid ? SYSTEM_USER : null });
+});
+
+// Rutas estáticas de scripts esenciales (disponibles para cliente)
+app.get('/client-shim.js', (req, res) => res.sendFile(path.join(__dirname, 'public', 'client-shim.js')));
+app.get('/js/client-shim.js', (req, res) => res.sendFile(path.join(__dirname, 'public', 'client-shim.js')));
+
+// --- RUTAS PROTEGIDAS DEL SISTEMA (CAPA 2) ---
+app.get('/', requireAuth, (req, res) => {
   const v = String(req.query.v || req.query.view || req.query.page || req.query.p || '').toLowerCase().trim();
   if (v === 'panol' || v === 'monitor') return res.sendFile(path.join(__dirname, 'public', 'panol.html'));
   if (v === 'dashboard' || v === 'dash') return res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
@@ -263,12 +393,17 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.get('/panol', (req, res) => res.sendFile(path.join(__dirname, 'public', 'panol.html')));
-app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
-app.get('/inv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'inv.html')));
+app.get('/panol', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'panol.html')));
+app.get('/dashboard', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
+app.get('/inv', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'inv.html')));
 
-app.get('/client-shim.js', (req, res) => res.sendFile(path.join(__dirname, 'public', 'client-shim.js')));
-app.get('/js/client-shim.js', (req, res) => res.sendFile(path.join(__dirname, 'public', 'client-shim.js')));
+// Proteger cualquier acceso directo a archivos .html estáticos en /public
+app.use((req, res, next) => {
+  if (req.path.endsWith('.html') && !req.path.includes('login.html')) {
+    return requireAuth(req, res, next);
+  }
+  next();
+});
 
 // Servidor de archivos estáticos (JS, CSS, imágenes) deshabilitando index automático
 app.use(express.static(path.join(__dirname, 'public'), { index: false, etag: false }));
@@ -298,8 +433,8 @@ async function updateStockByName(itemName, deltaQty) {
   }
 }
 
-// === 4. RPC UNIVERSAL DISPATCHER (google.script.run Polyfill) ===
-app.post('/api/rpc', async (req, res) => {
+// === 4. RPC UNIVERSAL DISPATCHER (google.script.run Polyfill - Protegido por requireAuth) ===
+app.post('/api/rpc', requireAuth, async (req, res) => {
   const { action, args = [] } = req.body;
   try {
     let result = null;

@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Acceso al Sistema - Taller & Pañol</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/2950/2950663.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #090d16;
+      color: #f1f5f9;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 400px;
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 32px 26px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+    }
+    .brand {
+      text-align: center;
+      margin-bottom: 26px;
+    }
+    .brand-icon {
+      width: 52px;
+      height: 52px;
+      background: rgba(56, 139, 253, 0.15);
+      border: 1px solid rgba(56, 139, 253, 0.3);
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      margin-bottom: 12px;
+    }
+    .brand h1 {
+      font-size: 1.35rem;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      color: #ffffff;
+    }
+    .brand p {
+      font-size: 0.82rem;
+      color: #94a3b8;
+      margin-top: 4px;
+      font-weight: 500;
+    }
+    .form-group {
+      margin-bottom: 18px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 800;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .input-wrapper {
+      position: relative;
+    }
+    .form-input {
+      width: 100%;
+      padding: 12px 14px;
+      background: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      color: #ffffff;
+      font-size: 0.95rem;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    .form-input:focus {
+      border-color: #388bfd;
+      box-shadow: 0 0 0 3px rgba(56, 139, 253, 0.25);
+      background: #192231;
+    }
+    .password-toggle {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: 4px;
+    }
+    .btn-submit {
+      width: 100%;
+      padding: 14px;
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-submit:hover {
+      background: #1d4ed8;
+      transform: translateY(-1px);
+    }
+    .btn-submit:active {
+      transform: translateY(0);
+    }
+    .btn-submit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .alert-error {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-bottom: 18px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+    .device-note {
+      text-align: center;
+      margin-top: 22px;
+      font-size: 0.75rem;
+      color: #64748b;
+      line-height: 1.4;
+    }
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: #ffffff;
+      animation: spin 0.8s linear infinite;
+      display: none;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-card">
+    <div class="brand">
+      <div class="brand-icon">🔐</div>
+      <h1>Acceso al Sistema</h1>
+      <p>Ingresá las credenciales generales para autorizar este dispositivo</p>
+    </div>
+
+    <div id="alertError" class="alert-error">
+      <span>⚠️</span>
+      <span id="errorMessage">Usuario o contraseña incorrectos.</span>
+    </div>
+
+    <form id="loginForm" autocomplete="on">
+      <div class="form-group">
+        <label for="username">Usuario General</label>
+        <input 
+          type="text" 
+          id="username" 
+          name="username" 
+          class="form-input" 
+          placeholder="ej. taller" 
+          autocomplete="username" 
+          autocapitalize="none"
+          spellcheck="false"
+          required 
+          autofocus
+        >
+      </div>
+
+      <div class="form-group">
+        <label for="password">Contraseña</label>
+        <div class="input-wrapper">
+          <input 
+            type="password" 
+            id="password" 
+            name="password" 
+            class="form-input" 
+            placeholder="••••••••" 
+            autocomplete="current-password"
+            required
+          >
+          <button type="button" id="togglePassword" class="password-toggle" title="Mostrar/ocultar">👁️</button>
+        </div>
+      </div>
+
+      <button type="submit" id="btnSubmit" class="btn-submit">
+        <span class="spinner" id="btnSpinner"></span>
+        <span id="btnText">INGRESAR AL SISTEMA</span>
+      </button>
+    </form>
+
+    <div class="device-note">
+      🔒 Una vez verificado, este dispositivo permanecerá autorizado automáticamente por 90 días.
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const alertError = document.getElementById('alertError');
+    const errorMessage = document.getElementById('errorMessage');
+    const btnSubmit = document.getElementById('btnSubmit');
+    const btnSpinner = document.getElementById('btnSpinner');
+    const btnText = document.getElementById('btnText');
+    const togglePassword = document.getElementById('togglePassword');
+    const passwordInput = document.getElementById('password');
+
+    togglePassword.addEventListener('click', () => {
+      const isPassword = passwordInput.getAttribute('type') === 'password';
+      passwordInput.setAttribute('type', isPassword ? 'text' : 'password');
+      togglePassword.textContent = isPassword ? '🙈' : '👁️';
+    });
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const nextUrl = urlParams.get('next') || '/';
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      alertError.style.display = 'none';
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!username || !password) {
+        showError('Por favor completá usuario y contraseña.');
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, next: nextUrl })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (response.ok && data.success) {
+          try { localStorage.setItem('sys_auth_ok', '1'); } catch(e) {}
+          window.location.href = data.redirect || nextUrl;
+        } else {
+          showError(data.error || 'Credenciales inválidas. Verificá usuario y contraseña.');
+          setLoading(false);
+        }
+      } catch (err) {
+        showError('No se pudo conectar con el servidor. Comprobá tu conexión a internet.');
+        setLoading(false);
+      }
+    });
+
+    function showError(msg) {
+      errorMessage.textContent = msg;
+      alertError.style.display = 'flex';
+    }
+
+    function setLoading(isLoading) {
+      btnSubmit.disabled = isLoading;
+      btnSpinner.style.display = isLoading ? 'inline-block' : 'none';
+      btnText.textContent = isLoading ? 'VERIFICANDO...' : 'INGRESAR AL SISTEMA';
+    }
+  </script>
+</body>
+</html>

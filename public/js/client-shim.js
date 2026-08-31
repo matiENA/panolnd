@@ -46,6 +46,10 @@
             body: JSON.stringify({ action: prop, args: args })
           })
           .then(async res => {
+            if (res.status === 401) {
+              window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+              return;
+            }
             if (!res.ok) {
               const errBody = await res.text().catch(() => '');
               throw new Error(`HTTP ${res.status}: ${res.statusText || 'Error del Servidor'}`);
