@@ -40,34 +40,48 @@
         if (prop in target) return target[prop];
 
         return function(...args) {
-          fetch('/api/rpc', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: prop, args: args })
-          })
-          .then(async res => {
-            if (res.status === 401) {
-              window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
-              return;
-            }
-            if (!res.ok) {
-              const errBody = await res.text().catch(() => '');
-              throw new Error(`HTTP ${res.status}: ${res.statusText || 'Error del Servidor'}`);
-            }
-            return res.json();
-          })
-          .then(data => {
-            if (data.error) {
-              if (failureCb) failureCb(new Error(data.error));
-              else console.warn('RPC Notice [' + prop + ']:', data.error);
-            } else {
-              if (successCb) successCb(data.result);
-            }
-          })
-          .catch(err => {
-            if (failureCb) failureCb(err);
-            else console.error('RPC Network Error [' + prop + ']:', err);
-          });
+          const makeRequest = (attempt = 1) => {
+            fetch('/api/rpc', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: prop, args: args })
+            })
+            .then(async res => {
+              if (res.status === 401) {
+                window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+                return;
+              }
+              // Si el servidor de Render está reiniciando (502, 503, 504, 520), reintentar automáticamente
+              if ((res.status >= 500 && res.status <= 599) && attempt <= 2) {
+                setTimeout(() => makeRequest(attempt + 1), 1200 * attempt);
+                return;
+              }
+              if (!res.ok) {
+                const errBody = await res.text().catch(() => '');
+                throw new Error(`HTTP ${res.status}: ${res.statusText || 'Error del Servidor'}`);
+              }
+              return res.json();
+            })
+            .then(data => {
+              if (!data) return;
+              if (data.error) {
+                if (failureCb) failureCb(new Error(data.error));
+                else console.warn('RPC Notice [' + prop + ']:', data.error);
+              } else {
+                if (successCb) successCb(data.result);
+              }
+            })
+            .catch(err => {
+              if (attempt <= 2) {
+                setTimeout(() => makeRequest(attempt + 1), 1200 * attempt);
+                return;
+              }
+              if (failureCb) failureCb(err);
+              else console.error('RPC Network Error [' + prop + ']:', err);
+            });
+          };
+
+          makeRequest();
         };
       }
     });

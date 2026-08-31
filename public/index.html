@@ -1393,11 +1393,16 @@ function executeSubmit() {
         const icon = document.getElementById('refreshIcon');
         if(icon) icon.classList.add('spinning');
         
-        if(opId) google.script.run.withSuccessHandler(orders => {
+        if(opId) google.script.run
+          .withSuccessHandler(orders => {
             allLoadedOrders = orders; 
             renderOrders(orders); 
             if(icon) icon.classList.remove('spinning');
-        }).getMechanicOrders(opId);
+          })
+          .withFailureHandler(err => {
+            if(icon) icon.classList.remove('spinning');
+          })
+          .getMechanicOrders(opId);
       }
 
       let userScopeOnly = true;
