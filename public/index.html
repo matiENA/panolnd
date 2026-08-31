@@ -1,1781 +1,1766 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-  <base target="_top">
-  <meta charset="utf-8">
-  <title>Taller App</title>
-  
-  <script src="/socket.io/socket.io.min.js"></script>
-  <script src="/js/client-shim.js"></script>
-  
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#365BA5"> 
-  
-  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/2950/2950663.png">
-  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2950/2950663.png">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-  
-  <style>
-    :root { 
-      --dark: #0A0B0B; --blue: #365BA5; --light: #E2E5E9;       
-      --white: #FFFFFF; --green: #1e8449; --text: #0A0B0B;
-      --text-muted: #57606a; --danger: #e74c3c;
-      --card-bg: #f3f4f6;
-    }
-    
-    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
-    
-    body { 
-      font-family: 'Inter', sans-serif; background: var(--light); color: var(--text); 
-      display: flex; justify-content: center; padding: 15px; margin: 0;
-      overscroll-behavior-y: none; 
-    }
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Monitor Pañol</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/client-shim.js"></script>
+    <style>
 
-    .container { width: 100%; max-width: 450px; padding-bottom: 30px; }
+      /* === NAVEGACIÓN TOP BAR === */
+      .top-nav { display: flex; gap: 8px; margin-left: 20px; flex: 1; }
+      .nav-tab {
+        background: transparent; color: var(--text-muted); border: none;
+        font-size: 0.85rem; font-weight: 800; cursor: pointer; padding: 8px 16px;
+        border-radius: 8px; transition: all 0.2s; text-transform: uppercase;
+        display: flex; align-items: center; gap: 6px;
+      }
+      .nav-tab:hover { background: rgba(255,255,255,0.05); color: var(--text-white); }
+      .nav-tab.active { background: rgba(56, 139, 253, 0.15); color: #58a6ff; }
+      .nav-tab .badge { background: var(--orange); color: white; padding: 2px 6px; border-radius: 12px; font-size: 0.7rem; }
 
-    /* --- ANIMATIONS --- */
-    @keyframes spin { 100% { transform: rotate(360deg); } }
-    .spinning { animation: spin 1s linear infinite; display: inline-block; }
-    
-    .hidden { display: none !important; }
-    .fade-in { animation: fadeIn 0.3s ease-out; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      /* === TARJETA HORIZONTAL DE DEVOLUCIONES === */
+      .card-horizontal {
+        display: flex; flex-direction: row; background: var(--card-bg);
+        border-radius: 12px; border: 1px solid var(--border); border-left: 5px solid var(--orange);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3); margin-bottom: 16px; overflow: hidden;
+      }
+      .ch-left { padding: 16px; border-right: 1px dashed var(--border); min-width: 180px; display: flex; flex-direction: column; justify-content: center; }
+      .ch-middle { padding: 16px; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+      .ch-right { padding: 16px; border-left: 1px solid var(--border); min-width: 220px; background: rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 12px; justify-content: center; }
+      
+      .btn-ch { flex: 1; padding: 12px; border: none; font-weight: 800; border-radius: 6px; cursor: pointer; transition: 0.2s; }
+      .btn-ch.ok { background: rgba(35, 134, 54, 0.2); color: var(--green); border: 1px solid var(--green); }
+      .btn-ch.ok:hover { background: var(--green); color: white; }
+      .btn-ch.inc { background: transparent; color: var(--orange); border: 1px solid var(--orange); }
+      .btn-ch.inc:hover { background: rgba(245, 158, 11, 0.15); }
+      
+      @media (max-width: 768px) { 
+        .card-horizontal { flex-direction: column; } 
+        .ch-left, .ch-right { border: none; border-bottom: 1px dashed var(--border); min-width: 100%; } 
+      }
 
-    .swipe-out { animation: swipeRight 0.3s ease-in forwards; }
-    @keyframes swipeRight { to { transform: translateX(100%); opacity: 0; height: 0; margin: 0; padding: 0; } }
+      /* === SHAKE DE TARJETA (Alerta Global) === */
+      .shake-card {
+        animation: card-shake 0.5s cubic-bezier(.36,.07,.19,.97) both !important;
+        border-left-color: var(--red) !important;
+        box-shadow: 0 0 15px rgba(218, 54, 51, 0.4) !important;
+      }
+      
+      @keyframes card-shake {
+        10%, 90% { transform: translate3d(-2px, 0, 0); }
+        20%, 80% { transform: translate3d(4px, 0, 0); }
+        30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+        40%, 60% { transform: translate3d(6px, 0, 0); }
+      }
 
-    @keyframes pulse-red {
-      0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
-      70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
-    }
+      :root {
+        --bg: #0d1117;          
+        --card-bg: #161b22;     
+        --panel-bg: #0d1117;
+        --text: #c9d1d9;        
+        --text-white: #f0f6fc;  
+        --text-muted: #8b949e;
+        --blue: #365BA5;        
+        --green: #238636;       
+        --red: #da3633;         
+        --orange: #f59e0b;
+        --border: #30363d;      
+        
+        /* Product Colors */
+        --color-metanol: #EF4444; --text-metanol: #ffffff; 
+        --color-glp: #F59E0B;     --text-glp: #1f2937; 
+        --color-campo: #10B981;   --text-campo: #ffffff; 
+        --color-liviano: #6366F1; --text-liviano: #ffffff;
+        --color-abastecedor: #D946EF; --text-abastecedor: #ffffff;
+        --color-gral: #6B7280;   --text-gral: #ffffff;
 
-    /* --- AUTOCOMPLETE --- */
-    .autocomplete-container { position: relative; width: 100%; }
-    .suggestions-list {
-      position: absolute; top: 100%; left: 0; right: 0;
-      background: white; border: 1px solid #e0e0e0;
-      border-top: none; border-radius: 0 0 8px 8px;
-      max-height: 200px; overflow-y: auto; z-index: 1000;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-      display: none;
-    }
-    .suggestion-item {
-      padding: 12px 14px; border-bottom: 1px solid #f0f0f0;
-      cursor: pointer; font-size: 0.9rem; color: var(--dark);
-      font-weight: 500; transition: background 0.1s; text-align: left;
-    }
-    .suggestion-item:last-child { border-bottom: none; }
-    .suggestion-item:hover { background-color: #f3f4f6; color: var(--blue); }
-    .suggestion-item strong { color: var(--blue); }
+        /* Brand Colors */
+        --color-iveco: #1d4ed8;
+        --color-volvo: #0369a1;
+        --color-scania: #b91c1c;
+        --color-mercedes: #374151;
 
-    /* --- SEGMENTED DESTINATION CONTROL (NEW) --- */
-    .dest-toggle-container {
-      display: none; /* Hidden by default */
-      background: #e2e5e9;
-      padding: 4px;
-      border-radius: 8px;
-      margin-top: 10px;
-      margin-bottom: 10px;
-      animation: fadeIn 0.3s ease;
-    }
+        --note-bg: #4d3800; --note-text: #ffd33d; --note-border: #9e7700; 
+      }
 
-    .dest-toggle-container.show { display: flex; }
+      * { box-sizing: border-box; }
 
-    .dest-option {
-      flex: 1;
-      text-align: center;
-      padding: 10px;
-      font-size: 0.8rem;
-      font-weight: 700;
-      color: #57606a;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s;
-      border: 1px solid transparent;
-    }
+      body {
+        background-color: var(--bg); color: var(--text); font-family: 'Inter', sans-serif;
+        margin: 0; padding: 0; min-height: 100vh;
+      }
 
-    /* Active State Design */
-    .dest-option.active {
-      background: white;
-      color: var(--blue);
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      border-color: #d1d5db;
-    }
+      header {
+        position: sticky; top: 0; z-index: 100;
+        background: var(--panel-bg);
+        border-bottom: 1px solid var(--border);
+        padding: 16px 24px;
+      }
 
-    /* Specific colors for visual distinction */
-    .dest-option[data-type="UNIT"].active { color: var(--blue); border-left: 3px solid var(--blue); }
-    .dest-option[data-type="SEMI"].active { color: var(--green); border-left: 3px solid var(--green); }
+      .header-top {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 16px;
+      }
 
+      .header-left { display: flex; align-items: center; gap: 20px; }
+      
+      h1 { 
+        margin: 0; font-size: 1.5rem; font-weight: 900; 
+        letter-spacing: -0.5px; color: var(--text-white); 
+      }
 
-    /* --- BOX SELECTOR --- */
-    .box-selector { display: flex; gap: 8px; overflow-x: auto; padding: 5px 0 15px 0; -webkit-overflow-scrolling: touch; }
-    .box-chip {
-      background: var(--card-bg); border: 1px solid #d1d5db; color: var(--text-muted);
-      padding: 8px 18px; border-radius: 20px; font-size: 0.85rem; font-weight: 700;
-      cursor: pointer; transition: all 0.2s ease; white-space: nowrap;
-    }
-    .box-chip.active {
-      background: var(--blue); color: white; border-color: var(--blue);
-      box-shadow: 0 4px 10px rgba(54, 91, 165, 0.3); transform: scale(1.05);
-    }
+      .live-badge {
+        display: flex; align-items: center; gap: 6px;
+        background: rgba(35, 134, 54, 0.15);
+        border: 1px solid rgba(35, 134, 54, 0.3);
+        padding: 4px 10px; border-radius: 20px;
+        font-size: 0.7rem; font-weight: 700; color: var(--green);
+      }
+      .live-dot {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: var(--green);
+        animation: pulse 2s infinite;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
 
-    /* CARD STYLES */
-    .card { background: var(--white); padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 15px; }
+      .header-right { display: flex; align-items: center; gap: 16px; }
 
-    /* HEADER */
-    .user-header { 
-      display: flex; justify-content: space-between; align-items: center; 
-      background: var(--dark); color: var(--white); padding: 16px 20px; 
-      border-radius: 12px; margin-bottom: 20px; 
-      box-shadow: 0 4px 12px rgba(10, 11, 11, 0.2); 
-    }
-    .user-info div:first-child { font-size: 0.7rem; color: #aaa; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
-    .user-info div:last-child { font-size: 1.1rem; font-weight: 800; color: var(--light); margin-top: 2px; }
-    .header-actions { display: flex; align-items: center; gap: 15px; }
-    .notif-bell { position: relative; font-size: 1.4rem; cursor: pointer; }
-    .notif-badge {
-      position: absolute; top: -5px; right: -5px;
-      background: var(--danger); color: white;
-      font-size: 0.65rem; font-weight: 800; width: 16px; height: 16px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      border: 2px solid var(--dark); animation: pulse-red 2s infinite;
-      opacity: 0; transition: opacity 0.3s;
-    }
-    .notif-badge.show { opacity: 1; }
-    .btn-logout { background: rgba(255,255,255,0.1); color: var(--white); border: 1px solid rgba(255,255,255,0.2); padding: 8px 14px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; }
+      #clock { 
+        font-family: 'Inter', monospace; font-size: 1.1rem; 
+        color: var(--text-muted); font-weight: 600;
+        background: var(--card-bg); padding: 6px 12px;
+        border-radius: 6px; border: 1px solid var(--border);
+      }
 
-    /* SMART SHEET (INBOX) */
-    .smart-sheet-overlay {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.5); z-index: 100;
-      opacity: 0; pointer-events: none; transition: 0.3s; backdrop-filter: blur(2px);
-    }
-    .smart-sheet-overlay.open { opacity: 1; pointer-events: all; }
-    .smart-sheet {
-      position: fixed; bottom: -100%; left: 0; width: 100%; height: 70%;
-      background: #f8f9fa; z-index: 101; border-radius: 20px 20px 0 0;
-      box-shadow: 0 -5px 20px rgba(0,0,0,0.2);
-      transition: bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      display: flex; flex-direction: column;
-    }
-    .smart-sheet.open { bottom: 0; }
-    .sheet-header { padding: 20px; background: white; border-bottom: 1px solid #eee; border-radius: 20px 20px 0 0; display: flex; justify-content: space-between; align-items: center; }
-    .sheet-title { font-weight: 800; color: var(--dark); font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
-    .btn-close-sheet { background: none; border: none; font-size: 1.5rem; color: #888; cursor: pointer; }
-    .sheet-content { flex: 1; overflow-y: auto; padding: 20px; }
+      .stats-row { display: flex; gap: 8px; }
+      .stat-chip {
+        display: flex; align-items: center; gap: 6px;
+        padding: 6px 12px; border-radius: 8px;
+        font-size: 0.75rem; font-weight: 700;
+        border: 1px solid var(--border);
+        background: var(--card-bg);
+      }
+      .stat-chip.pending { color: var(--blue); }
+      .stat-chip.ready { color: var(--green); }
+      .stat-count {
+        background: rgba(255,255,255,0.1);
+        padding: 2px 8px; border-radius: 4px;
+        font-weight: 800;
+      }
 
-    /* NOTIFICATION CARDS */
-    .notif-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-left: 5px solid var(--blue); }
+      .control-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 
-    .notif-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.75rem; color: #888; font-weight: 700; text-transform: uppercase; }
-    .notif-body { font-size: 0.95rem; font-weight: 600; color: var(--dark); margin-bottom: 15px; line-height: 1.4; }
-    
-    .response-input {
-      width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px;
-      font-size: 0.9rem; margin-bottom: 10px; outline: none; transition: border-color 0.2s;
-    }
-    .response-input:focus { border-color: var(--blue); }
-    
-    .btn-resolve { width: 100%; padding: 12px; border-radius: 8px; border: none; font-weight: 700; cursor: pointer; font-size: 0.85rem; background: var(--blue); color: white; }
-    .btn-resolve:disabled { background: #ccc; }
+      .search-box { flex: 1; min-width: 250px; max-width: 400px; position: relative; }
+      .search-input {
+        width: 100%; background: var(--card-bg); border: 1px solid var(--border);
+        color: var(--text-white); padding: 10px 12px 10px 38px; border-radius: 8px;
+        font-size: 0.9rem; font-family: 'Inter', sans-serif; transition: all 0.2s;
+      }
+      .search-input:focus { outline: none; border-color: var(--blue); background: #1c2128; }
+      .search-input::placeholder { color: var(--text-muted); }
+      .search-icon {
+        position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+        font-size: 0.9rem; color: var(--text-muted); pointer-events: none;
+      }
 
-    /* TABS */
-    .tabs { display: flex; gap: 8px; margin-bottom: 15px; background: #d1d5db; padding: 4px; border-radius: 10px; }
-    .tab-btn { flex: 1; padding: 10px; background: transparent; color: var(--text-muted); border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-    .tab-btn.active { background: var(--white); color: var(--blue); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+      .filter-group { display: flex; gap: 6px; align-items: center; }
+      .filter-label {
+        font-size: 0.7rem; font-weight: 700; color: var(--text-muted);
+        text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px;
+      }
+      .filter-pill {
+        padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700;
+        border: 1px solid var(--border); background: transparent; color: var(--text-muted);
+        cursor: pointer; transition: all 0.15s; white-space: nowrap;
+      }
+      .filter-pill:hover { border-color: var(--text-muted); color: var(--text-white); }
+      .filter-pill.active { background: var(--blue); border-color: var(--blue); color: white; }
 
-    /* FORMS & INPUTS */
-    .input-group { margin-bottom: 20px; }
-    label { font-size: 0.75rem; font-weight: 700; display: block; margin-bottom: 8px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-    input, textarea { width: 100%; padding: 14px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 16px; font-weight: 600; color: var(--dark); background: #fdfdfd; transition: border-color 0.2s; }
-    input:focus, textarea:focus { outline: none; border-color: var(--blue); background: var(--white); }
-    input[readonly] { background: #f3f4f6; color: #888; border-color: transparent; }
-    
-    .btn-main { background: var(--blue); color: var(--white); width: 100%; padding: 18px; border: none; font-weight: 800; font-size: 1rem; cursor: pointer; text-transform: uppercase; border-radius: 8px; margin-top: 10px; box-shadow: 0 4px 10px rgba(54, 91, 165, 0.3); }
-    .btn-main:active { transform: scale(0.98); }
-    .btn-main:disabled { background: #9ca3af; box-shadow: none; }
-    
-    .btn-add { background: var(--white); color: var(--green); width: 100%; padding: 18px; border: 2px; font-weight: 800; font-size: 0.75rem; cursor: pointer; text-transform: uppercase; border-radius: 8px; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 4px rgba(39, 174, 96, 0.3); transition: all 0.2s; }
-    .btn-add:active { transform: scale(0.98); box-shadow: none; }
+      .filter-pill.active[data-product="METANOL"] { background: var(--color-metanol); border-color: var(--color-metanol); }
+      .filter-pill.active[data-product="GLP"] { background: var(--color-glp); border-color: var(--color-glp); color: var(--text-glp); }
+      .filter-pill.active[data-product="CAMPO"] { background: var(--color-campo); border-color: var(--color-campo); }
+      .filter-pill.active[data-product="LIVIANO"] { background: var(--color-liviano); border-color: var(--color-liviano); }
+      .filter-pill.active[data-product="ABASTECEDOR"] { background: var(--color-abastecedor); border-color: var(--color-abastecedor); }
+      .filter-pill.active[data-product="GRAL"] { background: var(--color-gral); border-color: var(--color-gral); }
 
-    /* CART */
-    .cart-item { gap: 10px; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa; border: 1px solid #eee; padding: 12px 16px; border-radius: 8px; margin-bottom: 10px; }
-    .cart-item-text { flex: 1; display: flex; flex-direction: column; }
-    .cart-item-info { font-weight: 600; font-size: 0.95rem; color: var(--dark); }
-    .qty-selector { display: flex; align-items: center; background: #e2e5e9; border-radius: 20px; padding: 4px; gap: 8px; }
-    .btn-qty { width: 28px; height: 28px; border-radius: 50%; border: none; background: var(--white); color: var(--blue); font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .qty-display { font-weight: 700; font-size: 0.9rem; color: var(--dark); min-width: 15px; text-align: center; }
-    .btn-remove { background: none; border: none; color: #e74c3c; font-size: 1.2rem; cursor: pointer; padding: 0 5px; }
+      .sort-select {
+        padding: 6px 28px 6px 10px; border-radius: 8px; font-size: 0.8rem; font-weight: 600;
+        border: 1px solid var(--border);
+        background: var(--card-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238b949e' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E") no-repeat right 10px center;
+        color: var(--text); cursor: pointer; appearance: none;
+      }
+      .sort-select:focus { outline: none; border-color: var(--blue); }
 
-    /* ORDERS LIST */
-    #orders-container { display: flex; flex-direction: column; gap: 10px; }
-    .order-item { background: var(--white); border: 1px solid #eee; padding: 16px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #eee; }
-    .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; }
-    .badge-PENDIENTE { background: #ebf8ff; color: var(--blue); } 
-    .badge-LISTO { background: #e8f5e9; color: var(--green); }
-    .status-LISTO { border-left: 8px solid var(--green); background-color: #f0fdf4; box-shadow: 0 4px 12px rgba(39, 174, 96, 0.15); transform: scale(1.02); order: -1; z-index: 10; }
-    
-    /* Consistent Action Buttons */
-    .btn-action-primary { 
-      background: var(--green); 
-      color: white; 
-      border: none; 
-      padding: 12px 20px; 
-      border-radius: 8px; 
-      font-weight: 800; 
-      font-size: 0.85rem; 
-      cursor: pointer; 
-      box-shadow: 0 4px 12px rgba(39, 174, 96, 0.25);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: all 0.2s;
-      white-space: nowrap;
-    }
-    .btn-action-primary:hover { background: #166534; transform: translateY(-1px); }
-    .btn-action-primary:active { transform: scale(0.98); }
-    
-    .btn-action-secondary {
-      background: white;
-      color: var(--danger);
-      border: 2px solid var(--danger);
-      padding: 10px 16px;
-      border-radius: 8px;
-      font-weight: 700;
-      font-size: 0.8rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.2s;
-      white-space: nowrap;
-    }
-    .btn-action-secondary:hover { background: #fef2f2; }
-    .btn-action-secondary:active { transform: scale(0.98); }
-    
-    .btn-pickup { background: var(--green); color: white; border: none; padding: 10px 16px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; cursor: pointer; box-shadow: 0 4px 8px rgba(39, 174, 96, 0.2); }
+      main { padding: 24px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; align-items: start; }
 
-    /* MODAL */
-    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; display: flex; justify-content: center; align-items: center; opacity: 0; pointer-events: none; transition: 0.3s; backdrop-filter: blur(2px); }
-    .modal-overlay.open { opacity: 1; pointer-events: all; }
-    .modal-window { background: var(--white); width: 90%; max-width: 350px; border-radius: 16px; overflow: hidden; transform: scale(0.9); transition: 0.3s; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
-    .modal-overlay.open .modal-window { transform: scale(1); }
-    .modal-header { background: var(--dark); padding: 20px; text-align: center; }
-    .modal-icon { font-size: 2.5rem; display: block; margin-bottom: 5px; }
-    .modal-title { color: var(--white); font-weight: 800; font-size: 1.1rem; text-transform: uppercase; }
-    .modal-body { padding: 25px 20px; text-align: center; color: var(--text); font-size: 1rem; line-height: 1.5; font-weight: 500; }
-    .modal-footer { padding: 0 20px 20px 20px; display: flex; gap: 10px; }
-    .btn-modal { flex: 1; padding: 14px; border-radius: 8px; border: none; font-weight: 800; cursor: pointer; font-size: 0.9rem; text-transform: uppercase; }
-    .btn-confirm { background: var(--blue); color: white; }
-    .btn-cancel { background: #e0e0e0; color: #555; }
-    #returnReasonInput { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 1rem; margin-top: 10px; outline: none; transition: 0.2s; }
-    #returnReasonInput:focus { border-color: var(--blue); }
+      .card {
+        background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border);
+        border-left: 5px solid var(--blue); display: flex; flex-direction: column;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: all 0.2s ease; overflow: hidden;
+      }
+      .card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
 
-/* --- DEPENDENT SEARCH LAYOUT (UX/UI Prägnanz) --- */
-.search-dependency-layout {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  background: #f8f9fa;
-  padding: 15px;
-  border-radius: 8px;
-  border: 1px solid #e0e0e0;
-  margin-bottom: 15px;
-}
+      .card.status-PENDIENTE { border-left-color: var(--blue); }
+      .card.status-LISTO { border-left-color: var(--green); background: linear-gradient(90deg, rgba(35,134,54,0.08) 0%, var(--card-bg) 100%); }
+      .card.urgent { border-left-color: var(--red); animation: urgent-glow 2s infinite; }
+      @keyframes urgent-glow {
+        0%, 100% { box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+        50% { box-shadow: 0 2px 20px rgba(218, 54, 51, 0.3); }
+      }
 
-.search-group {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
+      .card.has-semi { border-left-color: var(--orange); }
+      .card.has-semi.status-LISTO { border-left-color: var(--green); }
 
-.search-label {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
+      .card-header { padding: 16px 16px 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; }
+      .unit-info { display: flex; flex-direction: column; gap: 4px; }
+      .unit-plate { font-size: 1.3rem; font-weight: 900; color: var(--text-white); letter-spacing: 0.5px; line-height: 1.2; display: flex; align-items: center; gap: 8px; }
+      .semi-plate { font-size: 0.85rem; color: var(--orange); font-weight: 700; }
+      .ot-display { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; }
+      .ot-label { color: var(--text-muted); font-weight: 600; }
+      .ot-value { color: var(--blue); font-weight: 800; }
 
-.input-wrapper {
-  position: relative;
-}
+      .time-badge { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+      .time-value { font-size: 0.9rem; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+      .time-value.urgent { color: var(--red); }
+      .wait-mins { font-size: 0.7rem; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; }
+      .wait-mins.urgent { background: rgba(218,54,51,0.2); color: var(--red); }
 
-/* Feedback Visual de Bloqueo (Poka-Yoke) */
-#itemInput:disabled {
-  background-color: #e2e5e9;
-  color: #888;
-  cursor: not-allowed;
-  border-color: transparent;
-}
+      .badges-row { display: flex; gap: 6px; padding: 8px 16px; flex-wrap: wrap; background: rgba(0,0,0,0.2); }
+      .badge { font-size: 0.65rem; font-weight: 800; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+      .badge-metanol { background: var(--color-metanol); color: var(--text-metanol); }
+      .badge-glp { background: var(--color-glp); color: var(--text-glp); }
+      .badge-campo { background: var(--color-campo); color: var(--text-campo); }
+      .badge-liviano { background: var(--color-liviano); color: var(--text-liviano); }
+      .badge-abastecedor { background: var(--color-abastecedor); color: var(--text-abastecedor); }
+      .badge-gral { background: var(--color-gral); color: var(--text-gral); }
+      .badge-brand { background: rgba(255,255,255,0.1); color: var(--text); border: 1px solid var(--border); }
+      .badge-brand.iveco { background: rgba(29,78,216,0.2); color: #60a5fa; border-color: rgba(29,78,216,0.4); }
+      .badge-brand.volvo { background: rgba(3,105,161,0.2); color: #38bdf8; border-color: rgba(3,105,161,0.4); }
+      .badge-brand.scania { background: rgba(185,28,28,0.2); color: #f87171; border-color: rgba(185,28,28,0.4); }
 
-.dropdown-arrow {
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 12px;
-  color: #888;
-  pointer-events: none;
-}
+      .card-body { padding: 12px 16px; flex-grow: 1; }
+      .mechanic-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed var(--border); }
+      .mechanic-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--blue); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800; }
+      .mechanic-name { font-size: 0.85rem; font-weight: 600; color: var(--text); }
 
-/* Rediseño de resultados para el dropdown */
-.autocomplete-results {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: 4px;
-  padding: 0;
-  list-style: none;
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  max-height: 200px;
-  overflow-y: auto;
-  z-index: 1000;
-}
+      .item-list { display: flex; flex-direction: column; gap: 0; background: rgba(0,0,0,0.2); border-radius: 8px; overflow: hidden; }
+      .item-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+      .item-row:last-child { border-bottom: none; }
+      .item-row.highlighted { background: rgba(35, 134, 54, 0.2); }
+      .item-primary { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+      .item-name { font-weight: 700; color: var(--text-white); font-size: 0.9rem; line-height: 1.3; }
+      .item-qty { background: var(--green); color: #fff; font-size: 0.75rem; font-weight: 800; padding: 3px 8px; border-radius: 4px; min-width: 32px; text-align: center; flex-shrink: 0; }
+      .item-secondary { display: flex; justify-content: space-between; align-items: center; }
+      .item-id { font-size: 0.85rem; color: #a5b4fc; font-family: monospace; font-weight: 700; background: rgba(165, 180, 252, 0.1); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px; }
+      .item-loc { font-size: 0.75rem; color: #58a6ff; background: rgba(56, 139, 253, 0.1); border: 1px solid rgba(56, 139, 253, 0.3); border-radius: 4px; padding: 4px 8px; text-align: center; font-weight: 800; white-space: nowrap; }
 
-.autocomplete-results li {
-  padding: 12px 16px;
-  cursor: pointer;
-  border-bottom: 1px solid #f0f0f0;
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--dark);
-}
+      .hidden-items { display: none; }
+      .hidden-items.show { display: block; }
+      .expand-btn { width: 100%; padding: 10px; background: rgba(56, 139, 253, 0.1); border: none; color: #58a6ff; font-size: 0.75rem; font-weight: 700; cursor: pointer; text-transform: uppercase; }
+      .expand-btn:hover { background: rgba(56, 139, 253, 0.2); }
+      .note-box { margin-top: 10px; background: var(--note-bg); color: var(--note-text); padding: 8px 10px; border-radius: 6px; font-size: 0.8rem; border-left: 3px solid var(--note-border); display: flex; align-items: flex-start; gap: 6px; }
 
-.autocomplete-results li:hover {
-  background-color: #f3f4f6;
-  color: var(--blue);
-}
-@keyframes modal-shake {
-        10%, 90% { transform: translate3d(-1px, 0, 0) scale(1); }
-        20%, 80% { transform: translate3d(2px, 0, 0) scale(1); }
-        30%, 50%, 70% { transform: translate3d(-4px, 0, 0) scale(1); }
-        40%, 60% { transform: translate3d(4px, 0, 0) scale(1); }
-    }
-    .modal-shake { animation: modal-shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
-    
-  </style>
+      .card-footer { padding: 0; }
+      .btn-action { width: 100%; padding: 14px; border: none; font-weight: 800; font-size: 0.9rem; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+      .btn-ready { background: var(--blue); color: white; }
+      .btn-ready:hover { background: #4169c5; }
+      .status-complete { padding: 14px; background: rgba(35, 134, 54, 0.15); color: var(--green); font-weight: 800; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; }
+
+      .empty-state { grid-column: 1 / -1; text-align: center; padding: 80px 20px; color: var(--text-muted); }
+      .empty-icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.5; }
+      .empty-title { font-size: 1.2rem; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+      .empty-text { font-size: 0.9rem; }
+
+      .loading { grid-column: 1 / -1; text-align: center; padding: 60px; color: var(--text-muted); }
+      .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      .action-group { display: flex; gap: 8px; padding: 12px 16px; background: rgba(0, 0, 0, 0.1); border-top: 1px solid var(--border); }
+      .panol-select { flex: 1; background: var(--bg); color: var(--text-white); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 0.85rem; font-weight: 600; outline: none; cursor: pointer; transition: all 0.2s; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23c9d1d9' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+      .panol-select:focus { border-color: var(--blue); }
+      .btn-action.btn-ready { flex: 1; padding: 10px; margin: 0; }
+
+      .shake-error { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; border-color: var(--red) !important; color: var(--red) !important; background-color: rgba(218, 54, 51, 0.1) !important; }
+      @keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }
+
+      .btn-undo-ready { width: 100%; padding: 12px; background: rgba(245, 158, 11, 0.2); color: var(--orange); border: 1px solid var(--orange); border-radius: 8px; font-weight: 800; font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.2s; }
+      .btn-undo-ready:hover { background: var(--orange); color: #000; }
+
+      .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 9999; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+      .modal-overlay.active { opacity: 1; pointer-events: auto; }
+      .modal-content { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 28px; min-width: 380px; max-width: 520px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.6); transform: translateY(20px); transition: transform 0.25s; }
+      .modal-overlay.active .modal-content { transform: translateY(0); }
+      .modal-title { font-size: 1.1rem; font-weight: 900; color: var(--text-white); margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+      .modal-body { margin-bottom: 20px; }
+      .modal-body label { display: block; font-size: 0.8rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; }
+      .modal-body input[type="number"], .modal-body input[type="text"] { width: 100%; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text-white); font-size: 1rem; font-weight: 700; outline: none; transition: border-color 0.2s; }
+      .modal-body input:focus { border-color: var(--blue); }
+      .modal-info { background: rgba(56,139,253,0.08); border: 1px solid rgba(56,139,253,0.2); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.85rem; color: #58a6ff; font-weight: 600; }
+      .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+      .modal-btn { padding: 10px 20px; border: none; border-radius: 8px; font-weight: 800; font-size: 0.85rem; cursor: pointer; transition: 0.2s; }
+      .modal-btn.primary { background: var(--blue); color: white; }
+      .modal-btn.primary:hover { background: #4169c5; }
+      .modal-btn.danger { background: rgba(218,54,51,0.15); color: var(--red); border: 1px solid var(--red); }
+      .modal-btn.danger:hover { background: var(--red); color: white; }
+      .modal-btn.cancel { background: rgba(255,255,255,0.05); color: var(--text-muted); }
+      .modal-btn.cancel:hover { background: rgba(255,255,255,0.1); color: var(--text-white); }
+
+      .item-edit-controls { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+      .qty-btn { width: 28px; height: 28px; border: 1px solid var(--border); background: rgba(255,255,255,0.05); color: var(--text-white); border-radius: 6px; font-size: 1rem; font-weight: 900; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; line-height: 1; }
+      .qty-btn:hover { background: var(--blue); border-color: var(--blue); }
+      .qty-btn:active { transform: scale(0.9); }
+      .qty-input { width: 42px; height: 28px; text-align: center; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text-white); font-size: 0.85rem; font-weight: 800; outline: none; -moz-appearance: textfield; }
+      .qty-input::-webkit-inner-spin-button, .qty-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+      .qty-input:focus { border-color: var(--blue); }
+      .stock-badge { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+      .stock-badge.low { color: var(--orange); background: rgba(245,158,11,0.1); }
+      .stock-badge.out { color: var(--red); background: rgba(218,54,51,0.1); }
+      .btn-remove-item { width: 24px; height: 24px; border: none; background: rgba(218,54,51,0.1); color: var(--red); border-radius: 4px; font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.15s; opacity: 0.6; }
+      .btn-remove-item:hover { background: var(--red); color: white; opacity: 1; }
+      .btn-add-item { width: 100%; padding: 8px; margin-top: 4px; background: rgba(56,139,253,0.08); border: 1px dashed rgba(56,139,253,0.3); color: #58a6ff; font-size: 0.8rem; font-weight: 700; border-radius: 6px; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+      .btn-add-item:hover { background: rgba(56,139,253,0.15); border-color: #58a6ff; }
+
+      .search-results { max-height: 250px; overflow-y: auto; margin-top: 10px; }
+      .search-result-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: 0.15s; border-radius: 6px; }
+      .search-result-item:hover { background: rgba(56,139,253,0.1); }
+      .search-result-item .sr-name { font-weight: 700; color: var(--text-white); font-size: 0.85rem; }
+      .search-result-item .sr-stock { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); }
+      .sr-add-row { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 12px; background: rgba(35,134,54,0.1); border-radius: 8px; border: 1px solid rgba(35,134,54,0.3); }
+      .sr-add-row .sr-selected-name { flex: 1; font-weight: 700; color: var(--green); font-size: 0.9rem; }
+    </style>
 </head>
 <body>
-    <div id="smartSheetOverlay" class="smart-sheet-overlay" onclick="closeInbox()"></div>
-    
-    <div id="smartSheet" class="smart-sheet">
-      <div class="sheet-header">
-        <div class="sheet-title">🔔 Mensajes <span id="sheetCount" style="background:var(--danger); color:white; padding:2px 6px; border-radius:10px; font-size:0.7rem;">0</span></div>
-        <button class="btn-close-sheet" onclick="closeInbox()">×</button>
-      </div>
-      <div id="inboxContent" class="sheet-content">
-      </div>
-    </div>
 
-    <div class="container">
-      
-      <div id="login-section" class="card fade-in">
-        <h3 style="margin-top:0; color:var(--dark)">Entrar</h3>
-        <div class="input-group">
-          <label>Ingresa tu N° de Operario</label>
-          <input type="number" id="loginOpInput" placeholder="Ej. 104">
-        </div>
-        <button class="btn-main" onclick="performLogin()">Ingresar</button>
-      </div>
-
-      <div id="app-section" class="hidden fade-in">
-        
-        <div class="user-header">
-          <div class="user-info">
-            <div>OPERARIO CONECTADO</div>
-            <div id="display-name"></div>
-          </div>
-          <div class="header-actions">
-            <div class="notif-bell" onclick="openInbox()">
-              🔔
-              <div id="bellBadge" class="notif-badge">0</div>
-            </div>
-            <button class="btn-logout" onclick="logout()">Salir</button>
+<header>
+      <div class="header-top">
+        <div class="header-left">
+          <h1>🔧 Monitor Pañol</h1>
+          <div class="live-badge">
+            <span class="live-dot"></span>
+            EN VIVO
           </div>
         </div>
 
-        <div class="tabs">
-          <button class="tab-btn active" onclick="switchTab('form')">📝 PEDIR</button>
-          <button class="tab-btn" onclick="switchTab('list')">📦 MIS PEDIDOS</button>
+        <div class="top-nav">
+          <button id="tab-despacho" class="nav-tab active" onclick="switchView('despacho')">
+            📦 Despacho
+          </button>
+          <button id="tab-returns" class="nav-tab" onclick="switchView('returns')">
+            ♻️ Devolución repuesto anterior <span id="returnsCount" class="badge">0</span>
+          </button>
+          <button id="tab-returns-new" class="nav-tab" onclick="switchView('returns-new')">
+            ↩️ Devolución repuesto nuevo <span id="returnsNewCount" class="badge">0</span>
+          </button>
         </div>
 
-        <div id="view-form" class="card">
-          <div id="location-container"></div>
-
-          <form id="addItemForm" onsubmit="addToCart(event)">
-            <input type="hidden" id="activeOpId">
-            <input type="hidden" id="activeMechName">
-
-<!-- Búsqueda por Patente -->
-            <div class="input-group">
-              <label>Unidad / Patente</label>
-              <div class="autocomplete-container">
-                <input type="text" id="unitInput" 
-                       placeholder="Escribe Patente o últimos caracteres ej. XD" 
-                       autocomplete="off"
-                       onkeyup="filterUnitInput(this.value, 'unitInput', 'unitSuggestions', 'UNIT')"
-                       onblur="searchByField(this.value, 'UNIT')" 
-                       required>
-                <div id="unitSuggestions" class="suggestions-list"></div>
-              </div>
+        <div class="header-right">
+          <div class="stats-row" id="statsRow">
+            <div class="stat-chip pending">
+              ⏳ Pendientes <span class="stat-count" id="pendingCount">0</span>
             </div>
-
-            <!-- Búsqueda por N° de OT (Simetría UI) -->
-            <div class="input-group">
-              <label>OT ASIGNADA</label>
-              <div class="autocomplete-container">
-                <input type="text" id="otInput" 
-                       placeholder="Escribe el N° de OT..." 
-                       autocomplete="off"
-                       onkeyup="filterUnitInput(this.value, 'otInput', 'otSuggestions', 'OT'); autoFillSemiOt();"
-                       onblur="searchByField(this.value, 'OT'); autoFillSemiOt();" 
-                       required>
-                <div id="otSuggestions" class="suggestions-list"></div>
-              </div>
+            <div class="stat-chip ready">
+              ⚡ Listos <span class="stat-count" id="readyCount">0</span>
             </div>
-
-            <details id="semiDetails" style="background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px; margin-bottom: 20px;">
-                <summary style="font-size: 0.75rem; font-weight: 700; color: var(--blue); cursor: pointer; outline: none; list-style: none;">
-                    🚛 AGREGAR SEMI / ACOPLADO ▼
-                </summary>
-                <div style="margin-top: 15px; animation: fadeIn 0.3s;">
-                    <div class="input-group" style="margin-bottom:10px;">
-                        <label style="font-size:0.7rem;">Patente / Interno (Semi)</label>
-                        <div class="autocomplete-container">
-                            <input type="text" id="semiUnitInput" 
-                                   placeholder="Ej. 6040 / Terminación..." 
-                                   autocomplete="off"
-                                   onkeyup="filterUnitInput(this.value, 'semiUnitInput', 'semiSuggestions', 'SEMI')"
-                                   onblur="searchByField(this.value, 'SEMI')"
-                                   style="font-size: 0.9rem; padding: 10px; background:white;">
-                            <div id="semiSuggestions" class="suggestions-list"></div>
-                        </div>
-                    </div>
-                    <div class="input-group" style="margin-bottom:0;">
-                        <label style="font-size:0.7rem;">N° OT (Semi)</label>
-                        <input type="text" id="semiOtInput" placeholder="Ej. 45002" style="font-size: 0.9rem; padding: 10px; background:white;">
-                    </div>
-                </div>
-            </details>
-            
-            <hr style="border:0; border-top:1px solid #eee; margin: 15px 0;">
-
-<!-- ==========================================
-     SELECTOR BIDIRECCIONAL (RUBRO <-> REPUESTO)
-     ========================================== -->
-<div class="search-dependency-layout">
-  
-  <!-- PASO 1: Selector de Categoría -->
-  <div class="search-group" id="category-search-container">
-    <label for="category-select" class="search-label">1. Filtrar por Rubro (Opcional)</label>
-    <div class="input-wrapper">
-      <input 
-        type="text" 
-        id="category-select" 
-        placeholder="Ej. Filtros, Herramientas..." 
-        autocomplete="off"
-        style="transition: background-color 0.3s;"
-      />
-      <span class="dropdown-arrow">▼</span>
-    </div>
-    <ul id="category-results" class="autocomplete-results hidden"></ul>
-  </div>
-
-  <!-- PASO 2: Selector de Producto (Principal) -->
-  <div class="search-group" id="function-search-container">
-    <label for="itemInput" class="search-label">2. Buscar Repuesto / Herramienta</label>
-    <div class="input-wrapper">
-      <input 
-        type="text" 
-        id="itemInput" 
-        placeholder="Escribe el nombre del repuesto..." 
-        autocomplete="off"
-        required
-      />
-      <span class="dropdown-arrow">▼</span>
-    </div>
-    <ul id="product-results" class="autocomplete-results hidden"></ul>
-  </div>
-
-</div>
-
-<hr style="border:0; border-top:1px solid #eee; margin: 15px 0;">
-
-            <div class="input-group" style="margin-bottom: 5px;">
-              <details id="notesDetails">
-                <summary>📝 AGREGAR NOTA / DETALLE</summary>
-                <div style="padding: 0 14px 14px 14px;">
-                  <textarea id="notesInput" rows="3" placeholder="Ej. Lado izquierdo, marca específica..."></textarea>
-                </div>
-              </details>
-            </div>
-
-            <div id="destToggle" class="dest-toggle-container">
-              <div id="optUnit" class="dest-option active" data-type="UNIT" onclick="setDestination('UNIT')">
-                🚛 TRACTOR
-              </div>
-              <div id="optSemi" class="dest-option" data-type="SEMI" onclick="setDestination('SEMI')">
-                📦 SEMI
-              </div>
-            </div>
-            
-            <input type="hidden" id="currentItemDest" value="UNIT">
-
-            <button type="submit" class="btn-add">
-              + Agregar al Carrito
-            </button>
-
-          </form>
-
-          <div id="cartSection" class="hidden" style="margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px;">
-            <div style="font-size: 0.9rem; font-weight: 800; color: var(--dark); text-transform: uppercase; margin-bottom: 15px;">Lista para Enviar:</div>
-            <div id="cartContainer"></div>
           </div>
-          
-          <button onclick="submitBatchOrder()" class="btn-main" id="submitBtn">CONFIRMAR PEDIDO</button>
+          <div id="clock">--:--</div>
         </div>
-
-        <div id="view-list" class="card hidden">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-                <h3 style="margin:0; font-size:1.1rem;">Mis Pedidos</h3>
-                <div style="display:flex; gap:10px;">
-                    <button id="btnHistory" onclick="toggleHistoryMode()" style="background:transparent; border:1px solid #d1d5db; color:#6b7280; font-size:0.8rem; font-weight:700; padding:8px 12px; border-radius:6px; cursor:pointer;">
-                        📜 HISTORIAL
-                    </button>
-                    <button onclick="refreshOrders()" style="background:none; border:none; color:var(--blue); font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:4px;">
-                        <span id="refreshIcon">🔄</span> Actualizar
-                    </button>
-                </div>
-            </div>
-            <div id="orders-container">Cargando...</div>
-        </div>
-
       </div>
-    </div>
 
-    <div id="customModal" class="modal-overlay">
-      <div class="modal-window">
-        <div class="modal-header">
-          <span id="modalIcon" class="modal-icon">👋</span>
-          <h3 id="modalTitle" class="modal-title">Atención</h3>
+      <div id="controlBar" class="control-bar">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput" class="search-input" 
+                 placeholder="Buscar patente, OT, mecánico o repuesto..." 
+                 oninput="applyFilters()">
         </div>
-        <div id="modalBody" class="modal-body">Mensaje...</div>
-        <div class="modal-footer">
-          <button id="modalBtnCancel" class="btn-modal btn-cancel" onclick="closeModal()">Cancelar</button>
-          <button id="modalBtnConfirm" class="btn-modal btn-confirm">ACEPTAR</button>
+
+        <div class="filter-group">
+          <span class="filter-label">Estado:</span>
+          <button class="filter-pill active" data-filter="status" data-value="ALL" onclick="setFilter('status', 'ALL', this)">Todos</button>
+          <button class="filter-pill" data-filter="status" data-value="PENDIENTE" onclick="setFilter('status', 'PENDIENTE', this)">⏳ Pendiente</button>
+          <button class="filter-pill" data-filter="status" data-value="LISTO" onclick="setFilter('status', 'LISTO', this)">⚡ Listo</button>
+          <button class="filter-pill" data-filter="status" data-value="ENTREGADO" onclick="setFilter('status', 'ENTREGADO', this)">📜 Historial</button>
         </div>
+
+        <div class="filter-group">
+          <span class="filter-label">Producto:</span>
+          <button class="filter-pill active" data-filter="product" data-value="ALL" onclick="setFilter('product', 'ALL', this)">Todos</button>
+          <button class="filter-pill" data-filter="product" data-value="METANOL" data-product="METANOL" onclick="setFilter('product', 'METANOL', this)">Metanol</button>
+          <button class="filter-pill" data-filter="product" data-value="GLP" data-product="GLP" onclick="setFilter('product', 'GLP', this)">GLP</button>
+          <button class="filter-pill" data-filter="product" data-value="CAMPO" data-product="CAMPO" onclick="setFilter('product', 'CAMPO', this)">Campo</button>
+          <button class="filter-pill" data-filter="product" data-value="LIVIANO" data-product="LIVIANO" onclick="setFilter('product', 'LIVIANO', this)">Liviano</button>
+          <button class="filter-pill" data-filter="product" data-value="ABASTECEDOR" data-product="ABASTECEDOR" onclick="setFilter('product', 'ABASTECEDOR', this)">Abast.</button>
+        </div>
+
+        <select class="sort-select" id="sortSelect" onchange="applyFilters()">
+          <option value="time-asc">⏰ Más antiguo primero</option>
+          <option value="time-desc">🕐 Más reciente primero</option>
+          <option value="mechanic">👤 Por mecánico</option>
+          <option value="urgent">🚨 Urgentes primero</option>
+        </select>
+      </div>
+    </header>
+
+    <main id="view-despacho">
+      <div id="board" class="grid">
+        <div class="loading">
+          <div class="spinner"></div>
+          <div>Cargando pedidos...</div>
+        </div>
+      </div>
+    </main>
+
+    <main id="view-returns" style="display: none;">
+      <div style="font-size:1.1rem; font-weight:800; color:var(--text-white); margin-bottom: 20px; display: flex; flex-direction: column; gap: 4px;">
+        <span>Devolución de repuesto anterior</span>
+        <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">
+          Compara la cantidad original solicitada contra el estado declarado por el mecánico.
+        </span>
+      </div>
+      <div id="returns-board"></div>
+    </main>
+
+    <main id="view-returns-new" style="display: none;">
+      <div style="font-size:1.1rem; font-weight:800; color:var(--text-white); margin-bottom: 16px; display: flex; flex-direction: column; gap: 4px;">
+        <span>↩️ Devolución de repuesto nuevo (sin uso)</span>
+        <span style="font-size:0.85rem; font-weight:600; color:var(--text-muted);">
+          Reintegra aquellos repuestos nuevos entregados que hayan sido solicitados para devolución por el mecánico.
+        </span>
+      </div>
+
+      <div class="filter-group" style="margin-bottom: 20px;">
+        <button class="filter-pill active" id="btn-subtab-new-pending" onclick="switchNewReturnsSubtab('pending', this)">
+          ⏳ Pendientes <span id="newPendingBadge" class="badge" style="background:var(--orange); color:#000;">0</span>
+        </button>
+        <button class="filter-pill" id="btn-subtab-new-history" onclick="switchNewReturnsSubtab('history', this)">
+          📜 Historial
+        </button>
+      </div>
+
+      <div id="returns-new-board"></div>
+    </main>
+
+    <div id="panolModal" class="modal-overlay" onclick="if(event.target===this)closePanolModal()">
+      <div class="modal-content">
+        <div class="modal-title" id="modalTitle"></div>
+        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-actions" id="modalActions"></div>
       </div>
     </div>
 
     <script>
-      let heartbeatTimer = null;
-      let msgTimer = null;
-      let cartItems = []; 
-      let currentBox = ""; 
-      let dbItems = []; 
-      let dbUnitList = []; 
-      let showHistory = false;
-      let allLoadedOrders = [];
-      let serverMessages = [];
-      let isPopulating = false;
+      let allOrders = [];
+      let expandedCards = new Set();
+      let panolStaffList = []; 
+      let pendingSelections = {}; 
+      let dirtyOrders = {};
+      let undoTimers = {};
+      let filters = { status: 'ALL', product: 'ALL', search: '' };
+      let pollingInterval; 
+      let isInteracting = false;
+      let lastPingMem = {};
 
-      window.onload = function() {
-        const savedOp = localStorage.getItem('mechanic_op');
-        if (savedOp) performLogin(savedOp);
-      };
-
-      // ===========================================
-      // 1. MESSAGING / RECEIVER LOGIC
-      // ===========================================
-      function updateBadge() {
-        const count = serverMessages.length;
-        const badge = document.getElementById('bellBadge');
-        const sheetCount = document.getElementById('sheetCount');
-        
-        badge.innerText = count;
-        sheetCount.innerText = count;
-        
-        if (count > 0) {
-           badge.classList.add('show');
-        } else {
-           badge.classList.remove('show');
-        }
+      function initApp() {
+        google.script.run
+          .withSuccessHandler(staff => {
+            panolStaffList = staff || [];
+            loadData();
+            resumePolling();
+            setInterval(updateClock, 1000);
+          })
+          .withFailureHandler(err => {
+            console.error("Error al cargar staff:", err);
+            loadData();
+            resumePolling();
+          })
+          .getPanolStaff();
       }
 
-      function openInbox() {
-        renderInbox();
-        document.getElementById('smartSheetOverlay').classList.add('open');
-        document.getElementById('smartSheet').classList.add('open');
-      }
+      initApp();
 
-      function closeInbox() {
-        document.getElementById('smartSheetOverlay').classList.remove('open');
-        document.getElementById('smartSheet').classList.remove('open');
-      }
-
-      function renderInbox() {
-        const container = document.getElementById('inboxContent');
-        container.innerHTML = "";
-        
-        if (serverMessages.length === 0) {
-           container.innerHTML = "<div style='text-align:center; color:#999; margin-top:50px;'>No tienes mensajes nuevos.</div>";
-           return;
-        }
-
-        serverMessages.forEach(msg => {
-           const div = document.createElement('div');
-           div.id = `msg-${msg.id}`;
-           div.className = 'notif-card';
-           
-           div.innerHTML = `
-              <div class="notif-header">
-                 <span>${msg.unit}</span>
-                 <span style="color:#365BA5;">De: Coordinación</span>
-              </div>
-              <div class="notif-body">${msg.body}</div>
-              <input type="text" 
-                     class="response-input" 
-                     id="response-${msg.id}" 
-                     placeholder="Escribe tu respuesta..."
-                     onkeydown="if(event.key==='Enter') resolveNotif('${msg.id}')">
-              <button class="btn-resolve" onclick="resolveNotif('${msg.id}')">
-                 ✓ ENVIAR RESPUESTA
-              </button>
-           `;
-           container.appendChild(div);
-        });
-      }
-
-      function resolveNotif(id) {
-        const inputEl = document.getElementById(`response-${id}`);
-        const responseText = inputEl ? inputEl.value.trim() : '';
-        
-        if(!responseText) {
-           inputEl.style.borderColor = '#e74c3c';
-           inputEl.placeholder = '⚠️ Escribe una respuesta...';
-           inputEl.focus();
-           return;
-        }
-
-        const card = document.getElementById(`msg-${id}`);
-        if(card) {
-           card.classList.add('swipe-out');
-           setTimeout(() => card.remove(), 300);
-        }
-
-        serverMessages = serverMessages.filter(m => m.id !== id);
-        updateBadge();
-        
-        if(serverMessages.length === 0) setTimeout(closeInbox, 400);
-
-        google.script.run.resolveFeedback(id, responseText);
-      }
-
-      function pollMessages() {
-         const opId = document.getElementById('activeOpId').value;
-         if(!opId) return;
-
-         google.script.run.withSuccessHandler(msgs => {
-            serverMessages = msgs;
-            updateBadge();
-            if(document.getElementById('smartSheet').classList.contains('open')) {
-                renderInbox();
+      function loadData() { 
+        google.script.run
+          .withSuccessHandler(orders => {
+            if (Array.isArray(orders)) {
+              onDataReceived(orders);
             }
-         }).pollInbox(opId);
+          })
+          .withFailureHandler(err => {
+            console.warn('Load hiccup, retrying automatically...', err);
+            setTimeout(loadData, 1500);
+          })
+          .getPendingOrdersEnriched(); 
       }
 
-      // ===========================================
-      // 2. CORE APP LOGIC (Orders, Cart, Login)
-      // ===========================================
-      function performLogin(autoId = null) {
-        const id = autoId || document.getElementById('loginOpInput').value;
-        const btn = document.querySelector('#login-section button');
-        if(!id) return showModal("Error", "Ingresa tu número de operario.", "⛔");
-        btn.textContent = "Verificando..."; btn.disabled = true;
+      function setFilter(type, value, btn) {
+        filters[type] = value;
+        document.querySelectorAll(`[data-filter="${type}"]`).forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        applyFilters();
+      }
+
+      function applyFilters() {
+        const board = document.getElementById('board');
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+        const sortBy = document.getElementById('sortSelect').value;
         
-        google.script.run.withSuccessHandler(config => {
-          if(config.success) {
-            localStorage.setItem('mechanic_op', id);
-            initApp(id, config);
+        filters.search = searchTerm;
+
+        let filtered = allOrders.filter(order => {
+          if (filters.status === 'ALL') {
+            if (order.status === 'ENTREGADO') return false;
           } else {
-            showModal("No Encontrado", config.error, "❌");
-            btn.textContent = "Ingresar"; btn.disabled = false;
-          }
-        }).getMechanicConfig(id);
-      }
-
-      function initApp(id, config) {
-        document.getElementById('login-section').classList.add('hidden');
-        document.getElementById('app-section').classList.remove('hidden');
-        document.getElementById('display-name').textContent = config.name;
-        document.getElementById('activeOpId').value = id;
-        document.getElementById('activeMechName').value = config.name;
-        renderBoxSelector(config.boxes);
-        
-        startAutoUpdate();
-        
-        fetchCatalog();
-        fetchUnitCatalog(); 
-      }
-
-      function fetchCatalog() {
-        google.script.run.withSuccessHandler(items => {
-          dbItems = items;
-        }).getItemCatalog();
-      }
-
-      function fetchUnitCatalog() {
-        google.script.run.withSuccessHandler(list => {
-          dbUnitList = list;
-          console.log("🚛 Fleet loaded:", dbUnitList.length);
-        }).getUnitCatalog();
-      }
-
-      function startAutoUpdate() {
-        refreshOrders(); 
-        pollMessages();
-
-        if (heartbeatTimer) clearInterval(heartbeatTimer);
-        if (msgTimer) clearInterval(msgTimer);
-        
-        heartbeatTimer = setInterval(refreshOrders, 10000);
-        msgTimer = setInterval(pollMessages, 15000);
-      }
-
-      // --- ITEM AUTOCOMPLETE ---
-      function filterItems(query) {
-        const list = document.getElementById('suggestions');
-        list.innerHTML = ""; 
-        if (!query || query.length < 2) { list.style.display = "none"; return; }
-        const matches = dbItems.filter(item => item.toLowerCase().includes(query.toLowerCase())).slice(0, 10);
-        if (matches.length === 0) { list.style.display = "none"; return; }
-        matches.forEach(item => {
-          const div = document.createElement('div');
-          div.className = 'suggestion-item';
-          const regex = new RegExp(`(${query})`, 'gi');
-          div.innerHTML = item.replace(regex, '<strong>$1</strong>');
-          div.onclick = () => selectItem(item);
-          list.appendChild(div);
-        });
-        list.style.display = "block";
-      }
-
-      function selectItem(name) {
-        document.getElementById('itemInput').value = name;
-        document.getElementById('suggestions').style.display = "none";
-      }
-
-      // --- UNIT AUTOCOMPLETE LOGIC ---
-      function filterUnitInput(query, inputId, listId, type) {
-        const list = document.getElementById(listId);
-        list.innerHTML = ""; 
-        
-        if (!query || query.length < 2) { list.style.display = "none"; return; }
-        
-        const q = query.toUpperCase();
-
-        const matches = dbUnitList.filter(plate => {
-            return plate.endsWith(q) || plate.startsWith(q) || plate.includes(q);
-        }).sort((a, b) => {
-            const aEnds = a.endsWith(q);
-            const bEnds = b.endsWith(q);
-            if (aEnds && !bEnds) return -1;
-            if (!aEnds && bEnds) return 1;
-            return 0;
-        }).slice(0, 8); 
-
-        if (matches.length === 0) { list.style.display = "none"; return; }
-
-        matches.forEach(plate => {
-          const div = document.createElement('div');
-          div.className = 'suggestion-item';
-          
-          if (plate.endsWith(q)) {
-             const prefix = plate.substring(0, plate.length - q.length);
-             div.innerHTML = `${prefix}<strong>${q}</strong>`;
-          } else {
-             div.innerText = plate;
-          }
-
-          div.onclick = () => {
-             const input = document.getElementById(inputId);
-             input.value = plate;
-             list.style.display = "none";
-             searchByField(plate, type); 
-          };
-          
-          list.appendChild(div);
-        });
-
-        list.style.display = "block";
-      }
-
-      document.addEventListener('click', function(e) {
- 
-        const uInput = document.getElementById('unitInput');
-        if (uInput && !uInput.parentElement.contains(e.target)) {
-             document.getElementById('unitSuggestions').style.display = "none";
-        }
-
-        const sInput = document.getElementById('semiUnitInput');
-        if (sInput && !sInput.parentElement.contains(e.target)) {
-             document.getElementById('semiSuggestions').style.display = "none";
-        }
-      });
-
-      // --- DESTINATION TOGGLE LOGIC (NEW) ---
-      function setDestination(type) {
-        document.querySelectorAll('.dest-option').forEach(el => el.classList.remove('active'));
-        
-        if (type === 'UNIT') document.getElementById('optUnit').classList.add('active');
-        else document.getElementById('optSemi').classList.add('active');
-
-        document.getElementById('currentItemDest').value = type;
-      }
-
-      function updateDestToggle(unitPlate, semiPlate) {
-          const toggle = document.getElementById('destToggle');
-          const optUnit = document.getElementById('optUnit');
-          const optSemi = document.getElementById('optSemi');
-          
-          const uLabel = unitPlate ? `🚛 ${unitPlate}` : '🚛 TRACTOR';
-          const sLabel = semiPlate ? `📦 ${semiPlate}` : '📦 SEMI';
-
-          optUnit.innerText = uLabel;
-          optSemi.innerText = sLabel;
-
-          // Logic: Check input value as fallback if metadata not fully propagated
-          const manualSemiVal = document.getElementById('semiUnitInput').value;
-
-          if(semiPlate || (manualSemiVal && manualSemiVal.length > 2)) {
-            toggle.classList.add('show');
-          } else {
-            toggle.classList.remove('show');
-            setDestination('UNIT'); 
-          }
-      }
-
-      // --- BOX SELECTOR ---
-      function renderBoxSelector(boxes) {
-        const container = document.getElementById('location-container');
-        if (!boxes || boxes.length === 0) { container.innerHTML = ""; currentBox = ""; return; }
-        currentBox = boxes[0];
-        let html = `<div style="font-size:0.7rem; font-weight:700; color:#888; text-transform:uppercase;">📍 Tu Ubicación:</div>
-                    <div class="box-selector">`;
-        boxes.forEach((box, index) => {
-           const activeClass = index === 0 ? 'active' : '';
-           html += `<div class="box-chip ${activeClass}" onclick="selectBox(this, '${box}')">Box ${box}</div>`;
-        });
-        html += `</div>`;
-        container.innerHTML = html;
-      }
-
-      function selectBox(el, boxName) {
-        document.querySelectorAll('.box-chip').forEach(b => b.classList.remove('active'));
-        el.classList.add('active');
-        currentBox = boxName;
-      }
-
-      // --- LOGOUT ---
-      function logout() {
-          showModal("Cerrar Sesión", "¿Quieres salir?", "👋", true, () => {
-            if (heartbeatTimer) clearInterval(heartbeatTimer);
-            if (msgTimer) clearInterval(msgTimer);
-            localStorage.clear(); 
-            cartItems = []; currentBox = ""; dbItems = []; serverMessages = []; dbUnitList = [];
-            document.getElementById('loginOpInput').value = "";
-            document.getElementById('unitInput').value = ""; 
-            document.getElementById('otInput').value = "";   
-            document.getElementById('itemInput').value = "";
-            document.getElementById('notesInput').value = "";
-            document.getElementById('location-container').innerHTML = "";
-            document.getElementById('cartContainer').innerHTML = "";
-            document.getElementById('orders-container').innerHTML = "Cargando...";
-            const loginBtn = document.querySelector('#login-section button');
-            if (loginBtn) { loginBtn.textContent = "Ingresar"; loginBtn.disabled = false; }
-            document.getElementById('app-section').classList.add('hidden');
-            document.getElementById('login-section').classList.remove('hidden');
-            switchTab('form'); 
-          });
-      }
-
-      // --- AUTO-FILL SEMI OT (829.txt Punto 2: N° OT Semi predeterminado: 1 número más que OT ASIGNADA) ---
-      function autoFillSemiOt(force = false) {
-          const otInput = document.getElementById('otInput');
-          const semiOtInput = document.getElementById('semiOtInput');
-          if (!otInput || !semiOtInput) return;
-          const otVal = otInput.value.trim();
-          if (otVal) {
-              const match = otVal.match(/\d+/);
-              if (match) {
-                  const num = parseInt(match[0], 10);
-                  const nextNum = num + 1;
-                  const autoSemi = otVal.replace(match[0], String(nextNum));
-                  const currentSemiVal = semiOtInput.value.trim();
-                  
-                  if (force || !currentSemiVal || currentSemiVal === otVal || semiOtInput.dataset.autoDefault === "true" || currentSemiVal === semiOtInput.dataset.lastAutoVal) {
-                      semiOtInput.value = autoSemi;
-                      semiOtInput.dataset.autoDefault = "true";
-                      semiOtInput.dataset.lastAutoVal = autoSemi;
-                      semiOtInput.style.backgroundColor = "#f0fdf4";
-                  }
-              }
-          }
-      }
-
-      // --- SEARCH & POPULATE ---
-      function searchByField(val, type) {
-          // 1. Validaciones iniciales
-          if (!val || val.length < 3 || isPopulating) return;
-
-          const unitInput = document.getElementById('unitInput');
-          const otInput = document.getElementById('otInput');
-          const semiUnitInput = document.getElementById('semiUnitInput');
-          const semiOtInput = document.getElementById('semiOtInput'); 
-          const detailsEl = document.getElementById('semiDetails');
-
-          // 2. UX: Feedback inmediato de búsqueda (Espejo bidireccional)
-          if (type === 'UNIT') otInput.placeholder = "Buscando...";
-          if (type === 'OT') unitInput.placeholder = "Buscando...";
-          if (type === 'SEMI') semiOtInput.placeholder = "Buscando...";
-          if (type === 'SEMI_OT') semiUnitInput.placeholder = "Buscando...";
-
-          // 3. Petición al Servidor
-          google.script.run.withSuccessHandler(res => {
-              if (res && res.success) {
-                  isPopulating = true;
-                  
-                  // --- Lógica del TRACTOR (Unidad / OT) ---
-                  if (res.unit || res.ot) {
-                      if (res.unit) unitInput.value = res.unit;
-                      if (res.ot) otInput.value = res.ot;
-                      
-                      otInput.style.color = res.ot ? "#238636" : "#555";
-                      
-                      // Ley de Cierre: Resaltamos visualmente el campo que el sistema completó por el usuario
-                      if (type === 'UNIT' && res.ot) flashField(otInput, "#e6fffa");
-                      if (type === 'OT' && res.unit) flashField(unitInput, "#e6fffa");
-                  }
-
-                  // --- Lógica del SEMI (Unidad / OT) ---
-                  if (res.semi || res.semiOt) {
-                      if (res.semi) semiUnitInput.value = res.semi;
-                      
-                      // Si viene una OT de Semi específica diferente a la OT principal, usarla; si es idéntica, autoFillSemiOt la incrementará +1
-                      if (res.semiOt && String(res.semiOt).trim() !== String(res.ot || '').trim()) {
-                          semiOtInput.value = res.semiOt;
-                          semiOtInput.style.backgroundColor = "#f0fdf4";
-                      }
-
-                      // Ley de Cierre para el Semi
-                      if (type === 'SEMI' && res.semiOt) flashField(semiOtInput, "#e6fffa");
-                      if (type === 'SEMI_OT' && res.semi) flashField(semiUnitInput, "#e6fffa");
-
-                      // Animación del contenedor de detalles
-                      if(!detailsEl.open) {
-                          detailsEl.open = true;
-                          detailsEl.style.borderColor = "#238636"; 
-                          setTimeout(() => detailsEl.style.borderColor = "#e0e0e0", 1000);
-                      }
-                      
-                      // Check toggle on DB find
-                      updateDestToggle(res.unit, res.semi);
-
-                  } else {
-                      // No semi in DB, but check if user manually typed one?
-                      updateDestToggle(res.unit, null);
-                  }
-
-                  // 829.txt: N° OT (Semi) predeterminado +1 número más que OT ASIGNADA
-                  autoFillSemiOt(true);
-
-                  isPopulating = false;
-              } else {
-                  // 4. UX: Manejo de fallos bidireccional (Poka-Yoke)
-                  if (type === 'UNIT') { otInput.placeholder = "SIN DATOS"; otInput.value = ""; }
-                  if (type === 'OT') { unitInput.placeholder = "SIN DATOS"; unitInput.value = ""; }
-                  if (type === 'SEMI') { semiOtInput.placeholder = "SIN DATOS"; semiOtInput.value = ""; }
-                  if (type === 'SEMI_OT') { semiUnitInput.placeholder = "SIN DATOS"; semiUnitInput.value = ""; }
-                  
-                  // Even if not found in DB, check if we need to show toggle based on inputs
-                  updateDestToggle(unitInput.value, semiUnitInput.value);
-              }
-          }).findUnitOrOt(val, type); // Pasamos 'type' para que el backend sepa qué columna priorizar en la búsqueda
-          
-          // Immediate check for manual entry before DB returns
-          updateDestToggle(unitInput.value, semiUnitInput.value);
-      }
-
-      
-      function flashField(el, color) {
-          const original = el.style.backgroundColor;
-          el.style.backgroundColor = color;
-          setTimeout(() => el.style.backgroundColor = original || 'white', 600);
-      }
-
-        function addToCart(e) {
-          if (e && e.preventDefault) e.preventDefault(); 
-          
-          const itemVal = document.getElementById('itemInput').value;
-          const otVal = document.getElementById('otInput').value; 
-          const noteVal = document.getElementById('notesInput').value;
-
-          if (!otVal || otVal.includes("SIN")) return showModal("Falta OT", "La unidad/OT no es válida.", "⚠️");
-          if (!itemVal) return;
-
-          const destType = document.getElementById('currentItemDest').value;
-          let finalItemName = itemVal;
-          let destLabel = "TRACTOR"; 
-
-          if (destType === 'SEMI') {
-            const semiPlate = document.getElementById('semiUnitInput').value;
-            finalItemName = `${itemVal} [PARA SEMI: ${semiPlate}]`;
-            destLabel = "SEMI";
-          }
-
-          // === DISEÑO DE SERVICIO: DETECCIÓN DE CANJE ===
-          // Buscamos si el ítem seleccionado requiere canje según la DB
-          const foundItem = dbItems.find(i => (i.name || i) === itemVal);
-          const reqCanje = foundItem ? (foundItem.requiereCanje === true || String(foundItem.requiereCanje).toUpperCase() === 'TRUE') : false;
-
-          cartItems.push({ 
-              item: finalItemName,
-              displayItem: itemVal,
-              qty: 1, 
-              notes: noteVal,
-              destination: destType,
-              requiereCanje: reqCanje // Inyectamos la bandera de seguridad
-          });
-          
-          // Limpieza de datos temporales
-          document.getElementById('itemInput').value = "";
-          document.getElementById('notesInput').value = "";
-          document.getElementById('notesDetails').removeAttribute('open');
-          
-          const catSelect = document.getElementById('category-select');
-          const itemInp = document.getElementById('itemInput');
-          
-         // Dentro de addToCart, en el reseteo de UI:
-          if (catSelect) catSelect.value = ""; 
-          if (itemInp) {
-            // Ya NO deshabilitamos el campo
-            itemInp.disabled = false;
-            itemInp.removeAttribute('disabled');
-            itemInp.placeholder = "Escribe el nombre del repuesto...";
+            if (order.status !== filters.status) return false;
           }
           
-          if (typeof isCategoryValid !== 'undefined') isCategoryValid = false;
-          if (typeof isItemValid !== 'undefined') isItemValid = false;
-          if (typeof currentFilteredProducts !== 'undefined') currentFilteredProducts = [];
-          if (typeof setDestination === 'function') setDestination('UNIT');
-
-          if (typeof renderCart === 'function') renderCart();
-        }
-      function renderCart() {
-        const container = document.getElementById('cartContainer');
-        const section = document.getElementById('cartSection');
-        const unitInput = document.getElementById('unitInput');
-        
-        container.innerHTML = "";
-
-        if(cartItems.length === 0) {
-          section.classList.add('hidden');
-          unitInput.readOnly = false; 
-          unitInput.style.backgroundColor = "#fdfdfd";
-          document.getElementById('submitBtn').innerText = "CONFIRMAR PEDIDO";
-        } else {
-          section.classList.remove('hidden');
-          unitInput.readOnly = true; 
-          unitInput.style.backgroundColor = "#f3f4f6";
-          
-          const totalItems = cartItems.reduce((sum, i) => sum + parseInt(i.qty), 0);
-          document.getElementById('submitBtn').innerText = `CONFIRMAR (${totalItems}) ITEMS`;
-          
-          cartItems.forEach((obj, index) => {
-            const div = document.createElement('div');
-            div.className = 'cart-item';
+          if (filters.product !== 'ALL') {
+            const orderProduct = (order.product || '').toUpperCase();
+            if (orderProduct !== filters.product) return false;
+          }
+          if (searchTerm) {
+            const matchUnit = (order.unitInfo || '').toLowerCase().includes(searchTerm);
+            const matchOT = String(order.otNumber || '').includes(searchTerm);
+            const matchMech = (order.opInfo || '').toLowerCase().includes(searchTerm);
+            const matchItem = order.items.some(i => (i.name || '').toLowerCase().includes(searchTerm));
+            const matchBrand = (order.brand || '').toLowerCase().includes(searchTerm);
+            const matchProduct = (order.product || '').toLowerCase().includes(searchTerm);
             
-            // Badge Logic
-            const badgeHtml = obj.destination === 'SEMI' 
-                ? `<span style="background:#e8f5e9; color:#1e8449; font-size:0.65rem; padding:2px 6px; border-radius:4px; border:1px solid #1e8449; font-weight:800; margin-left:5px;">SEMI</span>`
-                : `<span style="background:#ebf8ff; color:#365BA5; font-size:0.65rem; padding:2px 6px; border-radius:4px; border:1px solid #365BA5; font-weight:800; margin-left:5px;">TRACTOR</span>`;
-
-            div.innerHTML = `
-              <div class="cart-item-text">
-                <div class="cart-item-info">
-                    ${obj.displayItem || obj.item} ${badgeHtml}
-                </div>
-                <div style="font-size:0.75rem; color:#888;">${obj.notes || ''}</div>
-              </div>
-              <div class="qty-selector">
-                <button class="btn-qty" type="button" onclick="updateCartQty(${index}, -1)">−</button>
-                <span class="qty-display">${obj.qty}</span>
-                <button class="btn-qty" type="button" onclick="updateCartQty(${index}, 1)">+</button>
-              </div>
-              <button class="btn-remove" onclick="removeFromCart(${index})">×</button>
-            `;
-            container.appendChild(div);
-          });
-        }
-      }
-
-      function updateCartQty(index, change) {
-        let newVal = parseInt(cartItems[index].qty) + change;
-        if(newVal < 1) return;
-        cartItems[index].qty = newVal;
-        renderCart(); 
-      }
-      function removeFromCart(index) {
-        cartItems.splice(index, 1);
-        renderCart();
-      }
-
-// 1. EL INTERCEPTOR
-function submitBatchOrder() {
-    if(document.getElementById('itemInput').value) addToCart({ preventDefault: () => {} });
-    if(cartItems.length === 0) return showModal("Vacío", "Agrega al menos un repuesto.", "⚠️");
-
-    // Filtramos cuáles piezas del carrito son de recambio obligatorio
-    const itemsCanje = cartItems.filter(i => i.requiereCanje);
-    
-    if (itemsCanje.length > 0) {
-        promptCanje(itemsCanje); // Frenamos el flujo y exigimos justificación
-    } else {
-        executeSubmit(); // Flujo normal sin fricciones
-    }
-}
-
-// 2. LA INTERFAZ DE FRICCIÓN ADAPTATIVA (Gestalt: Región Común)
-function promptCanje(itemsCanje) {
-    let html = `
-    <div style="text-align:left; font-size:0.85rem; color:#555; margin-bottom:15px; font-weight:600;">
-      Por protocolo, estos repuestos requieren la devolución de la pieza dañada a Pañol.
-    </div>
-    <div id="canjeErrors" style="color:var(--danger); font-size:0.8rem; margin-bottom:10px; font-weight:800; display:none;">
-      ⚠️ Justifica las piezas faltantes.
-    </div>`;
-
-    itemsCanje.forEach((item, idx) => {
-        const safeId = `canje_${idx}`;
-        const qty = parseInt(item.qty, 10);
-
-        html += `
-          <div style="background: rgba(245, 158, 11, 0.05); border: 1px solid var(--orange); padding: 12px; border-radius: 8px; margin-bottom: 10px; text-align:left;">
-            <div style="font-weight: 800; color: var(--dark); margin-bottom: 8px; font-size:0.9rem;">
-              🔸 ${item.displayItem} (Cant: ${qty})
-            </div>`;
-        
-        // DISEÑO DE SERVICIO: Adaptación de UI según Cantidad
-        if (qty === 1) {
-            html += `
-            <div style="display: flex; gap: 10px; margin-bottom:5px;">
-              <label style="flex: 1; cursor: pointer; display:flex; align-items:center; gap:6px;">
-                <input type="radio" name="${safeId}" value="OK" onchange="toggleMotivo('${safeId}', 1)" checked>
-                <span style="font-size: 0.85rem; color:var(--dark); font-weight:700;">Lo tengo</span>
-              </label>
-              <label style="flex: 1; cursor: pointer; display:flex; align-items:center; gap:6px;">
-                <input type="radio" name="${safeId}" value="FALTA" onchange="toggleMotivo('${safeId}', 1)">
-                <span style="font-size: 0.85rem; color:var(--dark); font-weight:700;">No lo tengo</span>
-              </label>
-            </div>`;
-        } else {
-            // Dropdown de cantidad (Poka-Yoke: no permite más del máximo)
-            let optionsHtml = '';
-            for(let i = qty; i >= 0; i--) {
-                optionsHtml += `<option value="${i}">${i}</option>`;
-            }
-            html += `
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom:5px;">
-              <label style="font-size: 0.85rem; color:var(--dark); font-weight:700;">¿Cuántas entregas?</label>
-              <select id="select_${safeId}" style="padding:6px 12px; border-radius:6px; border:2px solid var(--border); font-weight:800; outline:none; background:white; color:var(--blue);" onchange="toggleMotivo('${safeId}', ${qty})">
-                ${optionsHtml}
-              </select>
-            </div>`;
-        }
-        
-        html += `
-            <input type="text" id="motivo_${safeId}" placeholder="¿Por qué no entregas todo?" style="display: none; width: 100%; border: 2px solid #e0e0e0; padding: 10px; border-radius: 6px; font-size: 0.85rem; outline:none; box-sizing:border-box; margin-top:8px;">
-          </div>
-        `;
-    });
-
-    document.getElementById('modalTitle').innerText = "♻️ Canje Obligatorio";
-    document.getElementById('modalBody').innerHTML = html;
-    document.getElementById('modalIcon').innerText = "📦";
-    
-    const btnCancel = document.getElementById('modalBtnCancel');
-    const btnConfirm = document.getElementById('modalBtnConfirm');
-    
-    btnCancel.style.display = "block";
-    btnConfirm.innerText = "CONFIRMAR PEDIDO";
-    
-    const newConfirm = btnConfirm.cloneNode(true);
-    btnConfirm.parentNode.replaceChild(newConfirm, btnConfirm);
-    
-    newConfirm.onclick = () => {
-        let allValid = true;
-        
-        itemsCanje.forEach((item, idx) => {
-            const safeId = `canje_${idx}`;
-            const qty = parseInt(item.qty, 10);
-            let returnedCount = 0;
-
-            // 1. Extraemos cuántos devuelve realmente
-            if (qty === 1) {
-                const radioVal = document.querySelector(`input[name="${safeId}"]:checked`).value;
-                returnedCount = (radioVal === 'OK') ? 1 : 0;
-            } else {
-                returnedCount = parseInt(document.getElementById(`select_${safeId}`).value, 10);
-            }
-
-            // 2. Procesamos el estado
-            if (returnedCount === qty) {
-                item.canjeStatus = 'OK';
-            } else {
-                const inputEl = document.getElementById(`motivo_${safeId}`);
-                const reason = inputEl.value.trim();
-                const missingCount = qty - returnedCount;
-
-                if (!reason) {
-                    allValid = false;
-                    inputEl.style.borderColor = 'var(--danger)';
-                } else {
-                    // Formateamos el string mixto para no romper la columna Q ni el Dashboard
-                    if (returnedCount === 0) {
-                        item.canjeStatus = `FALTA: ${reason}`;
-                    } else {
-                        item.canjeStatus = `FALTA PARCIAL (${returnedCount} entregada/s): ${reason}`;
-                    }
-                }
-            }
+            if (!matchUnit && !matchOT && !matchMech && !matchItem && !matchBrand && !matchProduct) return false;
+          }
+          return true;
         });
 
-        if (!allValid) {
-            document.getElementById('canjeErrors').style.display = 'block';
-            const modalWin = document.querySelector('.modal-window');
-            modalWin.classList.remove('modal-shake');
-            void modalWin.offsetWidth;
-            modalWin.classList.add('modal-shake');
-        } else {
-            closeModal();
-            executeSubmit();
-        }
-    };
-    
-    document.getElementById('customModal').classList.add('open');
-}
+        filtered = sortOrders(filtered, sortBy);
+        renderCards(filtered);
+      }
 
-// Helper Dinámico Adaptativo
-function toggleMotivo(safeId, maxQty) {
-    const inputEl = document.getElementById(`motivo_${safeId}`);
-    let isMissing = false;
-    let missingCount = 1;
-
-    if (maxQty === 1) {
-        const radioVal = document.querySelector(`input[name="${safeId}"]:checked`).value;
-        isMissing = (radioVal === 'FALTA');
-    } else {
-        const selectVal = parseInt(document.getElementById(`select_${safeId}`).value, 10);
-        isMissing = (selectVal < maxQty);
-        missingCount = maxQty - selectVal;
-    }
-
-    if (isMissing) {
-        inputEl.style.display = 'block';
-        // UX: El placeholder cambia dinámicamente según cuántas falten
-        inputEl.placeholder = maxQty > 1 ? `Motivo de las ${missingCount} faltantes...` : "¿Por qué no la tienes?";
-        inputEl.focus();
-    } else {
-        inputEl.style.display = 'none';
-        inputEl.style.borderColor = '#e0e0e0';
-    }
-}
-
-
-// 3. EL EJECUTOR (Envío al Backend)
-function executeSubmit() {
-    const btn = document.getElementById('submitBtn');
-    btn.disabled = true; btn.textContent = "ENVIANDO...";
-
-    const baseName = document.getElementById('activeMechName').value;
-    const finalName = currentBox ? `${baseName} [Box ${currentBox}]` : baseName;
-
-    let finalUnit = document.getElementById('unitInput').value;
-    let finalOt = document.getElementById('otInput').value;
-    const semiUnit = document.getElementById('semiUnitInput').value.trim();
-    const semiOt = document.getElementById('semiOtInput').value.trim();
-
-    if (semiUnit || semiOt) {
-         finalUnit = `${finalUnit} + [${semiUnit || '?'}]`;
-         finalOt = `${finalOt} + [${semiOt || '?'}]`;
-    }
-
-    const cleanItems = cartItems.map(i => ({
-        item: i.item,
-        qty: i.qty,
-        notes: i.notes,
-        canjeStatus: i.canjeStatus || null // <-- MANDAMOS EL ESTADO A LA BASE DE DATOS
-    }));
-
-    const payload = {
-      opId: document.getElementById('activeOpId').value,
-      mechanicName: finalName,
-      otNumber: finalOt, 
-      unitId: finalUnit, 
-      items: cleanItems
-    };
-
-    google.script.run.withSuccessHandler((res) => {
-          btn.disabled = false;
-          if(res.success) {
-            showModal("Pedido Enviado", "Tu pedido fue registrado.", "✅");
-            cartItems = []; renderCart();
-            document.getElementById('unitInput').value = "";
-            document.getElementById('otInput').value = "";
-            document.getElementById('semiUnitInput').value = "";
-            document.getElementById('semiOtInput').value = "";
-            document.getElementById('semiDetails').removeAttribute('open');
-            document.getElementById('notesDetails').removeAttribute('open'); 
-            
-            updateDestToggle(null, null);
-            switchTab('list');
-          } else {
-            showModal("Error", res.error, "⛔");
+      function sortOrders(orders, sortBy) {
+        const now = Date.now();
+        return [...orders].sort((a, b) => {
+          switch (sortBy) {
+            case 'time-asc': return new Date(a.timestamp) - new Date(b.timestamp);
+            case 'time-desc': return new Date(b.timestamp) - new Date(a.timestamp);
+            case 'mechanic': return (a.opInfo || '').localeCompare(b.opInfo || '');
+            case 'urgent':
+              const aWait = now - new Date(a.timestamp).getTime();
+              const bWait = now - new Date(b.timestamp).getTime();
+              const aUrgent = a.status !== 'LISTO' && aWait > 15 * 60000;
+              const bUrgent = b.status !== 'LISTO' && bWait > 15 * 60000;
+              if (aUrgent && !bUrgent) return -1;
+              if (!aUrgent && bUrgent) return 1;
+              return bWait - aWait;
+            default: return 0;
           }
-      }).submitBatchRequest(payload);
-}
-      function switchTab(view) {
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.tab-btn')[view === 'form' ? 0 : 1].classList.add('active');
-        document.getElementById('view-form').classList.toggle('hidden', view !== 'form');
-        document.getElementById('view-list').classList.toggle('hidden', view !== 'list');
-        if (view === 'list') refreshOrders();
-      }
-
-      // --- MODAL UTILS ---
-      function showModal(title, msg, icon, isConfirm = false, callback = null) {
-        document.getElementById('modalTitle').innerText = title;
-        document.getElementById('modalBody').innerHTML = msg;
-        document.getElementById('modalIcon').innerText = icon;
-        const btnCancel = document.getElementById('modalBtnCancel');
-        const btnConfirm = document.getElementById('modalBtnConfirm');
-        
-        btnCancel.style.display = isConfirm ? "block" : "none";
-        btnConfirm.innerText = isConfirm ? "CONFIRMAR" : "ENTENDIDO";
-        
-        const newConfirm = btnConfirm.cloneNode(true);
-        btnConfirm.parentNode.replaceChild(newConfirm, btnConfirm);
-        
-        newConfirm.onclick = () => { 
-           closeModal(); 
-           if(callback) callback(); 
-        };
-        
-        document.getElementById('customModal').classList.add('open');
-      }
-      function closeModal() { document.getElementById('customModal').classList.remove('open'); }
-
-      // --- ORDER HISTORY ---
-      function refreshOrders() {
-        const opId = document.getElementById('activeOpId').value;
-        const icon = document.getElementById('refreshIcon');
-        if(icon) icon.classList.add('spinning');
-        
-        if(opId) google.script.run.withSuccessHandler(orders => {
-            allLoadedOrders = orders; 
-            renderOrders(orders); 
-            if(icon) icon.classList.remove('spinning');
-        }).getMechanicOrders(opId);
-      }
-
-      let userScopeOnly = true;
-
-      function toggleUserScopeMode() {
-          userScopeOnly = !userScopeOnly;
-          const btn = document.getElementById('btnUserScope');
-          if (userScopeOnly) {
-              btn.style.background = "#e8f0fe";
-              btn.style.color = "#365BA5";
-              btn.style.borderColor = "#365BA5";
-              btn.innerText = "👤 MIS PEDIDOS";
-          } else {
-              btn.style.background = "#f3f4f6";
-              btn.style.color = "#374151";
-              btn.style.borderColor = "#9ca3af";
-              btn.innerText = "🌐 TODOS (TALLER)";
-          }
-          applyOrderFilters();
-      }
-
-      function toggleHistoryMode() {
-          showHistory = !showHistory; 
-          const btn = document.getElementById('btnHistory');
-          if(showHistory) {
-              btn.style.background = "#e5e7eb"; btn.style.color = "#374151"; btn.innerText = "⚡ VER ACTIVOS";
-          } else {
-              btn.style.background = "transparent"; btn.style.color = "#6b7280"; btn.innerText = "📜 HISTORIAL";
-          }
-          applyOrderFilters();
-      }
-
-      function applyOrderFilters() {
-          renderOrders(allLoadedOrders);
-      }
-
-      function renderOrders(orders) {
-        const container = document.getElementById('orders-container');
-        if (!Array.isArray(orders)) {
-            container.innerHTML = `<div style='text-align:center; padding:30px 20px; color:#999;'>Cargando datos...</div>`;
-            return;
-        }
-
-        const searchInput = document.getElementById('orderSearchInput');
-        const searchTerm = (searchInput ? searchInput.value : '').toLowerCase().trim();
-        const currentOpId = String(document.getElementById('activeOpId')?.value || '').trim();
-        const currentMechName = String(document.getElementById('activeMechName')?.value || '').toLowerCase().trim();
-
-        let filtered = orders.slice();
-
-        // 1. Delimitación por usuario (Mis Pedidos vs Todos)
-        if (userScopeOnly && (currentOpId || currentMechName)) {
-            filtered = filtered.filter(o => {
-                const rowOpId = String(o.opId || '').trim();
-                const rowOpInfo = String(o.opInfo || '').toLowerCase();
-                const matchOpId = currentOpId && (rowOpId === currentOpId || rowOpInfo.includes(currentOpId));
-                const matchOpName = currentMechName && rowOpInfo.includes(currentMechName);
-                return matchOpId || matchOpName;
-            });
-        }
-
-        // 2. Activos vs Historial
-        filtered = filtered.filter(o => {
-            if (showHistory) return o.status === "ENTREGADO" || o.status === "DEVOLUCION";
-            else return o.status === "PENDIENTE" || o.status === "LISTO";
         });
+      }
 
-        // 3. Buscador de Repuestos y OTs
-        if (searchTerm) {
-            filtered = filtered.filter(o => {
-                const matchOt = String(o.otNumber || '').toLowerCase().includes(searchTerm);
-                const matchUnit = String(o.unitInfo || '').toLowerCase().includes(searchTerm);
-                const matchMech = String(o.opInfo || '').toLowerCase().includes(searchTerm);
-                const matchItems = (o.items || []).some(i => String(i.name || '').toLowerCase().includes(searchTerm));
-                return matchOt || matchUnit || matchMech || matchItems;
-            });
-        }
-
-        if (!filtered || filtered.length === 0) {
-          const msg = showHistory 
-            ? "📜 Sin historial reciente que coincida." 
-            : (userScopeOnly ? "✅ No tenés pedidos pendientes." : "✅ Sin pedidos pendientes en el taller.");
-          container.innerHTML = `<div style='text-align:center; padding:40px 20px; color:#999; font-weight:500;'>${msg}</div>`;
+      function renderCards(orders) {
+        const board = document.getElementById('board');
+        if (!orders || orders.length === 0) {
+          const msg = filters.search || filters.status !== 'ALL' || filters.product !== 'ALL'
+            ? { icon: '🔍', title: 'Sin resultados', text: 'Intenta con otros filtros' }
+            : { icon: '✅', title: '¡Todo al día!', text: 'No hay pedidos pendientes' };
+          
+          board.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-icon">${msg.icon}</div>
+              <div class="empty-title">${msg.title}</div>
+              <div class="empty-text">${msg.text}</div>
+            </div>`;
           return;
         }
+        board.innerHTML = orders.map(order => renderCard(order)).join('');
+      }
+
+      function renderCard(o) {
+        const isReady = o.status === 'LISTO';
+        const dateObj = new Date(o.timestamp);
+        const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         
-        let html = "";
-        filtered.forEach(o => {
-          let action = "";
-          let statusBadge = "";
-          let statusClass = "status-PENDIENTE";
+        const now = Date.now();
+        const waitMins = Math.floor((now - dateObj.getTime()) / 60000);
+        const isUrgent = !isReady && waitMins >= 15;
+        
+        const hasSemi = o.unitInfo && (o.unitInfo.includes('/') || o.unitInfo.includes('+'));
+        let mainPlate = o.unitInfo || '';
+        let semiPlate = '';
+        if (hasSemi) {
+          const parts = o.unitInfo.split(/[\/+]/);
+          mainPlate = parts[0].trim();
+          semiPlate = parts[1] ? parts[1].trim() : '';
+        }
+        
+        let cardClass = `card status-${o.status}`;
+        if (isUrgent) cardClass += ' urgent';
+        if (hasSemi) cardClass += ' has-semi';
+
+        const productBadge = o.product ? `<span class="badge badge-${o.product.toLowerCase()}">${o.product}</span>` : '';
+        const brandBadge = o.brand ? `<span class="badge badge-brand ${o.brand.toLowerCase()}">${o.brand}</span>` : '';
+        const initials = (o.opInfo || 'NN').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+
+        const MAX_VISIBLE = 3;
+        const isExpanded = expandedCards.has(o.reqId);
+        
+        let itemsHtml = '<div class="item-list">';
+        const isPendiente = o.status === 'PENDIENTE';
+        o.items.forEach((item, idx) => {
+          const isHighlighted = filters.search && item.name.toLowerCase().includes(filters.search);
+          const highlightClass = isHighlighted ? 'highlighted' : '';
           
-          if (o.status === "LISTO") {
-            statusClass = "status-LISTO";
-            statusBadge = `<span class="status-badge badge-LISTO">⚡ LISTO PARA RETIRAR</span>`;
-            action = `<span style="font-size:0.8rem; color:#27ae60; font-weight:700;">Disponible en pañol</span>`;
+          if (idx === MAX_VISIBLE && !isExpanded) {
+            itemsHtml += `<div class="hidden-items" id="hidden-${o.reqId}">`;
+          }
           
-          } else if (o.status === "ENTREGADO") {
-             statusClass = ""; 
-             statusBadge = `<span class="status-badge" style="background:#f3f4f6; color:#555;">✅ RECIBIDO</span>`;
-             action = `<button class="btn-action-secondary" onclick="tryReturn('${o.reqId}')">
-                         <span>↩️</span> DEVOLVER
-                       </button>`;
-          
-          } else if (o.status === "DEVOLUCION") {
-             statusClass = "";
-             statusBadge = `<span class="status-badge" style="background:#fff5f5; color:#e74c3c;">↩️ DEVOLUCIÓN EN CURSO</span>`;
-             action = `<span style="font-size:0.75rem; color:#e74c3c; font-weight:600;">Stock restaurado</span>`;
-          
+          const itemId = item.id || 'S/D';
+          const itemLoc = item.loc || 'S/D';
+          const safeItemName = item.name.replace(/'/g, "\\'");
+
+          let qtyHtml;
+          if (isPendiente) {
+            const currentStock = item.stock || 0;
+            const stockClass = currentStock <= 0 ? 'out' : currentStock <= 3 ? 'low' : '';
+            qtyHtml = `
+              <div class="item-edit-controls">
+                <button class="qty-btn" onclick="changeItemQty('${o.reqId}','${safeItemName}',${item.qty},-1)" title="Reducir">−</button>
+                <input type="number" class="qty-input" id="qi-${o.reqId}-${idx}" value="${item.qty}" min="1"
+                       onchange="updateItemQty('${o.reqId}','${safeItemName}',this.value,${item.qty})"
+                       onfocus="pausePolling()" onblur="resumePolling()">
+                <button class="qty-btn" onclick="changeItemQty('${o.reqId}','${safeItemName}',${item.qty},1)" title="Aumentar">+</button>
+                <span class="stock-badge ${stockClass}" title="Stock actual en estantería">📦${currentStock}</span>
+                <button class="btn-remove-item" onclick="removeItem('${o.reqId}','${safeItemName}')" title="Eliminar ítem">✕</button>
+              </div>`;
           } else {
-            statusBadge = `<span class="status-badge badge-PENDIENTE">⏳ EN PREPARACIÓN</span>`;
-            action = `<span style="font-size:0.8rem; color:#aaa; font-weight:500;">Esperando a Pañol...</span>`;
+            qtyHtml = `<span class="item-qty">x${item.qty}</span>`;
           }
 
-          let bgStyle = (o.status === "ENTREGADO" || o.status === "DEVOLUCION") ? "background:#fafafa; border-left:4px solid #ccc;" : "";
-
-          let itemsHtml = (o.items || []).map(i => {
-            const isReturned = i.status === "DEVOLUCION";
-            const strikeStyle = isReturned ? "text-decoration: line-through; color: #a1a1aa;" : "color: var(--dark);";
-            const devBadge = isReturned ? `<span style="margin-left:6px; font-size:0.7rem; color:#e74c3c;">(Devuelto)</span>` : "";
-            
-            return `<div style="font-weight:800; font-size:1.05rem; margin-top:6px; ${strikeStyle}">
-               • ${i.name} 
-               <span style="margin-left:6px; background:#e2e5e9; padding:2px 6px; border-radius:4px; font-size:0.8rem; text-decoration:none !important; color:#555;">x${i.qty}</span>
-               ${devBadge}
-             </div>`;
-          }).join('');
-
-          const mechTag = (!userScopeOnly && o.opInfo) ? `<div style="font-size:0.75rem; color:var(--blue); font-weight:700; margin-top:2px;">👤 ${o.opInfo}</div>` : '';
-
-          html += `<div class="order-item ${statusClass}" style="${bgStyle}">
-              <div style="flex-grow:1; margin-right:15px;">
-                ${statusBadge}
-                ${mechTag}
-                <div style="margin-bottom:8px;">${itemsHtml}</div>
-                <div style="font-size:0.8rem; color:#888;">OT ${o.otNumber || 'N/A'} ${o.unitInfo ? '• ' + o.unitInfo : ''}</div>
+          itemsHtml += `
+            <div class="item-row ${highlightClass}">
+              <div class="item-primary">
+                <span class="item-name">${item.name}</span>
+                ${qtyHtml}
               </div>
-              <div>${action}</div>
+              <div class="item-secondary">
+                <span class="item-id" title="ID de Artículo">#${itemId}</span>
+                <span class="item-loc" title="Ubicación física">📍 ${itemLoc}</span>
+              </div>
             </div>`;
         });
         
-        container.innerHTML = html;
+        if (o.items.length > MAX_VISIBLE) {
+          if (!isExpanded) itemsHtml += '</div>';
+          const remaining = o.items.length - MAX_VISIBLE;
+          const btnText = isExpanded ? '▲ Ver menos' : `▼ Ver ${remaining} más`;
+          itemsHtml += `<button class="expand-btn" onclick="toggleExpand('${o.reqId}')">${btnText}</button>`;
+        }
+
+        if (isPendiente) {
+          itemsHtml += `<button class="btn-add-item" onclick="openAddItemModal('${o.reqId}')">＋ Agregar ítem</button>`;
+        }
+        itemsHtml += '</div>';
+
+        const noteHtml = o.notes && o.notes.trim() ? `<div class="note-box">📝 ${o.notes}</div>` : '';
+
+        const savedOpId = pendingSelections[o.reqId];
+        const defaultSelected = !savedOpId ? 'selected' : '';
+
+        const staffOptions = panolStaffList.map(s => {
+          const isSelected = savedOpId === String(s.id) ? 'selected' : '';
+          return `<option value="${s.id}" ${isSelected}>${s.name}</option>`;
+        }).join('');
+
+        const isDelivered = o.status === 'ENTREGADO';
+        let footerHtml;
+        if (isDelivered) {
+          footerHtml = `<div class="status-complete" style="background: rgba(139, 148, 158, 0.12); color: #8b949e;">✅ ENTREGADO Y CERRADO</div>`;
+        } else if (isReady) {
+          footerHtml = `<div class="status-complete">⚡ LISTO PARA ENTREGAR</div>`;
+        } else if (undoTimers[o.reqId]) {
+          const secs = undoTimers[o.reqId].secondsLeft || 5;
+          footerHtml = `<div class="action-group" style="padding: 10px 16px;">
+               <button class="btn-undo-ready" onclick="cancelMarkReady('${o.reqId}')" title="Clic para cancelar y mantener en PENDIENTE">
+                 <span>↩️ DESHACER</span>
+                 <span style="background: rgba(0,0,0,0.3); padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">${secs}s</span>
+               </button>
+             </div>`;
+        } else {
+          footerHtml = `<div class="action-group">
+               <select id="panol-op-${o.reqId}" 
+                       class="panol-select" 
+                       onchange="pendingSelections['${o.reqId}'] = this.value"
+                       onfocus="pausePolling()" 
+                       onblur="resumePolling()">
+                 <option value="" disabled ${defaultSelected}>👤 Tu nombre...</option>
+                 ${staffOptions}
+               </select>
+               <button class="btn-action btn-ready" onclick="markReady('${o.reqId}')">✓ LISTO</button>
+             </div>`;
+        }
+
+        return `
+          <div class="${cardClass}" id="card-${o.reqId}">
+            <div class="card-header">
+              <div class="unit-info">
+                <div class="unit-plate">
+                  ${mainPlate}
+                  ${semiPlate ? `<span class="semi-plate">/ ${semiPlate}</span>` : ''}
+                </div>
+                <div class="ot-display">
+                  <span class="ot-label">OT</span>
+                  <span class="ot-value">${o.otNumber || '--'}</span>
+                </div>
+              </div>
+              <div class="time-badge">
+                <span class="time-value ${isUrgent ? 'urgent' : ''}">${timeStr} ${isUrgent ? '⚠️' : ''}</span>
+                <span class="wait-mins ${isUrgent ? 'urgent' : ''}">${waitMins} min</span>
+              </div>
+            </div>
+            
+            ${productBadge || brandBadge ? `
+              <div class="badges-row">
+                ${productBadge}
+                ${brandBadge}
+              </div>
+            ` : ''}
+            
+            <div class="card-body">
+              <div class="mechanic-row">
+                <div class="mechanic-avatar">${initials}</div>
+                <span class="mechanic-name">${o.opInfo || 'Sin asignar'}</span>
+              </div>
+              ${itemsHtml}
+              ${noteHtml}
+            </div>
+            
+            <div class="card-footer">${footerHtml}</div>
+          </div>`;
       }
 
-      /* === [DESHABILITADO] Función tryPickup (Reactivar si se habilita el botón YA LO TENGO) ===
-      function tryPickup(reqId) {
-        showModal("Confirmar Retiro", "Quedará regitrado a su nombre.", "📦", true, () => {
-            document.getElementById('orders-container').innerHTML = "<div style='text-align:center; padding:20px;'>Procesando...</div>";
-            google.script.run.withSuccessHandler(() => refreshOrders()).markAsDelivered(reqId);
+      function toggleExpand(reqId) {
+        if (expandedCards.has(reqId)) {
+          expandedCards.delete(reqId);
+        } else {
+          expandedCards.add(reqId);
+        }
+        applyFilters(); 
+      }
+
+      function markReady(reqId) {
+        const selectEl = document.getElementById(`panol-op-${reqId}`);
+        const panolOpId = selectEl ? selectEl.value : null;
+
+        if (!panolOpId) {
+          if (selectEl) {
+            selectEl.classList.remove('shake-error');
+            void selectEl.offsetWidth; 
+            selectEl.classList.add('shake-error');
+          }
+          return;
+        }
+
+        pendingSelections[reqId] = panolOpId;
+        startUndoTimer(reqId, panolOpId);
+      }
+
+      function startUndoTimer(reqId, panolOpId) {
+        pausePolling();
+        let secondsLeft = 5;
+
+        const updateFooterUI = () => {
+          const cardFooter = document.querySelector(`#card-${reqId} .card-footer`);
+          if (cardFooter) {
+            cardFooter.innerHTML = `
+              <div class="action-group" style="padding: 10px 16px;">
+                <button class="btn-undo-ready" onclick="cancelMarkReady('${reqId}')" title="Clic para cancelar y mantener en PENDIENTE">
+                  <span>↩️ DESHACER</span>
+                  <span style="background: rgba(0,0,0,0.3); padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">${secondsLeft}s</span>
+                </button>
+              </div>`;
+          }
+        };
+
+        updateFooterUI();
+
+        const intervalId = setInterval(() => {
+          secondsLeft--;
+          if (undoTimers[reqId]) {
+            undoTimers[reqId].secondsLeft = secondsLeft;
+          }
+          if (secondsLeft > 0) {
+            updateFooterUI();
+          } else {
+            clearInterval(intervalId);
+            delete undoTimers[reqId];
+            executeMarkReady(reqId, panolOpId);
+          }
+        }, 1000);
+
+        undoTimers[reqId] = {
+          intervalId: intervalId,
+          panolOpId: panolOpId,
+          secondsLeft: 5
+        };
+      }
+
+      function cancelMarkReady(reqId) {
+        if (undoTimers[reqId]) {
+          clearInterval(undoTimers[reqId].intervalId);
+          delete undoTimers[reqId];
+        }
+        applyFilters();
+        resumePolling();
+      }
+
+      function executeMarkReady(reqId, panolOpId) {
+        const card = document.getElementById(`card-${reqId}`);
+        if (card) {
+          card.style.opacity = '0.3';
+          card.style.pointerEvents = 'none';
+        }
+        
+        const order = allOrders.find(o => String(o.reqId) === String(reqId));
+        const confirmedItems = order ? order.items.map(i => ({ name: i.name, qty: Number(i.qty) })) : null;
+
+        google.script.run
+          .withSuccessHandler(() => {
+            delete pendingSelections[reqId];
+            loadData();
+            resumePolling();
+          })
+          .withFailureHandler(err => {
+            console.error('Mark ready error:', err);
+            if (card) { card.style.opacity = '1'; card.style.pointerEvents = 'auto'; }
+            applyFilters();
+            resumePolling();
+          })
+          .markAsReady(reqId, panolOpId, confirmedItems); 
+      }
+
+      function updateStats() {
+        const pending = allOrders.filter(o => o.status === 'PENDIENTE').length;
+        const ready = allOrders.filter(o => o.status === 'LISTO').length;
+        document.getElementById('pendingCount').textContent = pending;
+        document.getElementById('readyCount').textContent = ready;
+      }
+
+      function updateClock() {
+        document.getElementById('clock').textContent = 
+          new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+
+      function pausePolling() {
+        isInteracting = true;
+        clearInterval(pollingInterval);
+      }
+
+      function resumePolling() {
+        isInteracting = false;
+        clearInterval(pollingInterval);
+        pollingInterval = setInterval(loadData, 5000);
+      }
+
+      let knownReqIds = null;
+      let titleFlashInterval = null;
+
+      function updateBrowserFavicon(hasAlert) {
+        let faviconEl = document.getElementById('favicon');
+        if (!faviconEl) {
+          faviconEl = document.createElement('link');
+          faviconEl.id = 'favicon';
+          faviconEl.rel = 'icon';
+          faviconEl.type = 'image/png';
+          document.head.appendChild(faviconEl);
+        }
+
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = 64;
+          canvas.height = 64;
+          const ctx = canvas.getContext('2d');
+
+          ctx.font = '46px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🔧', 32, 34);
+
+          if (hasAlert) {
+            ctx.beginPath();
+            ctx.arc(48, 16, 12, 0, 2 * Math.PI);
+            ctx.fillStyle = '#f85149';
+            ctx.fill();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#0d1117';
+            ctx.stroke();
+          }
+          faviconEl.href = canvas.toDataURL('image/png');
+        } catch(e) {}
+      }
+
+      function setDocumentTitle(titleText) {
+        document.title = titleText;
+        try {
+          if (window.top && window.top !== window) {
+            window.top.document.title = titleText;
+          }
+        } catch(e) {}
+      }
+
+      if ("Notification" in window && Notification.permission === "default") {
+        document.addEventListener('click', function requestNotifPerm() {
+          Notification.requestPermission();
+          document.removeEventListener('click', requestNotifPerm);
+        }, { once: true });
+      }
+
+      function checkForNewCardsAlert(orders) {
+        const pendingOrders = (orders || []).filter(o => o.status === 'PENDIENTE');
+        const currentPendingIds = new Set(pendingOrders.map(o => String(o.reqId)));
+
+        if (knownReqIds === null) {
+          knownReqIds = currentPendingIds;
+          return;
+        }
+
+        let brandNewCard = null;
+        pendingOrders.forEach(o => {
+          if (!knownReqIds.has(String(o.reqId))) {
+            brandNewCard = o;
+          }
+        });
+
+        knownReqIds = currentPendingIds;
+
+        if (brandNewCard) {
+          triggerWindowsTaskbarAlert(brandNewCard);
+        }
+      }
+
+      function triggerWindowsTaskbarAlert(order) {
+        order = order || { opInfo: 'Mecánico', unitInfo: 'General' };
+
+        try { window.focus(); } catch(e) {}
+        try { if (window.top) window.top.focus(); } catch(e) {}
+
+        if ('setAppBadge' in navigator) {
+          try { navigator.setAppBadge(1); } catch(e) {}
+        }
+
+        if ("Notification" in window && Notification.permission === "granted") {
+          try {
+            const notif = new Notification('🔧 Monitor Pañol: ¡Nuevo Pedido!', {
+              body: `Solicitud de ${order.opInfo || 'Mecánico'} - Unidad: ${order.unitInfo || 'S/D'}`,
+              tag: 'new-card-alert',
+              requireInteraction: true
+            });
+            notif.onclick = function() {
+              try { window.focus(); } catch(e) {}
+              try { if (window.top) window.top.focus(); } catch(e) {}
+              clearWindowsTaskbarAlert();
+            };
+          } catch(e) { console.log('Notification error:', e); }
+        }
+
+        clearInterval(titleFlashInterval);
+        let flashState = false;
+        titleFlashInterval = setInterval(() => {
+          const titleStr = flashState ? '🔴 (1) ¡NUEVO PEDIDO! | Pañol' : '🔧 Monitor Pañol';
+          setDocumentTitle(titleStr);
+          updateBrowserFavicon(flashState);
+          flashState = !flashState;
+        }, 500);
+
+        playAlertSound();
+      }
+
+      function clearWindowsTaskbarAlert() {
+        if (titleFlashInterval) {
+          clearInterval(titleFlashInterval);
+          titleFlashInterval = null;
+          setDocumentTitle('Monitor Pañol');
+          updateBrowserFavicon(false);
+        }
+        if ('clearAppBadge' in navigator) {
+          try { navigator.clearAppBadge(); } catch(e) {}
+        }
+      }
+
+      function playAlertSound() {
+        try {
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.3);
+          gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.3);
+        } catch(e) {}
+      }
+
+      window.addEventListener('focus', clearWindowsTaskbarAlert);
+      document.addEventListener('click', clearWindowsTaskbarAlert);
+
+      function onDataReceived(orders) {
+        allOrders = orders || [];
+        checkForNewCardsAlert(allOrders);
+        updateStats();
+        
+        applyFilters(); 
+        renderReturnsBoard();
+        renderReturnsNewBoard();
+        updateClock();
+
+        allOrders.forEach(o => {
+          const card = document.getElementById(`card-${o.reqId}`);
+          if (!card) return;
+
+          if (o.uiColor && o.uiColor !== 'default') {
+             card.style.borderLeftColor = `var(--${o.uiColor})`;
+          }
+
+          if (o.uiPing && String(o.uiPing) !== String(lastPingMem[o.reqId])) {
+             lastPingMem[o.reqId] = String(o.uiPing);
+             card.classList.add('shake-card');
+             setTimeout(() => {
+                card.classList.remove('shake-card');
+             }, 1000);
+          }
+        });
+      }      
+
+      function switchView(view) {
+        const isDespacho = view === 'despacho';
+        const isReturns = view === 'returns';
+        const isReturnsNew = view === 'returns-new';
+
+        document.getElementById('tab-despacho').classList.toggle('active', isDespacho);
+        document.getElementById('tab-returns').classList.toggle('active', isReturns);
+document.getElementById('tab-returns-new').classList.toggle('active', isReturnsNew);
+        
+        document.getElementById('view-despacho').style.display = isDespacho ? 'block' : 'none';
+        document.getElementById('controlBar').style.display = isDespacho ? 'flex' : 'none';
+        document.getElementById('view-returns').style.display = isReturns ? 'block' : 'none';
+        document.getElementById('view-returns-new').style.display = isReturnsNew ? 'block' : 'none';
+
+        if (isReturnsNew) {
+          renderReturnsNewBoard();
+        }
+      }
+
+      function formatLocationBox(unitInfo, firstItemLoc, opInfo) {
+        let rawLoc = '';
+        const uStr = String(unitInfo || '').trim();
+        const opStr = String(opInfo || '').trim();
+
+        // 1. Matchear ubicación entre corchetes ej: [BOX 25] en opInfo
+        const opBracket = opStr.match(/\[(.*?)\]/);
+        if (opBracket && opBracket[1]) {
+          rawLoc = opBracket[1].trim();
+        }
+
+        // 2. Matchear ubicación entre corchetes ej: [BOX 25] en unitInfo (que no sea patente vehicular)
+        if (!rawLoc) {
+          const bracketMatch = uStr.match(/\[(.*?)\]/);
+          if (bracketMatch && bracketMatch[1] && !/^[A-Z0-9]{6,8}$/i.test(bracketMatch[1].trim())) {
+            rawLoc = bracketMatch[1].trim();
+          }
+        }
+
+        // 3. Matchear "BOX <numero>" directo en unitInfo u opInfo
+        if (!rawLoc) {
+          const boxMatch = (uStr + ' ' + opStr).match(/BOX\s*\d+/i);
+          if (boxMatch) rawLoc = boxMatch[0].trim();
+        }
+
+        // 4. Matchear ubicación de estantería o ítem si no es S/D
+        if (!rawLoc && firstItemLoc && firstItemLoc !== 'S/D') {
+          rawLoc = String(firstItemLoc).trim();
+        }
+
+        // 5. Fallback si no hay BOX definido
+        if (!rawLoc) {
+          rawLoc = 'BOX --';
+        }
+
+        let label = 'BOX';
+        let number = '';
+
+        if (/BOX/i.test(rawLoc)) {
+          label = 'BOX';
+          const numMatch = rawLoc.match(/BOX\s*(\d+)/i);
+          number = numMatch ? numMatch[1] : rawLoc.replace(/BOX/i, '').trim();
+        } else {
+          const parts = rawLoc.split(/[\s-]+/);
+          label = parts[0] ? parts[0].toUpperCase() : 'LOC';
+          number = parts.slice(1).join(' ');
+        }
+
+        return { label, number };
+      }
+
+      function renderReturnsBoard() {
+        const board = document.getElementById('returns-board');
+        let html = '';
+        let pendingReturnsCount = 0;
+
+        allOrders.forEach(o => {
+          const returnItems = o.items.filter(i => i.requiereCanje || (i.estadoCanje && i.estadoCanje !== ""));
+          const hasPendingItems = returnItems.some(i => !i.panolConfirmacion.includes('OK') && !i.panolConfirmacion.includes('INCOMPLETO'));
+          
+          if (returnItems.length > 0 && hasPendingItems) {
+            pendingReturnsCount++;
+            let firstActionButtons = '';
+            
+            const itemsHtml = returnItems.map((i, idx) => {
+              const promisedText = i.estadoCanje || "Sin promesar";
+              const badgeColor = promisedText.includes('FALTA') ? '#f59e0b' : '#22c55e';
+              const safeItemName = i.name.replace(/'/g, "\\'");
+              const itemTag = `${o.reqId}-${idx}`;
+              
+              const isResolved = i.panolConfirmacion.includes('OK') || i.panolConfirmacion.includes('INCOMPLETO');
+
+              let reasonText = '';
+              if (i.notesColO) {
+                reasonText = i.notesColO.replace(/DEVOLUCIÓN ACEPTADA:\s*/i, '').trim();
+              }
+              if (!reasonText && o.notes) reasonText = String(o.notes).trim();
+
+              if (isResolved) {
+                const isOk = i.panolConfirmacion.includes('OK');
+                const statusColor = isOk ? '#22c55e' : '#f59e0b';
+                const statusLabel = isOk ? '✓ AUDITADO OK' : '⚠️ AUDITADO INCOMPLETO';
+
+                return `
+                  <div id="ret-item-${itemTag}" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; padding-bottom: 10px; opacity: 0.45; filter: grayscale(0.2); pointer-events: none;">
+                    <div>
+                      <div style="font-size: 1.15rem; font-weight: 900; color: var(--text-white);">
+                        • ${i.name} <span style="color: #94a3b8; font-weight: 600; font-size: 0.85rem;">(Pedido Original: x${i.qty})</span>
+                      </div>
+                      <div style="font-size: 0.85rem; color: ${statusColor}; font-weight: 800; margin-left: 14px; margin-top: 4px;">
+                        ${statusLabel}: [${i.panolConfirmacion}]
+                      </div>
+                    </div>
+                  </div>`;
+              }
+              
+              let returnedQty = i.qty; 
+              const partialMatch = promisedText.match(/(\d+)\s*entregada/i);
+              if (partialMatch && partialMatch[1]) {
+                  returnedQty = parseInt(partialMatch[1], 10);
+              } else if (promisedText.startsWith('FALTA:') || promisedText === 'FALTA') {
+                  returnedQty = 0;
+              }
+
+              const btnOkText = `✓ RECIBÍ ${returnedQty}`;
+              const btnOkTooltip = `Confirmar que recibiste exactamente ${returnedQty} unidad(es) de las ${i.qty} solicitadas originalmente.`;
+              const btnIncTooltip = `Reportar que NO recibiste las ${returnedQty} unidad(es) declaradas por el mecánico.`;
+
+              if (!firstActionButtons) {
+                firstActionButtons = `
+                  <button class="btn-ch ok" 
+                          title="${btnOkTooltip}" 
+                          onclick="submitReturnAudit('${o.reqId}', '${safeItemName}', 'OK', null, '${itemTag}')"
+                          style="width:100%; padding: 8px 12px; font-size: 0.75rem; font-weight: 900; background: rgba(35, 134, 54, 0.2); color: #22c55e; border: 1px solid #166534; border-radius: 6px; cursor: pointer; text-transform: uppercase;">
+                      ${btnOkText}
+                  </button>
+                  <button class="btn-ch inc" 
+                          title="${btnIncTooltip}" 
+                          onclick="openIncompletePopup('${o.reqId}', '${safeItemName}', ${i.qty}, ${returnedQty}, '${itemTag}')"
+                          style="width:100%; padding: 8px 12px; font-size: 0.75rem; font-weight: 900; background: rgba(234, 179, 8, 0.1); color: #f59e0b; border: 1px solid #a16207; border-radius: 6px; cursor: pointer; text-transform: uppercase;">
+                      ⚠️ INCOMPLETO
+                  </button>`;
+              }
+
+              return `
+                <div id="ret-item-${itemTag}" style="display:flex; justify-content:space-between; align-items:center; flex:1; gap:24px;">
+                  <div style="display:flex; flex-direction:column; gap:4px;">
+                    <div style="font-size: 1.15rem; font-weight: 900; color: var(--text-white); letter-spacing: -0.2px;">
+                      • ${i.name} <span style="color: #94a3b8; font-weight: 600; font-size: 0.85rem;">(Pedido Original: x${i.qty})</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: ${badgeColor}; font-weight: 800;">
+                      ↳ Mecánico indica: [${promisedText}]
+                    </div>
+                  </div>
+                  
+                  <div style="display:flex; gap:10px; align-items:flex-start; max-width:480px; font-size:0.85rem; line-height:1.4;">
+                    <span style="color: #f59e0b; font-weight: 900; white-space: nowrap;">Motivo:</span>
+                    <span style="color: #e2e8f0; font-weight: 500;">${reasonText || 'Auditoría de repuesto anterior.'}</span>
+                  </div>
+                </div>`;
+            }).join('');
+
+            const savedOpId = pendingSelections[`ret_${o.reqId}`] || o.panolOpId || '';
+            const staffOptions = panolStaffList.map(s => `<option value="${s.id}" ${savedOpId === String(s.id) ? 'selected' : ''}>${s.name}</option>`).join('');
+
+            const firstItemLoc = returnItems[0] ? returnItems[0].loc : '';
+            const locObj = formatLocationBox(o.unitInfo, firstItemLoc, o.opInfo);
+            const cleanMechName = String(o.opInfo || 'MECÁNICO').replace(/\[.*?\]/g, '').trim();
+
+            html += `
+              <div class="card-horizontal" id="ret-card-${o.reqId}" style="margin-bottom: 16px; border-radius: 10px; background: #0f172a; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center;">
+                <div class="ch-left" style="padding: 16px 20px; display: flex; align-items: center; border-right: 1px dashed rgba(255,255,255,0.15); min-width: 250px;">
+                  <div style="display: flex; gap: 14px; align-items: center;">
+                    <div style="display: flex; flex-direction: column; align-items: flex-start; justify-content: center;">
+                      <span style="font-size: 1.5rem; font-weight: 900; line-height: 1; color: var(--text-white); text-transform: uppercase;">${locObj.label}</span>
+                      ${locObj.number ? `<span style="font-size: 2.2rem; font-weight: 900; line-height: 1; color: var(--text-white); margin-top: 2px;">${locObj.number}</span>` : ''}
+                    </div>
+                    <div style="display: flex; flex-direction: column; justify-content: center; gap: 4px;">
+                      <div style="font-size: 0.85rem; font-weight: 700; color: #94a3b8;">
+                        OT: ${o.otNumber || '--'}
+                      </div>
+                      <div style="font-size: 0.85rem; font-weight: 800; color: #e2e8f0; text-transform: uppercase;">
+                        ${cleanMechName}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="ch-middle" style="padding: 16px 24px; flex: 1; display: flex; align-items: center;">
+                  ${itemsHtml}
+                </div>
+                
+                <div class="ch-right" style="padding: 12px 16px; margin: 12px; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; background: rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; gap: 10px; min-width: 190px; justify-content: center;">
+                  <select id="ret-op-${o.reqId}" class="panol-select" onchange="pendingSelections['ret_${o.reqId}'] = this.value" onfocus="pausePolling()" onblur="resumePolling()" style="width:100%; background:#090d16; border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:6px 10px; color:white; font-weight:700; font-size:0.85rem;">
+                    <option value="" disabled ${!savedOpId ? 'selected' : ''}>👤 Revisa Pañolero...</option>
+                    ${staffOptions}
+                  </select>
+                  ${firstActionButtons}
+                </div>
+              </div>`;
+          }
+        });
+
+        document.getElementById('returnsCount').innerText = pendingReturnsCount;
+
+        if (pendingReturnsCount === 0) {
+          board.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">Sin devoluciones pendientes</div><div class="empty-text">No hay repuestos viejos a auditar en este momento.</div></div>`;
+        } else {
+          board.innerHTML = html;
+        }
+      }
+
+      function renderReturnsNewBoard() {
+        const board = document.getElementById('returns-new-board');
+        if (!board) return;
+        let html = '';
+        let pendingNewCount = 0;
+
+        allOrders.forEach(o => {
+          let eligibleItems = [];
+          if (currentNewReturnsSubtab === 'pending') {
+            eligibleItems = o.items.filter(i => i.status === 'DEVOLUCION PENDIENTE');
+          } else {
+            eligibleItems = o.items.filter(i => i.status === 'DEVOLUCION');
+          }
+
+          const pendingInOrder = o.items.filter(i => i.status === 'DEVOLUCION PENDIENTE');
+          if (pendingInOrder.length > 0) pendingNewCount += pendingInOrder.length;
+
+          if (eligibleItems.length > 0) {
+            const itemsHtml = eligibleItems.map((i, idx) => {
+              const safeItemName = i.name.replace(/'/g, "\\'");
+              const itemTag = `newret-${o.reqId}-${idx}`;
+              const isPending = i.status === 'DEVOLUCION PENDIENTE';
+
+              let reasonText = '';
+              if (i.notesColO) {
+                reasonText = i.notesColO.replace(/SOLICITUD DEVOLUCIÓN NUEVA PARCIAL:\s*/i, '')
+                                        .replace(/SOLICITUD DEVOLUCIÓN NUEVA:\s*/i, '')
+                                        .replace(/DEVOLUCIÓN ACEPTADA:\s*/i, '').trim();
+              }
+              if (!reasonText && o.notes) {
+                reasonText = String(o.notes).trim();
+              }
+
+              if (!isPending) {
+                return `
+                  <div id="${itemTag}" style="display:flex; justify-content:space-between; align-items:center; flex:1; gap:24px; opacity:0.5;">
+                    <div>
+                      <div style="font-size: 1.15rem; font-weight: 900; color: var(--text-white);">
+                        • ${i.name} <span style="color: #94a3b8; font-weight: 600; font-size: 0.85rem;">(x${i.qty})</span>
+                      </div>
+                      <div style="font-size: 0.85rem; color: #22c55e; font-weight: 800; margin-top: 4px;">
+                        ✓ REINTEGRADO A STOCK
+                      </div>
+                    </div>
+                    ${reasonText ? `
+                      <div style="display:flex; gap:10px; align-items:flex-start; max-width:480px; font-size:0.85rem; line-height:1.4;">
+                        <span style="color: #f59e0b; font-weight: 900; white-space: nowrap;">Motivo:</span>
+                        <span style="color: #94a3b8; font-weight: 500;">${reasonText}</span>
+                      </div>
+                    ` : ''}
+                  </div>`;
+              }
+
+              return `
+                <div id="${itemTag}" style="display:flex; justify-content:space-between; align-items:center; flex:1; gap:24px;">
+                  <div style="display:flex; flex-direction:column; gap:4px;">
+                    <div style="font-size: 1.15rem; font-weight: 900; color: var(--text-white); letter-spacing: -0.2px;">
+                      • ${i.name} <span style="color: #94a3b8; font-weight: 600; font-size: 0.85rem;">(Cant. a devolver: x${i.qty})</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: #f59e0b; font-weight: 800;">
+                      ↳ Solicitado para devolución por el mecánico
+                    </div>
+                  </div>
+                  
+                  <div style="display:flex; gap:10px; align-items:flex-start; max-width:480px; font-size:0.85rem; line-height:1.4;">
+                    <span style="color: #f59e0b; font-weight: 900; white-space: nowrap;">Motivo:</span>
+                    <span style="color: #e2e8f0; font-weight: 500;">${reasonText || 'Solicitud de devolución por el mecánico.'}</span>
+                  </div>
+                </div>`;
+            }).join('');
+
+            const savedOpId = pendingSelections[`newret_${o.reqId}`] || o.panolOpId || '';
+            const staffOptions = panolStaffList.map(s => `<option value="${s.id}" ${savedOpId === String(s.id) ? 'selected' : ''}>${s.name}</option>`).join('');
+
+            const pendingItems = eligibleItems.filter(i => i.status === 'DEVOLUCION PENDIENTE');
+            const actionButtons = pendingItems.map((i, idx) => {
+              const safeItemName = i.name.replace(/'/g, "\\'");
+              const itemTag = `newret-${o.reqId}-${idx}`;
+              return `
+                <button class="btn-ch ok" 
+                        onclick="confirmNewItemReturn('${o.reqId}', '${safeItemName}', ${i.qty}, '${itemTag}')"
+                        style="width: 100%; padding: 8px 14px; font-size: 0.75rem; font-weight: 900; background: rgba(35, 134, 54, 0.2); color: #22c55e; border: 1px solid #166534; border-radius: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.3px; transition: 0.2s;">
+                    ✓ REINTEGRAR A STOCK
+                </button>`;
+            }).join('');
+
+            const firstItemLoc = eligibleItems[0] ? eligibleItems[0].loc : '';
+            const locObj = formatLocationBox(o.unitInfo, firstItemLoc, o.opInfo);
+            const cleanMechName = String(o.opInfo || 'MECÁNICO').replace(/\[.*?\]/g, '').trim();
+
+            html += `
+              <div class="card-horizontal" style="margin-bottom: 16px; border-radius: 10px; background: #0f172a; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center;">
+                <div class="ch-left" style="padding: 16px 20px; display: flex; align-items: center; border-right: 1px dashed rgba(255,255,255,0.15); min-width: 250px;">
+                  <div style="display: flex; gap: 14px; align-items: center;">
+                    <div style="display: flex; flex-direction: column; align-items: flex-start; justify-content: center;">
+                      <span style="font-size: 1.5rem; font-weight: 900; line-height: 1; color: var(--text-white); text-transform: uppercase;">${locObj.label}</span>
+                      ${locObj.number ? `<span style="font-size: 2.2rem; font-weight: 900; line-height: 1; color: var(--text-white); margin-top: 2px;">${locObj.number}</span>` : ''}
+                    </div>
+                    <div style="display: flex; flex-direction: column; justify-content: center; gap: 4px;">
+                      <div style="font-size: 0.85rem; font-weight: 700; color: #94a3b8;">
+                        OT: ${o.otNumber || '--'}
+                      </div>
+                      <div style="font-size: 0.85rem; font-weight: 800; color: #e2e8f0; text-transform: uppercase;">
+                        ${cleanMechName}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="ch-middle" style="padding: 16px 24px; flex: 1; display: flex; align-items: center;">
+                  ${itemsHtml}
+                </div>
+                
+                <div class="ch-right" style="padding: 12px 16px; margin: 12px; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; background: rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; gap: 10px; min-width: 190px; justify-content: center;">
+                  <select id="newret-op-${o.reqId}" class="panol-select" onchange="pendingSelections['newret_${o.reqId}'] = this.value" onfocus="pausePolling()" onblur="resumePolling()" style="width:100%; background:#090d16; border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:6px 10px; color:white; font-weight:700; font-size:0.85rem;">
+                    <option value="" disabled ${!savedOpId ? 'selected' : ''}>👤 Revisa Pañolero...</option>
+                    ${staffOptions}
+                  </select>
+                  ${actionButtons}
+                </div>
+              </div>`;
+          }
+        });
+
+        const badgeEl = document.getElementById('newPendingBadge');
+        if (badgeEl) badgeEl.innerText = pendingNewCount;
+        const navBadgeEl = document.getElementById('returnsNewCount');
+        if (navBadgeEl) navBadgeEl.innerText = pendingNewCount;
+
+        if (!html) {
+          board.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">Sin devoluciones de nuevos</div><div class="empty-text">No hay repuestos nuevos pendientes en esta sección.</div></div>`;
+        } else {
+          board.innerHTML = html;
+        }
+      }
+      
+      function submitReturnAudit(reqId, itemName, status, declaredQty, itemTag) {
+        const selectEl = document.getElementById(`ret-op-${reqId}`);
+        const panolOpId = selectEl ? selectEl.value : null;
+        if (!panolOpId) {
+          if (selectEl) {
+            selectEl.classList.remove('shake-error');
+            void selectEl.offsetWidth; 
+            selectEl.classList.add('shake-error');
+          }
+          return;
+        }
+
+        const itemEl = document.getElementById(`ret-item-${itemTag}`);
+        if (itemEl) {
+          itemEl.style.opacity = '0.4';
+          itemEl.style.pointerEvents = 'none';
+        }
+        
+        google.script.run
+          .withSuccessHandler(() => {
+            loadData();
+          })
+          .withFailureHandler(err => {
+            console.error('Audit Error:', err);
+            if (itemEl) {
+              itemEl.style.opacity = '1';
+              itemEl.style.pointerEvents = 'auto';
+            }
+          })
+          .confirmReturnItem(reqId, itemName, panolOpId, status, declaredQty || null); 
+      }
+
+      function showPanolModal(title, bodyHtml, actionsHtml) {
+        document.getElementById('modalTitle').innerHTML = title;
+        document.getElementById('modalBody').innerHTML = bodyHtml;
+        document.getElementById('modalActions').innerHTML = actionsHtml;
+        document.getElementById('panolModal').classList.add('active');
+        pausePolling();
+      }
+      function closePanolModal() {
+        document.getElementById('panolModal').classList.remove('active');
+        resumePolling();
+      }
+
+      const pendingQtyDebounce = {};
+      const apiQueue = [];
+      let isProcessingQueue = false;
+
+      function enqueueApiTask(taskFn) {
+        apiQueue.push(taskFn);
+        processApiQueue();
+      }
+
+      function processApiQueue() {
+        if (isProcessingQueue || apiQueue.length === 0) return;
+        isProcessingQueue = true;
+
+        const nextTask = apiQueue.shift();
+        nextTask(() => {
+          isProcessingQueue = false;
+          setTimeout(processApiQueue, 150);
         });
       }
-      ======================================================================================== */
 
-// === REEMPLAZAR EN Index.html (App Mecánicos) ===
+      function changeItemQty(reqId, itemName, currentQty, delta) {
+        const order = allOrders.find(o => String(o.reqId) === String(reqId));
+        if (!order) return;
+        const item = order.items.find(i => String(i.name).toLowerCase() === String(itemName).toLowerCase());
+        if (!item) return;
 
-function tryReturn(reqId) {
-  const order = allLoadedOrders.find(o => o.reqId === reqId);
-  if (!order) return;
-
-  // Solo mostramos repuestos que están en estado ENTREGADO
-  const returnableItems = order.items.filter(i => i.status === "ENTREGADO");
-
-  if (returnableItems.length === 0) {
-     showModal("Atención", "Ya no hay repuestos para devolver en este pedido.", "⚠️");
-     return;
-  }
-
-  // Sanitización e inyección de cantidad máxima como atributo 'data-qty'
-  const optionsHtml = returnableItems.map(i => {
-    const safeName = i.name.replace(/"/g, '&quot;');
-    return `<option value="${safeName}" data-qty="${i.qty}">${i.name} (Max: ${i.qty})</option>`;
-  }).join('');
-
-  // UX/UI: Flujo vertical (Región Común). Selección -> Cantidad -> Motivo
-  const htmlContent = `
-    <div style="text-align:left; font-size:0.85rem; color:#555; margin-bottom:6px; font-weight:800;">
-      1. ¿Qué repuesto deseas devolver?
-    </div>
-    <select id="returnItemSelect" style="width:100%; padding:12px; margin-bottom:15px; border-radius:8px; border:2px solid #e0e0e0; font-size:0.9rem; outline:none;" onchange="updateReturnQtyMax(this)">
-      ${optionsHtml}
-    </select>
-
-    <div style="text-align:left; font-size:0.85rem; color:#555; margin-bottom:6px; font-weight:800;">
-      2. ¿Cuántas unidades devuelves?
-    </div>
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
-       <input type="number" id="returnQtyInput" min="1" max="${returnableItems[0].qty}" value="${returnableItems[0].qty}" style="width:100px; padding:12px; border-radius:8px; border:2px solid #e0e0e0; font-size:1rem; outline:none; text-align:center; font-weight:700; color:var(--blue);">
-       <span style="font-size:0.8rem; color:#888; font-weight:600;" id="returnQtyMaxLabel">de ${returnableItems[0].qty} disponibles</span>
-    </div>
-    
-    <div style="text-align:left; font-size:0.85rem; color:#555; margin-bottom:6px; font-weight:800;">
-      3. Motivo (Opcional):
-    </div>
-    <input type="text" id="returnReasonInput" placeholder="Ej. Pieza equivocada, Defecto..." style="width:100%; padding:12px; border-radius:8px; border:2px solid #e0e0e0; font-size:0.9rem; outline:none;">
-  `;
-
-  showModal("Devolución Parcial", htmlContent, "↩️", true, () => {
-    const itemEl = document.getElementById('returnItemSelect');
-    const qtyEl = document.getElementById('returnQtyInput');
-    const inputEl = document.getElementById('returnReasonInput');
-    
-    const itemName = itemEl ? itemEl.value : "";
-    const returnQty = qtyEl ? parseInt(qtyEl.value, 10) : 1;
-    let reason = inputEl ? inputEl.value.trim() : "Sin motivo especificado";
-
-    if (!itemName || isNaN(returnQty) || returnQty < 1) {
-         showModal("Error", "Cantidad inválida.", "⚠️");
-         return;
-    }
-
-    document.getElementById('orders-container').innerHTML = "<div style='text-align:center; padding:40px 20px; color:#9ca3af; font-weight:600;'>Procesando devolución en Pañol...</div>";
-    
-    google.script.run.withSuccessHandler((res) => {
-      if(res.success) {
-        refreshOrders();
-      } else {
-        showModal("Error", res.error || "No se pudo registrar la devolución.", "⛔");
-        refreshOrders(); 
-      }
-    // Pasamos el nuevo parámetro 'returnQty' al Backend
-    }).requestRefund(reqId, itemName, reason, returnQty);
-  });
-}
-
-// === HELPER GLOBAL UX: Actualiza el input si el usuario cambia el select ===
-window.updateReturnQtyMax = function(selectEl) {
-    const selectedOption = selectEl.options[selectEl.selectedIndex];
-    const maxQty = selectedOption.getAttribute('data-qty');
-    const qtyInput = document.getElementById('returnQtyInput');
-    const qtyLabel = document.getElementById('returnQtyMaxLabel');
-
-    if(qtyInput && qtyLabel) {
-        qtyInput.max = maxQty;
-        qtyInput.value = maxQty;
-        qtyLabel.innerText = `de ${maxQty} disponibles`;
-    }
-};
-
-// ===========================================
-// SELECTORES BIDIRECCIONALES Y GLOBALES
-// ===========================================
-const categorySelect = document.getElementById('category-select');
-const categoryResults = document.getElementById('category-results');
-const itemInput = document.getElementById('itemInput');
-const productResults = document.getElementById('product-results');
-
-let currentFilteredProducts = [];
-let isCategoryValid = false;
-let isItemValid = false;
-
-const getUniqueCategories = () => [...new Set(dbItems.map(item => item.category || "GENERAL"))].sort();
-
-// --- LÓGICA DE CATEGORÍAS (De Arriba hacia Abajo) ---
-categorySelect.addEventListener('focus', () => renderCategories(categorySelect.value.toLowerCase().trim()));
-categorySelect.addEventListener('click', () => renderCategories(categorySelect.value.toLowerCase().trim()));
-categorySelect.addEventListener('input', (e) => {
-  isCategoryValid = false;
-  renderCategories(e.target.value.toLowerCase().trim());
-});
-
-function renderCategories(query) {
-  categoryResults.innerHTML = '';
-  const categories = getUniqueCategories();
-  
-  // Filtro SIN LÍMITES
-  const matches = categories.filter(cat => cat.toLowerCase().includes(query));
-
-  if (matches.length > 0) {
-    matches.forEach(cat => {
-      const li = document.createElement('li');
-      const regex = new RegExp(`(${query})`, "gi");
-      li.innerHTML = query ? cat.replace(regex, "<strong style='color: var(--blue);'>$1</strong>") : cat;
-      
-      li.addEventListener('click', () => {
-        categorySelect.value = cat;
-        isCategoryValid = true;
-        categoryResults.classList.add('hidden');
-        
-        // Acotamos los productos a esta categoría
-        currentFilteredProducts = dbItems.filter(item => (item.category || "GENERAL") === cat);
-        
-        // UX: Foco automático al paso 2
-        itemInput.value = ''; 
-        isItemValid = false;
-        itemInput.focus();
-      });
-      categoryResults.appendChild(li);
-    });
-    categoryResults.classList.remove('hidden');
-  } else {
-    categoryResults.classList.add('hidden');
-  }
-}
-
-// --- LÓGICA DE REPUESTOS (Bidireccional / De Abajo hacia Arriba) ---
-itemInput.addEventListener('focus', () => renderProducts(itemInput.value.toLowerCase().trim()));
-itemInput.addEventListener('click', () => renderProducts(itemInput.value.toLowerCase().trim()));
-itemInput.addEventListener('input', (e) => {
-  isItemValid = false;
-  renderProducts(e.target.value.toLowerCase().trim());
-});
-
-function renderProducts(query) {
-  productResults.innerHTML = '';
-  
-  // Si hay rubro válido, busca en ese subgrupo. Si no, busca en TODA la base (dbItems)
-  const sourceList = isCategoryValid ? currentFilteredProducts : dbItems;
-  
-  // Filtro SIN LÍMITES
-  const matches = sourceList.filter(item => {
-    const itemName = item.name || item; 
-    return itemName.toLowerCase().includes(query);
-  });
-
-  if (matches.length > 0) {
-    matches.forEach(match => {
-      const itemName = match.name || match;
-      const itemCat = match.category || "GENERAL";
-      
-      const li = document.createElement('li');
-      const regex = new RegExp(`(${query})`, "gi");
-      const highlightedName = query ? itemName.replace(regex, "<strong style='color: var(--blue);'>$1</strong>") : itemName;
-      
-      // UX Contextual: Si es búsqueda global, mostramos el rubro abajo en gris para diferenciar repuestos similares
-      const catContext = !isCategoryValid ? `<span style="display:block; font-size:0.7rem; color:var(--text-muted); margin-top:2px;">📂 ${itemCat}</span>` : '';
-      li.innerHTML = `${highlightedName} ${catContext}`;
-      
-      li.addEventListener('click', () => {
-        // 1. Rellenar el repuesto
-        itemInput.value = itemName;
-        isItemValid = true;
-        productResults.classList.add('hidden');
-        
-        // 2. MAGIA BIDIRECCIONAL: Si no había rubro, rellenarlo automáticamente hacia arriba
-        if (!isCategoryValid) {
-            categorySelect.value = itemCat;
-            isCategoryValid = true;
-            currentFilteredProducts = dbItems.filter(i => (i.category || "GENERAL") === itemCat);
-            
-            // Poka-Yoke visual: Parpadeo verde para confirmar que el sistema rellenó el dato
-            const originalBg = categorySelect.style.backgroundColor;
-            categorySelect.style.backgroundColor = "#e6fffa"; // Verde tenue
-            categorySelect.style.borderColor = "var(--green)";
-            setTimeout(() => {
-                categorySelect.style.backgroundColor = originalBg;
-                categorySelect.style.borderColor = "#e0e0e0";
-            }, 600);
+        const newQty = Math.max(0, Number(item.qty) + delta);
+        if (newQty === 0) {
+          removeItem(reqId, itemName);
+          return;
         }
-      });
-      productResults.appendChild(li);
-    });
-    productResults.classList.remove('hidden');
-  } else {
-    productResults.innerHTML = `<li style="color: #999; cursor: default;">Sin coincidencias</li>`;
-    productResults.classList.remove('hidden');
-  }
-}
 
-// --- CONTROL DE ERRORES (Poka-Yoke de clicks fuera) ---
-document.addEventListener('click', function(e) {
-  const isClickInsideCat = document.getElementById('category-search-container').contains(e.target);
-  const isClickInsideProd = document.getElementById('function-search-container').contains(e.target);
+        item.qty = newQty;
+        applyFilters();
+      }
 
-  if (!isClickInsideCat) {
-    categoryResults.classList.add('hidden');
-    // Si sale dejando un rubro inválido, lo borramos pero dejamos libre el input de Repuestos
-    if (!isCategoryValid && categorySelect.value !== '') {
-      categorySelect.value = '';
-      currentFilteredProducts = dbItems; 
-    }
-  }
+      function updateItemQty(reqId, itemName, newQty, oldQty) {
+        newQty = Number(newQty);
+        if (isNaN(newQty) || newQty < 0) return;
+        if (newQty === 0) { removeItem(reqId, itemName); return; }
 
-  if (!isClickInsideProd) {
-    productResults.classList.add('hidden');
-    // Si sale dejando un repuesto inválido, lo borramos
-    if (!isItemValid && itemInput.value !== '') {
-        itemInput.value = '';
-    }
-  }
-});
+        const order = allOrders.find(o => String(o.reqId) === String(reqId));
+        if (order) {
+          const item = order.items.find(i => String(i.name).toLowerCase() === String(itemName).toLowerCase());
+          if (item) item.qty = newQty;
+        }
+        applyFilters();
+      }
 
+      function removeItem(reqId, itemName) {
+        showPanolModal(
+          '⚠️ Eliminar Ítem',
+          `<div class="modal-info">¿Seguro que querés eliminar <strong>${itemName}</strong> del pedido?<br>La cantidad se devolverá al stock.</div>`,
+          `<button class="modal-btn cancel" onclick="closePanolModal()">Cancelar</button>
+           <button class="modal-btn danger" onclick="confirmRemoveItem('${reqId}','${itemName.replace(/'/g, "\\'")}')">Sí, Eliminar</button>`
+        );
+      }
+
+      function confirmRemoveItem(reqId, itemName) {
+        closePanolModal();
+
+        const orderIndex = allOrders.findIndex(o => String(o.reqId) === String(reqId));
+        if (orderIndex !== -1) {
+          allOrders[orderIndex].items = allOrders[orderIndex].items.filter(
+            i => String(i.name).toLowerCase() !== String(itemName).toLowerCase()
+          );
+          if (allOrders[orderIndex].items.length === 0) {
+            allOrders.splice(orderIndex, 1);
+          }
+        }
+        applyFilters();
+
+        enqueueApiTask((done) => {
+          google.script.run
+            .withSuccessHandler(res => {
+              done();
+            })
+            .withFailureHandler(err => {
+              console.error('Remove error:', err);
+              done();
+            })
+            .removePendingItem(reqId, itemName);
+        });
+      }
+
+      let addItemSearchTimeout = null;
+      let addItemSelectedItem = null;
+
+      function openAddItemModal(reqId) {
+        addItemSelectedItem = null;
+        const bodyHtml = `
+          <label>Buscar repuesto</label>
+          <input type="text" id="addItemSearchInput" placeholder="Nombre del repuesto..." 
+                 oninput="searchItemsForAdd(this.value)" autocomplete="off">
+          <div id="addItemResults" class="search-results"></div>
+          <div id="addItemConfirmRow" style="display:none;"></div>`;
+        const actionsHtml = `
+          <button class="modal-btn cancel" onclick="closePanolModal()">Cancelar</button>
+          <button class="modal-btn primary" id="btnConfirmAddItem" onclick="confirmAddItem('${reqId}')" disabled>Agregar al Pedido</button>`;
+        showPanolModal('＋ Agregar Ítem al Pedido', bodyHtml, actionsHtml);
+        setTimeout(() => document.getElementById('addItemSearchInput')?.focus(), 100);
+      }
+
+      function searchItemsForAdd(query) {
+        clearTimeout(addItemSearchTimeout);
+        if (query.length < 2) { document.getElementById('addItemResults').innerHTML = ''; return; }
+        addItemSearchTimeout = setTimeout(() => {
+          google.script.run
+            .withSuccessHandler(results => {
+              const container = document.getElementById('addItemResults');
+              if (!results || results.length === 0) {
+                container.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:0.85rem;">Sin resultados.</div>';
+                return;
+              }
+              container.innerHTML = results.map(r => `
+                <div class="search-result-item" onclick="selectItemForAdd('${r.name.replace(/'/g, "\\\'")}', ${r.stock || 0})">
+                  <span class="sr-name">${r.name}</span>
+                  <span class="sr-stock">📦 Stock: ${r.stock || 0}</span>
+                </div>`).join('');
+            })
+            .withFailureHandler(err => console.error('Search error:', err))
+            .getInventoryItems(query);
+        }, 300);
+      }
+
+      function selectItemForAdd(itemName, stock) {
+        addItemSelectedItem = { name: itemName, stock: stock };
+        document.getElementById('addItemResults').innerHTML = '';
+        document.getElementById('addItemSearchInput').value = itemName;
+        const confirmRow = document.getElementById('addItemConfirmRow');
+        confirmRow.style.display = 'block';
+        confirmRow.innerHTML = `
+          <div class="sr-add-row">
+            <span class="sr-selected-name">✓ ${itemName}</span>
+            <span style="font-size:0.8rem;color:var(--text-muted);font-weight:700;">📦 ${stock}</span>
+            <label style="margin:0;font-size:0.75rem;">QTY:</label>
+            <input type="number" id="addItemQtyInput" value="1" min="1" 
+                   class="qty-input" style="width:55px;" onfocus="pausePolling()" onblur="resumePolling()">
+          </div>`;
+        document.getElementById('btnConfirmAddItem').disabled = false;
+      }
+
+      function confirmAddItem(reqId) {
+        if (!addItemSelectedItem) return;
+        const qty = Number(document.getElementById('addItemQtyInput')?.value) || 0;
+        if (qty < 1) { alert('Cantidad inválida.'); return; }
+
+        const itemName = addItemSelectedItem.name;
+        const stock = addItemSelectedItem.stock || 0;
+        closePanolModal();
+
+        const order = allOrders.find(o => String(o.reqId) === String(reqId));
+        if (order) {
+          order.items.push({
+            name: itemName, qty: qty, id: '---', loc: 'S/D',
+            requiereCanje: false, estadoCanje: '', panolConfirmacion: '',
+            stock: stock, status: 'PENDIENTE'
+          });
+        }
+        applyFilters();
+
+        google.script.run
+          .withSuccessHandler(res => {
+            if (res && !res.success) {
+              alert(res.error || 'Error al agregar ítem.');
+              loadData();
+            }
+          })
+          .withFailureHandler(err => {
+            console.error('Add item error:', err);
+            loadData();
+          })
+          .addItemToPendingOrder(reqId, itemName, qty);
+      }
+
+      function openIncompletePopup(reqId, itemName, originalQty, declaredByMechanic, itemTag) {
+        const safeItemName = itemName.replace(/'/g, "\\'");
+        const bodyHtml = `
+          <div class="modal-info">
+            <strong>${itemName}</strong><br>
+            El mecánico declaró: <strong>${declaredByMechanic}</strong> de <strong>${originalQty}</strong> unidad(es)
+          </div>
+          <label>Cantidad efectivamente recibida</label>
+          <input type="number" id="incompleteQtyInput" value="${declaredByMechanic}" min="0" max="${originalQty}"
+                 onfocus="pausePolling()" onblur="resumePolling()">`;
+        const actionsHtml = `
+          <button class="modal-btn cancel" onclick="closePanolModal()">Cancelar</button>
+          <button class="modal-btn danger" onclick="confirmIncomplete('${reqId}', '${safeItemName}', '${itemTag}')">Confirmar Incompleto</button>`;
+        showPanolModal('⚠️ Declaración de Devolución Incompleta', bodyHtml, actionsHtml);
+        setTimeout(() => document.getElementById('incompleteQtyInput')?.focus(), 100);
+      }
+
+      function confirmIncomplete(reqId, itemName, itemTag) {
+        const declaredQty = Number(document.getElementById('incompleteQtyInput')?.value);
+        if (isNaN(declaredQty) || declaredQty < 0) { alert('Cantidad inválida.'); return; }
+        closePanolModal();
+        submitReturnAudit(reqId, itemName, 'INCOMPLETO', declaredQty, itemTag);
+      }
+
+      let currentNewReturnsSubtab = 'pending';
+
+      function switchNewReturnsSubtab(tab, btn) {
+        currentNewReturnsSubtab = tab;
+        document.querySelectorAll('#view-returns-new .filter-pill').forEach(b => b.classList.remove('active'));
+        if (btn) btn.classList.add('active');
+        renderReturnsNewBoard();
+      }
+
+      function renderReturnsNewBoard() {
+        const board = document.getElementById('returns-new-board');
+        if (!board) return;
+        let html = '';
+        let pendingNewCount = 0;
+
+        allOrders.forEach(o => {
+          let eligibleItems = [];
+          if (currentNewReturnsSubtab === 'pending') {
+            eligibleItems = o.items.filter(i => i.status === 'DEVOLUCION PENDIENTE');
+          } else {
+            eligibleItems = o.items.filter(i => i.status === 'DEVOLUCION');
+          }
+
+          const pendingInOrder = o.items.filter(i => i.status === 'DEVOLUCION PENDIENTE');
+          if (pendingInOrder.length > 0) pendingNewCount += pendingInOrder.length;
+
+          if (eligibleItems.length > 0) {
+            const itemsHtml = eligibleItems.map((i, idx) => {
+              const safeItemName = i.name.replace(/'/g, "\\'");
+              const itemTag = `newret-${o.reqId}-${idx}`;
+              const isPending = i.status === 'DEVOLUCION PENDIENTE';
+
+              if (!isPending) {
+                return `
+                  <div id="${itemTag}" style="margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; opacity: 0.5;">
+                    <div style="font-size: 1.1rem; font-weight: 900; color: var(--text-white);">
+                      • ${i.name} <span style="color: var(--text-muted); font-weight: 600; font-size: 0.9rem;">(x${i.qty})</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--green); font-weight: 800; margin-left: 14px; margin-top: 4px;">
+                      ✓ REINTEGRADO A STOCK EN DB_ITEMS
+                    </div>
+                  </div>`;
+              }
+
+              return `
+                <div id="${itemTag}" style="margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px;">
+                  <div style="font-size: 1.1rem; font-weight: 900; color: var(--text-white);">
+                    • ${i.name} <span style="color: var(--text-muted); font-weight: 600; font-size: 0.9rem;">(Cant. a devolver: x${i.qty})</span>
+                  </div>
+                  <div style="font-size: 0.85rem; color: var(--orange); font-weight: 800; margin-left: 14px; margin-top: 4px; margin-bottom: 10px;">
+                    ↳ Solicitado para devolución por el mecánico
+                  </div>
+                  <div style="margin-left: 14px;">
+                    <button class="btn-ch ok" 
+                            onclick="confirmNewItemReturn('${o.reqId}', '${safeItemName}', ${i.qty}, '${itemTag}')"
+                            style="padding: 8px 16px; font-size: 0.85rem;">
+                        ✓ REINTEGRAR A STOCK
+                    </button>
+                  </div>
+                </div>`;
+            }).join('');
+
+            const savedOpId = pendingSelections[`newret_${o.reqId}`] || o.panolOpId || '';
+            const staffOptions = panolStaffList.map(s => `<option value="${s.id}" ${savedOpId === String(s.id) ? 'selected' : ''}>${s.name}</option>`).join('');
+
+            html += `
+              <div class="card-horizontal">
+                <div class="ch-left">
+                  <div class="unit-plate">${(o.unitInfo || '').split(/[\/+]/)[0].trim()}</div>
+                  <div class="ot-display" style="margin-top:4px;">OT: ${o.otNumber || '--'}</div>
+                  <div style="margin-top:12px; font-size:0.8rem; color:var(--text-muted); font-weight:600;">
+                    👤 Operario: ${o.opInfo}
+                  </div>
+                </div>
+                <div class="ch-middle">
+                  ${itemsHtml}
+                </div>
+                <div class="ch-right" style="justify-content: flex-start;">
+                  <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; margin-bottom:4px; text-transform:uppercase;">Auditor Pañol:</div>
+                  <select id="newret-op-${o.reqId}" class="panol-select" onchange="pendingSelections['newret_${o.reqId}'] = this.value" onfocus="pausePolling()" onblur="resumePolling()" style="width:100%; border-color:var(--border);">
+                    <option value="" disabled ${!savedOpId ? 'selected' : ''}>👤 Revisa Pañolero...</option>
+                    ${staffOptions}
+                  </select>
+                </div>
+              </div>`;
+          }
+        });
+
+        const badgeEl = document.getElementById('newPendingBadge');
+        if (badgeEl) badgeEl.innerText = pendingNewCount;
+        const navBadgeEl = document.getElementById('returnsNewCount');
+        if (navBadgeEl) navBadgeEl.innerText = pendingNewCount;
+
+        if (!html) {
+          board.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">Sin devoluciones de nuevos</div><div class="empty-text">No hay repuestos nuevos pendientes en esta sección.</div></div>`;
+        } else {
+          board.innerHTML = html;
+        }
+      }
+
+      function confirmNewItemReturn(reqId, itemName, returnQty, itemTag) {
+        const selectEl = document.getElementById(`newret-op-${reqId}`);
+        const panolOpId = selectEl ? selectEl.value : null;
+
+        if (!panolOpId) {
+          if (selectEl) {
+            selectEl.classList.remove('shake-error');
+            void selectEl.offsetWidth; 
+            selectEl.classList.add('shake-error');
+          }
+          return;
+        }
+
+        const itemEl = document.getElementById(itemTag);
+        if (itemEl) {
+          itemEl.style.opacity = '0.4';
+          itemEl.style.pointerEvents = 'none';
+        }
+
+        google.script.run
+          .withSuccessHandler(() => {
+            loadData();
+          })
+          .withFailureHandler(err => {
+            console.error('Error al reintegrar stock:', err);
+            if (itemEl) {
+              itemEl.style.opacity = '1';
+              itemEl.style.pointerEvents = 'auto';
+            }
+          })
+          .confirmNewReturn(reqId, itemName, returnQty, panolOpId);
+      }
     </script>
 </body>
 </html>
