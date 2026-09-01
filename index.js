@@ -393,9 +393,13 @@ app.get('/', requireAuth, (req, res) => {
   if (v === 'panol' || v === 'monitor') return res.sendFile(path.join(__dirname, 'public', 'panol.html'));
   if (v === 'dashboard' || v === 'dash') return res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
   if (v === 'inv' || v === 'inventory' || v === 'stock') return res.sendFile(path.join(__dirname, 'public', 'inv.html'));
+  if (v === 'mobile' || v === 'm' || v === 'app-mecanico') return res.sendFile(path.join(__dirname, 'public', 'mobile.html'));
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+app.get('/mobile', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'mobile.html')));
+app.get('/m', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'mobile.html')));
+app.get('/app-mecanico', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'mobile.html')));
 app.get('/panol', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'panol.html')));
 app.get('/dashboard', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/inv', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'inv.html')));
