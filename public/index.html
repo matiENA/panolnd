@@ -102,16 +102,16 @@
     .user-info-badge .name { font-size: 0.95rem; font-weight: 800; color: #60a5fa; }
 
     /* SELECTOR DE BAHÍA (SOLO ICONO 📍 SIN LABEL) */
-    .box-selector-container { display: flex; align-items: center; gap: 8px; }
-    .box-location-icon { font-size: 1.1rem; }
-    .box-chips-bar { display: flex; gap: 6px; }
+    .box-selector-container { display: flex; align-items: center; gap: 6px; }
+    .box-location-icon { font-size: 1rem; }
+    .box-chips-bar { display: flex; gap: 4px; }
     .box-chip {
-      background: var(--card-bg);
+      background: #0d1117;
       border: 1px solid var(--border);
       color: var(--text-muted);
-      padding: 6px 14px;
+      padding: 4px 10px;
       border-radius: 20px;
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       font-weight: 800;
       cursor: pointer;
       transition: all 0.2s;
@@ -325,33 +325,32 @@
     /* DESTINO SEGMENTADO */
     .dest-segmented-control {
       display: flex;
-      gap: 8px;
-      background: var(--card-bg);
-      padding: 4px;
+      gap: 4px;
+      background: #0d1117;
+      padding: 3px 4px;
       border-radius: var(--radius-md);
       border: 1px solid var(--border);
-      margin-top: 4px;
     }
     .dest-chip-btn {
-      flex: 1;
-      padding: 8px 12px;
+      padding: 4px 10px;
       border: 1px solid transparent;
       background: transparent;
       color: var(--text-muted);
       border-radius: var(--radius-sm);
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       font-weight: 800;
       cursor: pointer;
       text-align: center;
       transition: all 0.2s;
+      white-space: nowrap;
     }
     .dest-chip-btn.active.tractor {
-      background: rgba(54, 91, 165, 0.2);
+      background: rgba(54, 91, 165, 0.25);
       border-color: var(--blue);
       color: #93c5fd;
     }
     .dest-chip-btn.active.semi {
-      background: rgba(39, 174, 96, 0.2);
+      background: rgba(39, 174, 96, 0.25);
       border-color: var(--green-light);
       color: #86efac;
     }
@@ -736,24 +735,7 @@
         </div>
       </div>
 
-      <!-- SELECTOR DE BAHÍA / BOX (SOLO ICONO 📍 SIN TEXTO) -->
-      <div class="box-selector-container">
-        <span class="box-location-icon">📍</span>
-        <div class="box-chips-bar" id="location-container">
-          <!-- Renderizado dinámico de boxes -->
-        </div>
-      </div>
-
       <div class="header-actions">
-        <button class="btn-notif-bell" onclick="openInbox()">
-          <span>🔔</span> Avisos
-          <span class="notif-badge-count" id="bellBadge">0</span>
-        </button>
-
-        <a href="/mobile" class="btn-mobile-link" title="Cambiar a vista móvil">
-          📱 Móvil
-        </a>
-
         <button class="btn-logout" onclick="logout()">
           Salir
         </button>
@@ -773,7 +755,7 @@
             <span style="font-size:0.7rem; color:var(--text-dim); font-weight:600;">Búsqueda bidireccional</span>
           </div>
 
-          <div class="vehicles-dual-grid">
+          <div class="vehicles-dual-grid" style="margin-bottom:0;">
             <!-- TRACTOR -->
             <div class="vehicle-panel tractor">
               <div class="vehicle-tag-row">
@@ -819,30 +801,39 @@
               </div>
             </div>
           </div>
-
-          <!-- SELECTOR SEGMENTADO DE DESTINO -->
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
-            <span style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Destino del Repuesto:</span>
-            <div class="dest-segmented-control" style="width:320px;">
-              <button class="dest-chip-btn active tractor" id="optUnit" onclick="setDestination('UNIT')">
-                🚛 Tractor
-              </button>
-              <button class="dest-chip-btn semi" id="optSemi" onclick="setDestination('SEMI')">
-                📦 Semi
-              </button>
-            </div>
-          </div>
-          <input type="hidden" id="currentItemDest" value="UNIT">
-          <input type="hidden" id="activeOpId">
-          <input type="hidden" id="activeMechName">
         </div>
 
         <!-- MÓDULO CATÁLOGO LIMPIO -->
         <div class="card" style="flex:1;">
           <div class="card-header-title">
-            <span>📦 CATÁLOGO DE REPUESTOS</span>
-            <span style="font-size:0.7rem; color:var(--text-dim); font-weight:600;">Click para agregar al pedido</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span>📦 CATÁLOGO DE REPUESTOS</span>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+              <!-- SELECTOR DE BAHÍA / BOX (SOLO ICONO 📍) -->
+              <div class="box-selector-container">
+                <span class="box-location-icon">📍</span>
+                <div class="box-chips-bar" id="location-container">
+                  <!-- Renderizado dinámico de boxes -->
+                </div>
+              </div>
+
+              <!-- SELECTOR SEGMENTADO DE DESTINO -->
+              <div class="dest-segmented-control">
+                <button class="dest-chip-btn active tractor" id="optUnit" onclick="setDestination('UNIT')" type="button">
+                  🚛 Tractor
+                </button>
+                <button class="dest-chip-btn semi" id="optSemi" onclick="setDestination('SEMI')" type="button">
+                  📦 Semi
+                </button>
+              </div>
+            </div>
           </div>
+
+          <input type="hidden" id="currentItemDest" value="UNIT">
+          <input type="hidden" id="activeOpId">
+          <input type="hidden" id="activeMechName">
 
           <div class="search-row-layout">
             <select id="category-select" class="select-category-dropdown" onchange="onCategoryChange(this.value)">
