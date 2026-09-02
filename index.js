@@ -9,6 +9,7 @@ const { extractCleanPlate } = require('./plateNormalizer');
 const { extractPlates, processSingleOtUpdate, syncFullOtDatabase } = require('./otSyncService');
 const {
   syncOtsToTasksDatabase,
+  startAutomaticTaskSync,
   getActiveTasksBoard,
   updateTaskExecution,
   getHistoricalTasks
@@ -1116,6 +1117,16 @@ app.post('/webhook/nueva-ot', async (req, res) => {
       });
 
       console.log(`✅ Webhook /webhook/nueva-ot completado: ${result.action} para ${result.matchedPlate} (OT ${result.otNumber})`);
+      
+      // Auto-sincronizar nuevas tareas en DB_OT_TASKS de forma no bloqueante
+      syncOtsToTasksDatabase({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID })
+        .then(taskRes => {
+          if (taskRes && taskRes.newTasksAppended > 0) {
+            io.emit('tasks_synced', taskRes);
+          }
+        })
+        .catch(e => console.error('Error en sync de tareas tras webhook:', e.message));
+
       res.status(200).json(result);
     } else {
       console.warn(`⚠️ Webhook /webhook/nueva-ot no aplicado: ${result.error}`);
@@ -1187,5 +1198,17 @@ server.listen(PORT, async () => {
     console.log('✅ Sincronización inicial de OTs finalizada:', otSyncRes);
   } catch (e) {
     console.error('⚠️ Advertencia: No se pudo completar sincronización inicial de OTs:', e.message);
+  }
+
+  // Iniciar sincronización automatizada de DB_OT_TASKS (Cero sobreescritura, solo append de nuevos)
+  try {
+    startAutomaticTaskSync({
+      sheetsClient: sheets,
+      spreadsheetId: SPREADSHEET_ID,
+      io,
+      intervalMinutes: OT_SYNC_INTERVAL_MINUTES
+    });
+  } catch (e) {
+    console.error('⚠️ Error al iniciar automatización de DB_OT_TASKS:', e.message);
   }
 });

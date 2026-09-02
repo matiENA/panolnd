@@ -1,13 +1,13 @@
 /**
  * taskSyncService.js
- * Servicio integral de gestión de tareas operativas de taller para Pañol Cloud / Render.
+ * Servicio integral y automatizado de gestión de tareas operativas de taller para Pañol Cloud / Render.
  * 
- * Funcionalidades:
- * 1. Mantenimiento y auto-creación de pestañas 'DB_OT_TASKS' e 'HISTORICO_COLD' en Google Sheets.
- * 2. Ingesta y desglose inteligente de la pestaña 'ots' (strings concatenados con '|') a filas atómicas.
- * 3. Identificación precisa de Tractor (T) vs Semi/Acoplado (A).
- * 4. Actualización atómica e independiente de tareas por Box/Fosa (Ubicación, Operario, Asignado, Empezó, Terminó).
- * 5. Cierre automático y archivado en Cold Storage ('HISTORICO_COLD') con depuración en caliente (Hot Purge).
+ * Reglas de Negocio (Idempotencia, Prägnanz y Poka-Yoke):
+ * 1. Automatización continua: Tarea de fondo periódica + gatillos por webhook.
+ * 2. CERO SOBREESCRITURA: Las fechas (ASIGNADO, EMPEZO, TERMINO) y datos (UBICACION, OPERARIO) existentes NUNCA se tocan ni sobreescriben.
+ * 3. CERO RE-PROCESAMIENTO: Si una tarea ya existe en 'DB_OT_TASKS' o ya fue archivada en 'HISTORICO_COLD', se ignora por completo.
+ * 4. Inserción exclusiva por APPEND: Solo se insertan al final de 'DB_OT_TASKS' las tareas genuinamente nuevas.
+ * 5. Cold Storage & Hot Purge: Al completarse el 100% de las tareas de una OT, se archiva en 'HISTORICO_COLD' y se purga de la tabla activa.
  */
 
 const DB_TASKS_TAB = 'DB_OT_TASKS';
@@ -47,6 +47,10 @@ const COLD_STORAGE_HEADERS = [
   'OBSERVACIONES'
 ];
 
+// Mutex de sincronización para evitar ejecuciones concurrentes solapadas
+let isSyncRunning = false;
+let autoSyncIntervalTimer = null;
+
 /**
  * Valida y crea las pestañas DB_OT_TASKS e HISTORICO_COLD en Google Sheets si no existen.
  */
@@ -85,7 +89,7 @@ async function ensureSheetsStructure(sheetsClient, spreadsheetId) {
         spreadsheetId,
         requestBody: { requests }
       });
-      console.log(`✅ Pestañas creadas: ${requests.map(r => r.addSheet.properties.title).join(', ')}`);
+      console.log(`✅ Pestañas inicializadas: ${requests.map(r => r.addSheet.properties.title).join(', ')}`);
     }
 
     // Asegurar encabezados en DB_OT_TASKS
@@ -121,7 +125,7 @@ async function ensureSheetsStructure(sheetsClient, spreadsheetId) {
 }
 
 /**
- * Desglosa un string de tareas crudo "[RUBRO] Descripcion | [RUBRO] Descripcion" en objetos.
+ * Desglosa un string de tareas crudo "[RUBRO] Descripcion | [RUBRO] Descripcion" en objetos individuales.
  */
 function parseTasksFromString(rawTasksString) {
   if (!rawTasksString || typeof rawTasksString !== 'string') return [];
@@ -130,15 +134,12 @@ function parseTasksFromString(rawTasksString) {
   const tasks = [];
 
   chunks.forEach((chunk, idx) => {
-    // Regex para capturar [RUBRO] y la descripción
     const match = chunk.match(/^\[(.*?)\]\s*(.*)$/);
     if (match) {
-      const rubro = match[1].trim().toUpperCase();
-      const desc = match[2].trim();
       tasks.push({
         index: idx + 1,
-        rubro: rubro,
-        descripcion: desc,
+        rubro: match[1].trim().toUpperCase(),
+        descripcion: match[2].trim(),
         rawText: chunk
       });
     } else {
@@ -161,13 +162,13 @@ function parseDominioAndInterno(rawDominioString) {
   const result = {
     plate: '',
     interno: 'S/D',
-    tipo: 'TRACTOR' // TRACTOR o SEMI
+    tipo: 'TRACTOR'
   };
 
   if (!rawDominioString) return result;
 
   const parts = String(rawDominioString).split('|').map(s => s.trim());
-  result.plate = parts[0] || '';
+  result.plate = parts[0] ? parts[0].toUpperCase().replace(/[\s\-_.]/g, '') : '';
 
   if (parts.length > 1) {
     result.interno = parts[1] || '';
@@ -185,132 +186,194 @@ function parseDominioAndInterno(rawDominioString) {
 }
 
 /**
- * Sincroniza las OTs desde la pestaña 'ots' hacia la tabla operativa 'DB_OT_TASKS'.
- * Preserva las asignaciones y horarios que los mecánicos ya hayan cargado.
+ * Genera clave canónica para verificación de unicidad.
+ */
+function makeTaskFingerprint(otNumber, plate, rubro, descripcion) {
+  const cleanOt = String(otNumber || '').trim().replace(/^0+/, '');
+  const cleanPlate = String(plate || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+  const cleanRubro = String(rubro || '').trim().toUpperCase();
+  const cleanDesc = String(descripcion || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return `${cleanOt}__${cleanPlate}__${cleanRubro}__${cleanDesc}`;
+}
+
+/**
+ * SINCRONIZACIÓN AUTOMATIZADA IDEMPOTENTE:
+ * - NO sobreescribe ninguna fila existente.
+ * - NO toca ninguna fecha ni horario.
+ * - NO procesa tareas ya existentes en DB_OT_TASKS ni en HISTORICO_COLD.
+ * - Solo inserta (APPEND) tareas nuevas.
  */
 async function syncOtsToTasksDatabase({ sheetsClient, spreadsheetId }) {
   if (!sheetsClient || !spreadsheetId) throw new Error('Cliente o Spreadsheet ID inválido');
 
-  await ensureSheetsStructure(sheetsClient, spreadsheetId);
-
-  // 1. Leer pestaña 'ots'
-  const otsRes = await sheetsClient.spreadsheets.values.get({
-    spreadsheetId,
-    range: `'${OTS_SOURCE_TAB}'!A2:F500`
-  });
-
-  const otsRows = otsRes.data.values || [];
-  if (otsRows.length === 0) {
-    return { success: true, count: 0, message: "No hay filas en la pestaña 'ots'" };
+  if (isSyncRunning) {
+    console.log('⏳ Sincronización de tareas ya en ejecución. Omitiendo ciclo solapado.');
+    return { success: true, status: 'SKIPPED_CONCURRENT' };
   }
 
-  // 2. Leer tareas actuales en 'DB_OT_TASKS' para preservar estado existente
-  const currentTasksRes = await sheetsClient.spreadsheets.values.get({
-    spreadsheetId,
-    range: `'${DB_TASKS_TAB}'!A2:L1500`
-  });
+  isSyncRunning = true;
+  const startTime = Date.now();
 
-  const currentTaskRows = currentTasksRes.data.values || [];
-  const existingTaskMap = new Map();
+  try {
+    await ensureSheetsStructure(sheetsClient, spreadsheetId);
 
-  currentTaskRows.forEach(r => {
-    const taskId = String(r[0] || '').trim();
-    if (taskId) {
-      existingTaskMap.set(taskId, {
-        taskId: r[0],
-        otNumber: r[1],
-        dominio: r[2],
-        internoTipo: r[3],
-        rubro: r[4],
-        descripcion: r[5],
-        ubicacion: r[6] || '',
-        operario: r[7] || '',
-        asignado: r[8] || '',
-        empezo: r[9] || '',
-        termino: r[10] || '',
-        estado: r[11] || 'PENDIENTE'
+    // 1. Leer pestaña 'ots' (Ingesta)
+    const otsRes = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${OTS_SOURCE_TAB}'!A2:F500`
+    });
+
+    const otsRows = otsRes.data.values || [];
+    if (otsRows.length === 0) {
+      return { success: true, count: 0, message: "No hay datos en la pestaña 'ots'" };
+    }
+
+    // 2. Leer tareas existentes en 'DB_OT_TASKS'
+    const currentTasksRes = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${DB_TASKS_TAB}'!A2:F1500`
+    });
+    const currentTaskRows = currentTasksRes.data.values || [];
+
+    // 3. Leer tareas ya archivadas en 'HISTORICO_COLD' (para no re-crear OTs cerradas)
+    const coldTasksRes = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${COLD_STORAGE_TAB}'!A2:F3000`
+    });
+    const coldTaskRows = coldTasksRes.data.values || [];
+
+    // 4. Construir índice de exclusión (Set de IDs y Fingerprints existentes)
+    const existingTaskIds = new Set();
+    const existingFingerprints = new Set();
+
+    currentTaskRows.forEach(r => {
+      const taskId = String(r[0] || '').trim();
+      const ot = String(r[1] || '').trim();
+      const plate = String(r[2] || '').trim();
+      const rubro = String(r[4] || '').trim();
+      const desc = String(r[5] || '').trim();
+      if (taskId) existingTaskIds.add(taskId);
+      if (ot && desc) existingFingerprints.add(makeTaskFingerprint(ot, plate, rubro, desc));
+    });
+
+    coldTaskRows.forEach(r => {
+      const taskId = String(r[0] || '').trim();
+      const ot = String(r[1] || '').trim();
+      const plate = String(r[2] || '').trim();
+      const rubro = String(r[4] || '').trim();
+      const desc = String(r[5] || '').trim();
+      if (taskId) existingTaskIds.add(taskId);
+      if (ot && desc) existingFingerprints.add(makeTaskFingerprint(ot, plate, rubro, desc));
+    });
+
+    // 5. Filtrar estrictamente solo lo NUEVO
+    const newRowsToAppend = [];
+    let skippedExistingCount = 0;
+
+    for (const row of otsRows) {
+      const rawOt = String(row[2] || '').trim(); // Col C: ORDEN Nº
+      const rawDominio = String(row[3] || '').trim(); // Col D: DOMINIO
+      const rawTasks = String(row[4] || '').trim(); // Col E: Sector / Tareas
+
+      if (!rawOt || !rawTasks) continue;
+
+      const cleanOt = rawOt.replace(/^0+/, '') || rawOt;
+      const { plate, interno, tipo } = parseDominioAndInterno(rawDominio);
+      const parsedTaskList = parseTasksFromString(rawTasks);
+
+      parsedTaskList.forEach((item, idx) => {
+        const taskId = `${cleanOt}-${plate}-${idx + 1}`;
+        const fingerprint = makeTaskFingerprint(cleanOt, plate, item.rubro, item.descripcion);
+
+        // Si ya existe en DB_OT_TASKS o en HISTORICO_COLD, SE SALTEA SIN TOCAR
+        if (existingTaskIds.has(taskId) || existingFingerprints.has(fingerprint)) {
+          skippedExistingCount++;
+          return;
+        }
+
+        // Es una tarea genuinamente nueva
+        newRowsToAppend.push([
+          taskId,
+          cleanOt,
+          plate,
+          `${interno} (${tipo})`,
+          item.rubro,
+          item.descripcion,
+          '', // Ubicación (vacía para asignar)
+          '', // Operario (vacío para asignar)
+          '', // Asignado (vacío)
+          '', // Empezó (vacío)
+          '', // Terminó (vacío)
+          'PENDIENTE' // Estado inicial
+        ]);
+
+        // Registrar en los sets locales para evitar duplicaciones dentro del mismo lote
+        existingTaskIds.add(taskId);
+        existingFingerprints.add(fingerprint);
       });
     }
-  });
 
-  // 3. Procesar cada fila de 'ots'
-  const updatedRows = [];
-  let newTasksCount = 0;
-  let preservedCount = 0;
+    // 6. Inserción atómica por APPEND (sin reescribir ni tocar filas previas)
+    if (newRowsToAppend.length > 0) {
+      await sheetsClient.spreadsheets.values.append({
+        spreadsheetId,
+        range: `'${DB_TASKS_TAB}'!A:L`,
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: { values: newRowsToAppend }
+      });
+      console.log(`✨ [AutoSync] ${newRowsToAppend.length} nuevas tareas agregadas a ${DB_TASKS_TAB}. (${skippedExistingCount} existentes preservadas intactas).`);
+    } else {
+      console.log(`✓ [AutoSync] Sin tareas nuevas (${skippedExistingCount} existentes comprobadas y preservadas intactas).`);
+    }
 
-  for (const row of otsRows) {
-    const rawOt = String(row[2] || '').trim(); // Col C: ORDEN Nº
-    const rawDominio = String(row[3] || '').trim(); // Col D: DOMINIO
-    const rawTasks = String(row[4] || '').trim(); // Col E: Sector / Tareas
+    const durationMs = Date.now() - startTime;
+    return {
+      success: true,
+      newTasksAppended: newRowsToAppend.length,
+      skippedExisting: skippedExistingCount,
+      durationMs,
+      timestamp: new Date().toISOString()
+    };
+  } catch (err) {
+    console.error('❌ Error en syncOtsToTasksDatabase:', err.message);
+    return { success: false, error: err.message };
+  } finally {
+    isSyncRunning = false;
+  }
+}
 
-    if (!rawOt || !rawTasks) continue;
+/**
+ * Inicia el cron de sincronización automática periódica en segundo plano.
+ */
+function startAutomaticTaskSync({ sheetsClient, spreadsheetId, io, intervalMinutes = 2 }) {
+  if (autoSyncIntervalTimer) {
+    clearInterval(autoSyncIntervalTimer);
+  }
 
-    const cleanOt = rawOt.replace(/^0+/, '') || rawOt;
-    const { plate, interno, tipo } = parseDominioAndInterno(rawDominio);
-    const parsedTaskList = parseTasksFromString(rawTasks);
+  const intervalMs = Math.max(1, intervalMinutes) * 60 * 1000;
+  console.log(`🤖 Automatización iniciada: Sincronizador de DB_OT_TASKS activo cada ${intervalMinutes} minuto(s).`);
 
-    parsedTaskList.forEach((item, idx) => {
-      // TASK_ID idempotente: "OT-DOMINIO-INDEX" (ej: "11110-AG147LK-1")
-      const taskId = `${cleanOt}-${plate}-${idx + 1}`;
-      const existing = existingTaskMap.get(taskId);
+  // Primera ejecución inicial
+  syncOtsToTasksDatabase({ sheetsClient, spreadsheetId }).then(res => {
+    if (res.newTasksAppended > 0 && io) {
+      io.emit('tasks_synced', res);
+    }
+  }).catch(e => console.error('Error en sync inicial:', e.message));
 
-      if (existing) {
-        // Preservar datos de intervención
-        updatedRows.push([
-          taskId,
-          cleanOt,
-          plate,
-          `${interno} (${tipo})`,
-          item.rubro,
-          item.descripcion,
-          existing.ubicacion,
-          existing.operario,
-          existing.asignado,
-          existing.empezo,
-          existing.termino,
-          existing.estado
-        ]);
-        preservedCount++;
-      } else {
-        // Nueva tarea lista para ser asignada a un box
-        updatedRows.push([
-          taskId,
-          cleanOt,
-          plate,
-          `${interno} (${tipo})`,
-          item.rubro,
-          item.descripcion,
-          '', // Ubicación
-          '', // Operario
-          '', // Asignado
-          '', // Empezó
-          '', // Terminó
-          'PENDIENTE' // Estado
-        ]);
-        newTasksCount++;
+  // Tarea periódica
+  autoSyncIntervalTimer = setInterval(async () => {
+    try {
+      const res = await syncOtsToTasksDatabase({ sheetsClient, spreadsheetId });
+      if (res.newTasksAppended > 0 && io) {
+        io.emit('tasks_synced', res);
       }
-    });
-  }
+    } catch (e) {
+      console.error('Error en autoSyncIntervalTimer:', e.message);
+    }
+  }, intervalMs);
 
-  // 4. Escribir de forma atómica en 'DB_OT_TASKS'
-  if (updatedRows.length > 0) {
-    await sheetsClient.spreadsheets.values.update({
-      spreadsheetId,
-      range: `'${DB_TASKS_TAB}'!A2:L${updatedRows.length + 1}`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: updatedRows }
-    });
-  }
-
-  console.log(`✅ DB_OT_TASKS sincronizada: ${updatedRows.length} tareas totales (${newTasksCount} nuevas, ${preservedCount} preservadas).`);
-
-  return {
-    success: true,
-    totalTasks: updatedRows.length,
-    newTasks: newTasksCount,
-    preservedTasks: preservedCount,
-    timestamp: new Date().toISOString()
-  };
+  return autoSyncIntervalTimer;
 }
 
 /**
@@ -406,7 +469,7 @@ async function updateTaskExecution({ sheetsClient, spreadsheetId, taskId, ubicac
     throw new Error('Parámetros requeridos: sheetsClient, spreadsheetId, taskId');
   }
 
-  // 1. Buscar la fila en DB_OT_TASKS
+  // 1. Buscar la fila exacta en DB_OT_TASKS
   const res = await sheetsClient.spreadsheets.values.get({
     spreadsheetId,
     range: `'${DB_TASKS_TAB}'!A:L`
@@ -428,7 +491,7 @@ async function updateTaskExecution({ sheetsClient, spreadsheetId, taskId, ubicac
     return { success: false, error: `No se encontró la tarea con ID ${taskId}` };
   }
 
-  // 2. Preparar valores actualizados manteniendo los existentes si no se especifican
+  // 2. Preservar valores previos si el parámetro no viene definido
   const newUbicacion = ubicacion !== undefined ? ubicacion : (currentRowData[6] || '');
   const newOperario = operario !== undefined ? operario : (currentRowData[7] || '');
   const newAsignado = asignado !== undefined ? asignado : (currentRowData[8] || '');
@@ -469,7 +532,6 @@ async function updateTaskExecution({ sheetsClient, spreadsheetId, taskId, ubicac
     timestamp: new Date().toISOString()
   };
 
-  // Notificar por WebSockets
   if (io) {
     io.emit('task_updated', updateResult);
   }
@@ -625,6 +687,7 @@ module.exports = {
   parseTasksFromString,
   parseDominioAndInterno,
   syncOtsToTasksDatabase,
+  startAutomaticTaskSync,
   getActiveTasksBoard,
   updateTaskExecution,
   checkAndArchiveIfOtFinished,
