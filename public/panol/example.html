@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <title>Taller App — Terminal de Box</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/2950/2950663.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <script src="/socket.io/socket.io.min.js"></script>
+  <script src="/js/client-shim.js"></script>
+
+  <style>
+    :root {
+      --bg: #0A0B0B;
+      --panel-bg: #121518;
+      --card-bg: #1A1F24;
+      --card-hover: #222930;
+      --border: #2A323D;
+      --border-light: #3D4856;
+      
+      --text: #F3F4F6;
+      --text-muted: #9CA3AF;
+      --text-dim: #6B7280;
+      
+      --blue: #365BA5;
+      --blue-light: #4D76C9;
+      --blue-glow: rgba(54, 91, 165, 0.25);
+      
+      --green: #1E8449;
+      --green-light: #27AE60;
+      --green-glow: rgba(39, 174, 96, 0.2);
+      
+      --orange: #D97706;
+      --orange-light: #F59E0B;
+      
+      --danger: #E74C3C;
+      --danger-glow: rgba(231, 76, 60, 0.2);
+      
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* === SCROLLBAR INDUSTRIAL LIMPIO === */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--panel-bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+    /* === HEADER SUPERIOR LIMPIO (SIN AGREGADOS EXTRA) === */
+    header {
+      background: var(--panel-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-left { display: flex; align-items: center; gap: 20px; }
+    .brand-title {
+      font-size: 1.1rem;
+      font-weight: 900;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .user-info-box {
+      display: flex;
+      flex-direction: column;
+      border-left: 2px solid var(--border);
+      padding-left: 16px;
+    }
+    .user-tag { font-size: 0.65rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .user-name { font-size: 0.95rem; font-weight: 800; color: #60a5fa; }
+
+    .header-center { display: flex; align-items: center; gap: 8px; }
+    .box-selector-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-right: 4px;
+    }
+    .box-chips { display: flex; gap: 6px; }
+    .box-chip {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .box-chip:hover { border-color: var(--blue-light); color: var(--text); }
+    .box-chip.active {
+      background: var(--blue);
+      color: white;
+      border-color: var(--blue);
+      box-shadow: 0 2px 8px var(--blue-glow);
+    }
+
+    .header-right { display: flex; align-items: center; gap: 14px; }
+    
+    .btn-bell {
+      position: relative;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .btn-bell:hover { background: var(--card-hover); border-color: var(--border-light); }
+    .bell-badge {
+      background: var(--danger);
+      color: white;
+      font-size: 0.65rem;
+      font-weight: 900;
+      padding: 2px 6px;
+      border-radius: 10px;
+      display: none;
+    }
+    .bell-badge.show { display: inline-block; }
+
+    .btn-logout {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-logout:hover { background: rgba(231, 76, 60, 0.2); border-color: var(--danger); color: #fca5a5; }
+
+    /* === CONTENEDOR PRINCIPAL DESKTOP (SPLIT-SCREEN 58% / 42%) === */
+    .main-workspace {
+      display: grid;
+      grid-template-columns: 58% 42%;
+      gap: 20px;
+      padding: 20px 24px;
+      flex: 1;
+      max-width: 1700px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    @media (max-width: 1150px) {
+      .main-workspace { grid-template-columns: 1fr; }
+    }
+
+    .col-left { display: flex; flex-direction: column; gap: 18px; }
+    .col-right { display: flex; flex-direction: column; gap: 18px; }
+
+    /* === TARJETAS / CONTENEDORES === */
+    .card {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    .card-title {
+      font-size: 0.9rem;
+      font-weight: 800;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* === 1. CONTEXTO DE UNIDAD & OT (TRACTOR + SEMI) === */
+    .vehicles-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+
+    .vehicle-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .vehicle-box.tractor { border-left: 4px solid var(--blue); }
+    .vehicle-box.semi { border-left: 4px solid var(--green-light); }
+
+    .vehicle-header-tag {
+      font-size: 0.7rem;
+      font-weight: 800;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .fields-row { display: flex; gap: 10px; }
+    .field-group { flex: 1; display: flex; flex-direction: column; gap: 4px; position: relative; }
+    .field-group label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    .text-input {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 0.95rem;
+      font-weight: 700;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      outline: none;
+      width: 100%;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    .text-input:focus { border-color: var(--blue-light); }
+    .text-input::placeholder { color: var(--text-dim); font-weight: 500; font-size: 0.85rem; }
+
+    /* AUTOCOMPLETE POPOVER */
+    .autocomplete-popover {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: #1e293b;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 50;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      margin-top: 4px;
+      display: none;
+    }
+    .popover-item {
+      padding: 10px 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .popover-item:last-child { border-bottom: none; }
+    .popover-item:hover { background: var(--blue); color: white; }
+    .popover-item strong { color: #60a5fa; }
+    .popover-item:hover strong { color: white; }
+
+    /* SELECTOR SEGMENTADO DE DESTINO */
+    .destination-segmented {
+      display: flex;
+      gap: 8px;
+      background: var(--card-bg);
+      padding: 4px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      margin-top: 4px;
+    }
+    .dest-option {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      font-weight: 800;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .dest-option.active.tractor {
+      background: rgba(54, 91, 165, 0.2);
+      border-color: var(--blue);
+      color: #93c5fd;
+    }
+    .dest-option.active.semi {
+      background: rgba(39, 174, 96, 0.2);
+      border-color: var(--green-light);
+      color: #86efac;
+    }
+
+    /* === 2. CATÁLOGO LIMPIO & SELECTOR BIDIRECCIONAL (SIN STOCK NI UBICACIÓN) === */
+    .catalog-search-layout {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .search-inputs-bar {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 10px;
+    }
+
+    .catalog-select {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      font-weight: 700;
+      outline: none;
+      cursor: pointer;
+    }
+    .catalog-select:focus { border-color: var(--blue-light); }
+
+    /* LISTA LIMPIA DE REPUESTOS */
+    .catalog-items-list {
+      max-height: 320px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-right: 4px;
+    }
+
+    .catalog-item-row {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 11px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .catalog-item-row:hover {
+      background: var(--card-hover);
+      border-color: var(--blue-light);
+      transform: translateX(3px);
+    }
+
+    .item-text-wrapper { display: flex; flex-direction: column; gap: 3px; }
+    .item-name-heading { font-size: 0.9rem; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .item-category-label { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600; }
+    
+    .badge-canje-inline {
+      background: rgba(217, 119, 6, 0.2);
+      border: 1px solid var(--orange);
+      color: #fcd34d;
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .btn-add-item {
+      background: rgba(39, 174, 96, 0.15);
+      border: 1px solid var(--green-light);
+      color: var(--green-light);
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-add-item:hover { background: var(--green-light); color: white; }
+
+    .notes-input-box {
+      margin-top: 12px;
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+    }
+    .notes-input-box input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 0.85rem;
+      outline: none;
+      font-family: inherit;
+    }
+
+    /* === 3. CARRITO ACTIVO (PANEL DERECHO) === */
+    .cart-box {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .cart-rows-container {
+      min-height: 130px;
+      max-height: 220px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .cart-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      font-weight: 600;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-md);
+      gap: 6px;
+    }
+
+    .cart-item-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cart-item-title { font-size: 0.85rem; font-weight: 700; color: var(--text); }
+    .cart-item-dest-tag {
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 4px;
+      width: fit-content;
+      margin-top: 2px;
+    }
+    .cart-item-dest-tag.tractor { background: rgba(54, 91, 165, 0.2); color: #93c5fd; }
+    .cart-item-dest-tag.semi { background: rgba(39, 174, 96, 0.2); color: #86efac; }
+
+    .qty-stepper {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #0d1117;
+      padding: 3px 6px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+    }
+    .btn-qty {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: none; background: var(--border); color: white;
+      font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem;
+    }
+    .btn-qty:hover { background: var(--blue-light); }
+    .qty-display { font-weight: 800; font-size: 0.85rem; min-width: 18px; text-align: center; }
+
+    .btn-cart-del {
+      background: none; border: none; color: var(--danger);
+      font-size: 1.1rem; cursor: pointer; padding: 0 4px;
+    }
+
+    .btn-confirm-order {
+      background: var(--blue);
+      color: white;
+      border: none;
+      padding: 14px;
+      border-radius: var(--radius-md);
+      font-weight: 800;
+      font-size: 0.95rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: all 0.2s;
+    }
+    .btn-confirm-order:hover { background: var(--blue-light); }
+    .btn-confirm-order:disabled { background: var(--border); color: var(--text-dim); cursor: not-allowed; }
+
+    /* === 4. MIS PEDIDOS EN TALLER (MONITOR EN VIVO) === */
+    .orders-monitor-box {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .monitor-nav-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .filter-pills-bar { display: flex; gap: 6px; }
+    .nav-pill {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .nav-pill.active { background: var(--blue); color: white; border-color: var(--blue); }
+
+    .orders-list-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 380px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .order-item-row {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      border-left: 5px solid var(--blue);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s;
+    }
+
+    /* RESALTE DESTACADO DE LISTO PARA RETIRAR */
+    .order-item-row.status-LISTO {
+      border-left-color: var(--green-light);
+      background: rgba(39, 174, 96, 0.08);
+      border-color: rgba(39, 174, 96, 0.4);
+      box-shadow: 0 2px 12px var(--green-glow);
+    }
+
+    .status-badge-tag {
+      font-size: 0.7rem;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      display: inline-block;
+      margin-bottom: 6px;
+    }
+    .status-LISTO-tag { background: rgba(39, 174, 96, 0.2); color: #86efac; border: 1px solid var(--green-light); }
+    .status-PENDIENTE-tag { background: rgba(54, 91, 165, 0.2); color: #93c5fd; border: 1px solid var(--blue); }
+    .status-ENTREGADO-tag { background: rgba(156, 163, 175, 0.2); color: #9ca3af; }
+
+    .order-summary-text { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+    .order-footer-meta { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; }
+
+    .btn-return-secondary {
+      background: rgba(231, 76, 60, 0.1);
+      border: 1px solid var(--danger);
+      color: #fca5a5;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-return-secondary:hover { background: var(--danger); color: white; }
+
+    /* === MODAL DIALOGS === */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(3px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+    .modal-box {
+      background: var(--panel-bg);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+      overflow: hidden;
+    }
+    .modal-header {
+      background: #0d1117;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header h3 { font-size: 1rem; font-weight: 800; color: var(--text); }
+    .modal-body { padding: 20px; max-height: 60vh; overflow-y: auto; }
+    .modal-footer {
+      padding: 14px 20px;
+      background: #0d1117;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .btn-m-cancel { background: var(--card-bg); border: 1px solid var(--border); color: var(--text-muted); padding: 8px 16px; border-radius: var(--radius-sm); font-weight: 700; cursor: pointer; }
+    .btn-m-confirm { background: var(--blue); border: none; color: white; padding: 8px 18px; border-radius: var(--radius-sm); font-weight: 800; cursor: pointer; }
+
+    /* TOAST */
+    .toast-popup {
+      position: fixed;
+      bottom: 20px; right: 20px;
+      background: #1e293b;
+      border: 1px solid var(--blue);
+      color: white;
+      padding: 12px 18px;
+      border-radius: var(--radius-md);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      z-index: 300;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- BARRA SUPERIOR LIMPIA (SIN AGREGADOS EXTRA) -->
+  <header>
+    <div class="header-left">
+      <div class="brand-title">
+        <span>🚛</span> TALLER APP
+      </div>
+
+      <div class="user-info-box">
+        <span class="user-tag">Operario Conectado</span>
+        <span class="user-name" id="userNameDisplay">Matias Rodriguez</span>
+      </div>
+    </div>
+
+    <!-- SELECTOR DE BOX / UBICACIÓN DEL OPERARIO -->
+    <div class="header-center">
+      <span class="box-selector-label">📍 Tu Bahía:</span>
+      <div class="box-chips" id="boxChips">
+        <button class="box-chip active" onclick="selectBox('01')">Box 01</button>
+        <button class="box-chip" onclick="selectBox('02')">Box 02</button>
+        <button class="box-chip" onclick="selectBox('03')">Box 03</button>
+        <button class="box-chip" onclick="selectBox('04')">Box 04</button>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <button class="btn-bell" onclick="openInboxModal()">
+        <span>🔔</span> Avisos
+        <span class="bell-badge" id="bellBadge">0</span>
+      </button>
+
+      <button class="btn-logout" onclick="logout()">
+        Salir
+      </button>
+    </div>
+  </header>
+
+  <!-- CONTENEDOR SPLIT-SCREEN -->
+  <main class="main-workspace">
+
+    <!-- COLUMNA IZQUIERDA: UNIDAD + CATÁLOGO LIMPIO -->
+    <div class="col-left">
+      
+      <!-- 1. IDENTIFICACIÓN DE UNIDAD (TRACTOR + SEMI) -->
+      <div class="card">
+        <div class="card-title">
+          <span>🚛 UNIDAD & ORDEN DE TRABAJO</span>
+          <span style="font-size:0.7rem; color:var(--text-dim); font-weight:600;">Autocompletado bidireccional</span>
+        </div>
+
+        <div class="vehicles-grid">
+          <!-- TRACTOR -->
+          <div class="vehicle-box tractor">
+            <div class="vehicle-header-tag">
+              <span>TRACTOR</span>
+              <span style="color:#60a5fa;">PRINCIPAL</span>
+            </div>
+            <div class="fields-row">
+              <div class="field-group">
+                <label>Patente / Interno</label>
+                <input type="text" id="unitInput" class="text-input" placeholder="Ej. AA123CD..." autocomplete="off" oninput="filterFleet(this.value, 'UNIT')">
+                <div id="unitSuggestions" class="autocomplete-popover"></div>
+              </div>
+              <div class="field-group" style="max-width: 130px;">
+                <label>N° OT</label>
+                <input type="text" id="otInput" class="text-input" placeholder="OT..." autocomplete="off">
+              </div>
+            </div>
+          </div>
+
+          <!-- SEMI -->
+          <div class="vehicle-box semi">
+            <div class="vehicle-header-tag">
+              <span>SEMI / ACOPLADO</span>
+              <span style="color:#86efac;">OPCIONAL</span>
+            </div>
+            <div class="fields-row">
+              <div class="field-group">
+                <label>Patente Semi</label>
+                <input type="text" id="semiUnitInput" class="text-input" placeholder="Ej. 6040..." autocomplete="off" oninput="filterFleet(this.value, 'SEMI')">
+                <div id="semiSuggestions" class="autocomplete-popover"></div>
+              </div>
+              <div class="field-group" style="max-width: 130px;">
+                <label>OT Semi (+1)</label>
+                <input type="text" id="semiOtInput" class="text-input" placeholder="OT Semi..." autocomplete="off">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SELECTOR DE DESTINO DEL REPUESTO -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
+          <span style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Destino del Repuesto:</span>
+          <div class="destination-segmented" style="width:320px;">
+            <button class="dest-option active tractor" id="optTractor" onclick="setDest('UNIT')">
+              🚛 Tractor (<span id="txtTractor">AA123</span>)
+            </button>
+            <button class="dest-option semi" id="optSemi" onclick="setDest('SEMI')">
+              📦 Semi (<span id="txtSemi">6040</span>)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. CATÁLOGO LIMPIO (SIN STOCK NI UBICACIÓN) -->
+      <div class="card" style="flex:1;">
+        <div class="card-title">
+          <span>📦 CATÁLOGO DE REPUESTOS</span>
+          <span style="font-size:0.7rem; color:var(--text-dim); font-weight:600;">Click para agregar al pedido</span>
+        </div>
+
+        <!-- BÚSQUEDA Y FILTRADO -->
+        <div class="catalog-search-layout">
+          <div class="search-inputs-bar">
+            <select id="catSelect" class="catalog-select" onchange="filterCatalog()">
+              <option value="">📂 Todos los Rubros</option>
+              <option value="FILTROS">Filtros</option>
+              <option value="FRENOS">Frenos y Aire</option>
+              <option value="SUSPENSION">Suspensión y Dirección</option>
+              <option value="ELECTRICIDAD">Electricidad e Iluminación</option>
+              <option value="LUBRICANTES">Aceites y Grasas</option>
+              <option value="HERRAMIENTAS">Herramientas Especiales</option>
+            </select>
+
+            <input type="text" id="itemSearchInput" class="text-input" placeholder="🔍 Escribe el nombre del repuesto..." autocomplete="off" oninput="filterCatalog()">
+          </div>
+        </div>
+
+        <!-- LISTA LIMPIA DE REPUESTOS -->
+        <div class="catalog-items-list" id="catalogList">
+          <!-- Renderizado dinámico de repuestos -->
+        </div>
+
+        <!-- NOTAS OPCIONALES -->
+        <div class="notes-input-box">
+          <input type="text" id="notesInput" placeholder="📝 Agregar nota o detalle específico para Pañol...">
+        </div>
+      </div>
+
+    </div>
+
+    <!-- COLUMNA DERECHA: CARRITO + MIS PEDIDOS EN TALLER -->
+    <div class="col-right">
+
+      <!-- 3. LISTA PARA DESPACHAR (CARRITO) -->
+      <div class="cart-box">
+        <div class="card-title">
+          <span>🛒 LISTA PARA ENVIAR</span>
+          <span id="cartBadge" style="background:var(--blue); color:white; font-size:0.75rem; font-weight:900; padding:2px 8px; border-radius:10px;">0 ÍTEMS</span>
+        </div>
+
+        <div class="cart-rows-container" id="cartContainer">
+          <div class="cart-placeholder">
+            <span>📦</span>
+            <span>El carrito está vacío. Selecciona repuestos a la izquierda.</span>
+          </div>
+        </div>
+
+        <button class="btn-confirm-order" id="btnSubmitOrder" onclick="submitBatchOrder()" disabled>
+          CONFIRMAR PEDIDO
+        </button>
+      </div>
+
+      <!-- 4. MIS PEDIDOS EN TALLER (MONITOR EN VIVO) -->
+      <div class="orders-monitor-box">
+        <div class="monitor-nav-bar">
+          <div class="card-title" style="margin:0; padding:0; border:none;">
+            <span>📦 MIS PEDIDOS</span>
+          </div>
+          <div class="filter-pills-bar">
+            <button class="nav-pill active" id="tabActive" onclick="switchOrderTab(false)">⚡ ACTIVOS</button>
+            <button class="nav-pill" id="tabHistory" onclick="switchOrderTab(true)">📜 HISTORIAL</button>
+            <button class="nav-pill" onclick="refreshOrders()" title="Actualizar">🔄</button>
+          </div>
+        </div>
+
+        <div class="orders-list-feed" id="ordersFeed">
+          <!-- Renderizado dinámico de pedidos -->
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- MODAL DE CANJE OBLIGATORIO -->
+  <div class="modal-overlay" id="canjeModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>♻️ Protocolo de Canje Obligatorio</h3>
+        <button style="background:none; border:none; color:#888; font-size:1.4rem; cursor:pointer;" onclick="closeCanjeModal()">×</button>
+      </div>
+      <div class="modal-body" id="canjeModalBody"></div>
+      <div class="modal-footer">
+        <button class="btn-m-cancel" onclick="closeCanjeModal()">Volver</button>
+        <button class="btn-m-confirm" onclick="executeCanjeConfirm()">Confirmar Pedido</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE DEVOLUCIÓN DE REPUESTO -->
+  <div class="modal-overlay" id="returnModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>↩️ Devolución a Pañol</h3>
+        <button style="background:none; border:none; color:#888; font-size:1.4rem; cursor:pointer;" onclick="closeReturnModal()">×</button>
+      </div>
+      <div class="modal-body" id="returnModalBody"></div>
+      <div class="modal-footer">
+        <button class="btn-m-cancel" onclick="closeReturnModal()">Cancelar</button>
+        <button class="btn-m-confirm" style="background:var(--danger);" onclick="executeReturnConfirm()">Enviar Devolución</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST DE FEEDBACK -->
+  <div class="toast-popup" id="toast">
+    <span id="toastIcon">✅</span>
+    <span id="toastMsg">Operación completada</span>
+  </div>
+
+  <script>
+    // ESTADO
+    let activeBox = "01";
+    let activeDestination = "UNIT";
+    let cartItems = [];
+    let showHistory = false;
+
+    // CATÁLOGO LIMPIO (SIN STOCK NI LOCATION)
+    let dbCatalog = [
+      { name: "Filtro de Aceite W950/26", category: "FILTROS", requiereCanje: false },
+      { name: "Filtro de Combustible WK 940/20", category: "FILTROS", requiereCanje: false },
+      { name: "Filtro de Aire Primario C 30 850", category: "FILTROS", requiereCanje: false },
+      { name: "Juego de Pastillas Freno Disco Delantero", category: "FRENOS", requiereCanje: true },
+      { name: "Disco de Freno Ventilado 430mm", category: "FRENOS", requiereCanje: true },
+      { name: "Válvula Reguladora de Presión 4 Vías", category: "FRENOS", requiereCanje: true },
+      { name: "Fuelle Neumático Completo con Base", category: "SUSPENSION", requiereCanje: true },
+      { name: "Amortiguador Reforzado Eje Delantero", category: "SUSPENSION", requiereCanje: true },
+      { name: "Lámpara H7 24V 70W Heavy Duty", category: "ELECTRICIDAD", requiereCanje: false },
+      { name: "Óptica Delantera Izquierda LED", category: "ELECTRICIDAD", requiereCanje: true },
+      { name: "Aceite Sintético 10W-40 Rimula R6 (Balde 20L)", category: "LUBRICANTES", requiereCanje: false },
+      { name: "Grasa de Litio Compleja EP-2 (Cartucho)", category: "LUBRICANTES", requiereCanje: false }
+    ];
+
+    let liveOrders = [
+      {
+        reqId: "REQ-9A4B",
+        timestamp: "10:38",
+        opInfo: "Matias Rodriguez [Box 01]",
+        otNumber: "45890 + [45891]",
+        unitInfo: "AA123CD + [6040]",
+        status: "LISTO",
+        items: [
+          { name: "Filtro de Aceite W950/26", qty: 2, status: "LISTO" },
+          { name: "Juego de Pastillas Freno Disco Delantero [PARA SEMI: 6040]", qty: 1, status: "LISTO" }
+        ]
+      },
+      {
+        reqId: "REQ-8F12",
+        timestamp: "10:25",
+        opInfo: "Matias Rodriguez [Box 01]",
+        otNumber: "45812",
+        unitInfo: "AC998ZZ",
+        status: "PENDIENTE",
+        items: [
+          { name: "Filtro de Aire Primario C 30 850", qty: 1, status: "PENDIENTE" },
+          { name: "Aceite Sintético 10W-40 Rimula R6 (Balde 20L)", qty: 1, status: "PENDIENTE" }
+        ]
+      },
+      {
+        reqId: "REQ-7C00",
+        timestamp: "09:40",
+        opInfo: "Matias Rodriguez [Box 01]",
+        otNumber: "45760",
+        unitInfo: "AB450EE",
+        status: "ENTREGADO",
+        items: [
+          { name: "Lámpara H7 24V 70W Heavy Duty", qty: 4, status: "ENTREGADO" }
+        ]
+      }
+    ];
+
+    window.onload = function() {
+      renderCatalog(dbCatalog);
+      renderOrdersFeed();
+
+      // Carga desde backend RPC real si está conectado
+      if (window.google && window.google.script && window.google.script.run) {
+        google.script.run.withSuccessHandler(items => {
+          if (items && items.length > 0) {
+            dbCatalog = items;
+            renderCatalog(dbCatalog);
+          }
+        }).getItemCatalog();
+
+        google.script.run.withSuccessHandler(orders => {
+          if (orders && orders.length > 0) {
+            liveOrders = orders;
+            renderOrdersFeed();
+          }
+        }).getMechanicOrders('104');
+      }
+
+      // WebSockets
+      if (typeof io !== 'undefined') {
+        const socket = io();
+        socket.on('orders_sync', function(orders) {
+          if (Array.isArray(orders)) {
+            liveOrders = orders;
+            renderOrdersFeed();
+            showToast("Actualización de pedidos recibida", "⚡");
+          }
+        });
+      }
+    };
+
+    function selectBox(box) {
+      activeBox = box;
+      document.querySelectorAll('.box-chip').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      showToast(`Bahía configurada en Box ${box}`);
+    }
+
+    function setDest(dest) {
+      activeDestination = dest;
+      document.getElementById('optTractor').classList.toggle('active', dest === 'UNIT');
+      document.getElementById('optSemi').classList.toggle('active', dest === 'SEMI');
+    }
+
+    function filterCatalog() {
+      const q = document.getElementById('itemSearchInput').value.toLowerCase().trim();
+      const cat = document.getElementById('catSelect').value;
+
+      const filtered = dbCatalog.filter(item => {
+        const matchQ = !q || item.name.toLowerCase().includes(q);
+        const matchCat = !cat || item.category === cat;
+        return matchQ && matchCat;
+      });
+
+      renderCatalog(filtered);
+    }
+
+    function renderCatalog(items) {
+      const list = document.getElementById('catalogList');
+      list.innerHTML = "";
+
+      if (items.length === 0) {
+        list.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-dim);">Sin repuestos coincidentes.</div>`;
+        return;
+      }
+
+      items.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'catalog-item-row';
+
+        const canjeTag = item.requiereCanje ? `<span class="badge-canje-inline">♻️ Requiere Canje</span>` : '';
+
+        div.innerHTML = `
+          <div class="item-text-wrapper">
+            <div class="item-name-heading">
+              <span>${item.name}</span>
+              ${canjeTag}
+            </div>
+            <div class="item-category-label">Rubro: ${item.category || 'GENERAL'}</div>
+          </div>
+          <button class="btn-add-item" onclick="addItemDirectly('${item.name.replace(/'/g, "\\'")}')">
+            + Agregar
+          </button>
+        `;
+
+        div.onclick = (e) => {
+          if (e.target.tagName !== 'BUTTON') addItemDirectly(item.name);
+        };
+
+        list.appendChild(div);
+      });
+    }
+
+    function addItemDirectly(itemName) {
+      const found = dbCatalog.find(i => i.name === itemName) || { name: itemName, requiereCanje: false };
+      const dest = activeDestination;
+      const semiPlate = document.getElementById('semiUnitInput').value.trim();
+
+      let finalName = itemName;
+      if (dest === 'SEMI' && semiPlate) {
+        finalName = `${itemName} [PARA SEMI: ${semiPlate}]`;
+      }
+
+      const existing = cartItems.find(i => i.item === finalName);
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        cartItems.push({
+          item: finalName,
+          displayItem: itemName,
+          qty: 1,
+          destination: dest,
+          requiereCanje: !!found.requiereCanje
+        });
+      }
+
+      renderCart();
+      showToast(`+1 "${itemName}"`);
+    }
+
+    function renderCart() {
+      const container = document.getElementById('cartContainer');
+      const badge = document.getElementById('cartBadge');
+      const btn = document.getElementById('btnSubmitOrder');
+
+      container.innerHTML = "";
+
+      if (cartItems.length === 0) {
+        container.innerHTML = `
+          <div class="cart-placeholder">
+            <span>📦</span>
+            <span>El carrito está vacío. Selecciona repuestos a la izquierda.</span>
+          </div>
+        `;
+        badge.innerText = "0 ÍTEMS";
+        btn.disabled = true;
+        btn.innerText = "CONFIRMAR PEDIDO";
+        return;
+      }
+
+      const totalQty = cartItems.reduce((acc, i) => acc + i.qty, 0);
+      badge.innerText = `${totalQty} ÍTEMS`;
+      btn.disabled = false;
+      btn.innerText = `CONFIRMAR PEDIDO (${totalQty} ÍTEMS)`;
+
+      cartItems.forEach((item, idx) => {
+        const div = document.createElement('div');
+        div.className = 'cart-item-card';
+
+        const destTag = item.destination === 'SEMI'
+          ? `<div class="cart-item-dest-tag semi">📦 SEMI</div>`
+          : `<div class="cart-item-dest-tag tractor">🚛 TRACTOR</div>`;
+
+        div.innerHTML = `
+          <div>
+            <div class="cart-item-title">${item.displayItem}</div>
+            ${destTag}
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="qty-stepper">
+              <button class="btn-qty" onclick="stepQty(${idx}, -1)">−</button>
+              <span class="qty-display">${item.qty}</span>
+              <button class="btn-qty" onclick="stepQty(${idx}, 1)">+</button>
+            </div>
+            <button class="btn-cart-del" onclick="delCart(${idx})">×</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function stepQty(idx, delta) {
+      cartItems[idx].qty += delta;
+      if (cartItems[idx].qty <= 0) cartItems.splice(idx, 1);
+      renderCart();
+    }
+
+    function delCart(idx) {
+      cartItems.splice(idx, 1);
+      renderCart();
+    }
+
+    function submitBatchOrder() {
+      if (cartItems.length === 0) return;
+
+      const canjeItems = cartItems.filter(i => i.requiereCanje);
+      if (canjeItems.length > 0) {
+        openCanjeModal(canjeItems);
+      } else {
+        dispatchOrder();
+      }
+    }
+
+    function openCanjeModal(items) {
+      const body = document.getElementById('canjeModalBody');
+      let html = `<div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">
+        Los siguientes repuestos requieren entregar la pieza averiada a Pañol:
+      </div>`;
+
+      items.forEach((item, idx) => {
+        html += `
+          <div style="background:var(--card-bg); border:1px solid var(--orange); border-radius:var(--radius-md); padding:12px; margin-bottom:10px;">
+            <div style="font-weight:800; font-size:0.9rem; margin-bottom:6px;">
+              🔸 ${item.displayItem} (Cant: ${item.qty})
+            </div>
+            <div style="display:flex; gap:16px; margin-bottom:6px;">
+              <label style="cursor:pointer; display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+                <input type="radio" name="canje_${idx}" value="OK" checked onchange="document.getElementById('motive_${idx}').style.display='none'">
+                Entrego usada
+              </label>
+              <label style="cursor:pointer; display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+                <input type="radio" name="canje_${idx}" value="FALTA" onchange="document.getElementById('motive_${idx}').style.display='block'">
+                Faltante
+              </label>
+            </div>
+            <input type="text" id="motive_${idx}" placeholder="Motivo de la pieza faltante..." class="text-input" style="display:none; font-size:0.8rem; padding:8px; margin-top:6px;">
+          </div>
+        `;
+      });
+
+      body.innerHTML = html;
+      document.getElementById('canjeModal').classList.add('open');
+    }
+
+    function closeCanjeModal() { document.getElementById('canjeModal').classList.remove('open'); }
+
+    function executeCanjeConfirm() {
+      closeCanjeModal();
+      dispatchOrder();
+    }
+
+    function dispatchOrder() {
+      const unit = document.getElementById('unitInput').value.trim() || 'AA123CD';
+      const ot = document.getElementById('otInput').value.trim() || '45890';
+      const semiUnit = document.getElementById('semiUnitInput').value.trim();
+      const semiOt = document.getElementById('semiOtInput').value.trim();
+
+      let finalUnit = unit;
+      let finalOt = ot;
+      if (semiUnit || semiOt) {
+        finalUnit += ` + [${semiUnit || '?'}]`;
+        finalOt += ` + [${semiOt || '?'}]`;
+      }
+
+      const reqId = 'REQ-' + Math.floor(Math.random() * 10000).toString(16).toUpperCase();
+
+      const newOrder = {
+        reqId: reqId,
+        timestamp: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }),
+        opInfo: `Matias Rodriguez [Box ${activeBox}]`,
+        otNumber: finalOt,
+        unitInfo: finalUnit,
+        status: "PENDIENTE",
+        items: cartItems.map(i => ({ name: i.item, qty: i.qty, status: "PENDIENTE" }))
+      };
+
+      liveOrders.unshift(newOrder);
+      cartItems = [];
+      document.getElementById('notesInput').value = "";
+      renderCart();
+      renderOrdersFeed();
+
+      showToast(`Pedido ${reqId} enviado a Pañol`, "🚀");
+
+      // Simulación de respuesta de Pañol
+      setTimeout(() => {
+        newOrder.status = "LISTO";
+        newOrder.items.forEach(i => i.status = "LISTO");
+        renderOrdersFeed();
+        showToast(`⚡ Pedido ${reqId} LISTO PARA RETIRAR`, "⚡");
+      }, 7000);
+    }
+
+    function switchOrderTab(hist) {
+      showHistory = hist;
+      document.getElementById('tabActive').classList.toggle('active', !hist);
+      document.getElementById('tabHistory').classList.toggle('active', hist);
+      renderOrdersFeed();
+    }
+
+    function renderOrdersFeed() {
+      const container = document.getElementById('ordersFeed');
+      container.innerHTML = "";
+
+      const filtered = liveOrders.filter(o => {
+        if (showHistory) return o.status === 'ENTREGADO' || o.status === 'DEVOLUCION';
+        return o.status === 'PENDIENTE' || o.status === 'LISTO';
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-dim);">
+          ${showHistory ? 'Sin pedidos en historial.' : 'No tienes pedidos activos.'}
+        </div>`;
+        return;
+      }
+
+      filtered.forEach(o => {
+        const div = document.createElement('div');
+        div.className = `order-item-row status-${o.status}`;
+
+        let statusBadge = '';
+        let actionBtn = '';
+
+        if (o.status === 'LISTO') {
+          statusBadge = `<span class="status-badge-tag status-LISTO-tag">⚡ LISTO PARA RETIRAR</span>`;
+          actionBtn = `<span style="color:var(--green-light); font-weight:800; font-size:0.8rem;">📦 Disponible en Pañol</span>`;
+        } else if (o.status === 'PENDIENTE') {
+          statusBadge = `<span class="status-badge-tag status-PENDIENTE-tag">⏳ EN PREPARACIÓN</span>`;
+          actionBtn = `<span style="color:var(--text-dim); font-size:0.75rem;">Preparando...</span>`;
+        } else if (o.status === 'ENTREGADO') {
+          statusBadge = `<span class="status-badge-tag status-ENTREGADO-tag">✅ ENTREGADO</span>`;
+          actionBtn = `<button class="btn-return-secondary" onclick="openReturnModal('${o.reqId}')">↩️ Devolver</button>`;
+        }
+
+        const itemsText = o.items.map(i => `• ${i.name} (x${i.qty})`).join('<br>');
+
+        div.innerHTML = `
+          <div>
+            ${statusBadge}
+            <div class="order-summary-text">${itemsText}</div>
+            <div class="order-footer-meta">
+              <strong>${o.reqId}</strong> • OT: ${o.otNumber} • ${o.unitInfo} • 🕒 ${o.timestamp}
+            </div>
+          </div>
+          <div>${actionBtn}</div>
+        `;
+
+        container.appendChild(div);
+      });
+    }
+
+    function refreshOrders() {
+      showToast("Actualizando pedidos...");
+      renderOrdersFeed();
+    }
+
+    function openReturnModal(reqId) {
+      const order = liveOrders.find(o => o.reqId === reqId);
+      if (!order) return;
+
+      const body = document.getElementById('returnModalBody');
+      const options = order.items.map(i => `<option value="${i.name}">${i.name} (Entregadas: ${i.qty})</option>`).join('');
+
+      body.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div>
+            <label style="font-size:0.75rem; font-weight:700; color:var(--text-dim); text-transform:uppercase;">Repuesto</label>
+            <select id="retItem" class="text-input" style="margin-top:4px;">${options}</select>
+          </div>
+          <div>
+            <label style="font-size:0.75rem; font-weight:700; color:var(--text-dim); text-transform:uppercase;">Cantidad</label>
+            <input type="number" id="retQty" class="text-input" value="1" min="1" max="10" style="margin-top:4px; max-width:100px;">
+          </div>
+          <div>
+            <label style="font-size:0.75rem; font-weight:700; color:var(--text-dim); text-transform:uppercase;">Motivo (Opcional)</label>
+            <input type="text" id="retReason" class="text-input" placeholder="Ej. Sobrante..." style="margin-top:4px;">
+          </div>
+        </div>
+      `;
+
+      document.getElementById('returnModal').classList.add('open');
+    }
+
+    function closeReturnModal() { document.getElementById('returnModal').classList.remove('open'); }
+
+    function executeReturnConfirm() {
+      closeReturnModal();
+      showToast("Solicitud de devolución enviada", "↩️");
+    }
+
+    function filterFleet(val, type) {
+      const popover = document.getElementById(type === 'UNIT' ? 'unitSuggestions' : 'semiSuggestions');
+      if (!val || val.length < 2) { popover.style.display = 'none'; return; }
+
+      const fleet = ["AA123CD", "AA450EE", "AC998ZZ", "6040", "6042"];
+      const matches = fleet.filter(f => f.includes(val.toUpperCase()));
+
+      if (matches.length === 0) { popover.style.display = 'none'; return; }
+
+      popover.innerHTML = matches.map(m => `
+        <div class="popover-item" onclick="pickFleet('${m}', '${type}')">${m}</div>
+      `).join('');
+
+      popover.style.display = 'block';
+    }
+
+    function pickFleet(plate, type) {
+      if (type === 'UNIT') {
+        document.getElementById('unitInput').value = plate;
+        document.getElementById('otInput').value = "45890";
+        document.getElementById('unitSuggestions').style.display = 'none';
+        document.getElementById('txtTractor').innerText = plate;
+        document.getElementById('semiUnitInput').value = "6040";
+        document.getElementById('semiOtInput').value = "45891";
+        document.getElementById('txtSemi').innerText = "6040";
+      } else {
+        document.getElementById('semiUnitInput').value = plate;
+        document.getElementById('semiOtInput').value = "45891";
+        document.getElementById('semiSuggestions').style.display = 'none';
+        document.getElementById('txtSemi').innerText = plate;
+      }
+    }
+
+    function showToast(text, icon = "✅") {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastIcon').innerText = icon;
+      document.getElementById('toastMsg').innerText = text;
+      toast.style.display = 'flex';
+      setTimeout(() => toast.style.display = 'none', 3000);
+    }
+
+    function logout() {
+      if (confirm("¿Cerrar sesión?")) window.location.href = '/logout';
+    }
+
+    function openInboxModal() {
+      showToast("Sin mensajes pendientes de Coordinación", "🔔");
+    }
+  </script>
+</body>
+</html>

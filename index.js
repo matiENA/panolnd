@@ -7,6 +7,12 @@ const { Server } = require('socket.io');
 const { google } = require('googleapis');
 const { extractCleanPlate } = require('./plateNormalizer');
 const { extractPlates, processSingleOtUpdate, syncFullOtDatabase } = require('./otSyncService');
+const {
+  syncOtsToTasksDatabase,
+  getActiveTasksBoard,
+  updateTaskExecution,
+  getHistoricalTasks
+} = require('./taskSyncService');
 
 const app = express();
 app.use(cors());
@@ -403,6 +409,7 @@ app.get('/app-mecanico', requireAuth, (req, res) => res.sendFile(path.join(__dir
 app.get('/panol', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'panol.html')));
 app.get('/dashboard', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/inv', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'inv.html')));
+app.get('/wireframe', (req, res) => res.sendFile(path.join(__dirname, 'public', 'wireframe.html')));
 
 // Proteger cualquier acceso directo a archivos .html estáticos en /public
 app.use((req, res, next) => {
@@ -995,6 +1002,32 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
       });
       io.emit('ot_sync_completed', result);
     }
+    // === GESTIÓN DE DB_OT_TASKS Y COLD STORAGE ===
+    else if (action === 'getTasksBoard') {
+      result = await getActiveTasksBoard({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
+    }
+    else if (action === 'updateTaskExecution') {
+      const payload = args[0] || {};
+      result = await updateTaskExecution({
+        sheetsClient: sheets,
+        spreadsheetId: SPREADSHEET_ID,
+        taskId: payload.taskId,
+        ubicacion: payload.ubicacion,
+        operario: payload.operario,
+        asignado: payload.asignado,
+        empezo: payload.empezo,
+        termino: payload.termino,
+        estado: payload.estado,
+        io
+      });
+    }
+    else if (action === 'syncOtsToTasks') {
+      result = await syncOtsToTasksDatabase({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
+      io.emit('tasks_synced', result);
+    }
+    else if (action === 'getHistoricalTasks') {
+      result = await getHistoricalTasks({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
+    }
     else {
       // Fallback genérico
       result = { success: true };
@@ -1004,6 +1037,49 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
   } catch (e) {
     console.error('❌ RPC Error en ' + action + ':', e.message);
     res.json({ error: e.message });
+  }
+});
+
+// === ENDPOINTS REST: DB_OT_TASKS ===
+app.get('/api/tasks', async (req, res) => {
+  try {
+    const data = await getActiveTasksBoard({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/tasks/update', async (req, res) => {
+  try {
+    const result = await updateTaskExecution({
+      sheetsClient: sheets,
+      spreadsheetId: SPREADSHEET_ID,
+      ...req.body,
+      io
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/tasks/sync', async (req, res) => {
+  try {
+    const result = await syncOtsToTasksDatabase({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
+    io.emit('tasks_synced', result);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/tasks/history', async (req, res) => {
+  try {
+    const result = await getHistoricalTasks({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

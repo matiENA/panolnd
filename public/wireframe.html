@@ -1,0 +1,1620 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wireframe Interactivo - OTs Taller (Tractor + Semi)</title>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- WebSockets Client (Socket.io) -->
+  <script src="/socket.io/socket.io.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #ffffff;
+      --card-bg: #ffffff;
+      --text: #000000;
+      --text-muted: #666666;
+      --border: #000000;
+      --border-light: #e5e5e5;
+      --pill-border: #000000;
+      --pill-bg: #ffffff;
+      --pill-hover: #f3f3f3;
+      --highlight: #f8f9fa;
+      --success: #16a34a;
+      --warning: #d97706;
+      --info: #2563eb;
+      --danger: #dc2626;
+      --radius-card: 26px;
+      --radius-pill: 9999px;
+      --shadow-modal: 0 20px 40px rgba(0,0,0,0.2);
+    }
+
+    [data-theme="dark"] {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --text: #f0f6fc;
+      --text-muted: #8b949e;
+      --border: #484f58;
+      --border-light: #30363d;
+      --pill-border: #6e7681;
+      --pill-bg: #21262d;
+      --pill-hover: #30363d;
+      --highlight: #1c2128;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 28px 80px;
+      transition: background-color 0.2s, color 0.2s;
+    }
+
+    /* TOP PROTOTYPE TOOLBAR */
+    .prototype-bar {
+      width: 100%;
+      max-width: 1200px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card-bg);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 10px 18px;
+      margin-bottom: 28px;
+      gap: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    }
+
+    .proto-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+      font-size: 0.85rem;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+    .proto-badge .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+    .proto-badge .dot.offline {
+      background: var(--warning);
+      box-shadow: 0 0 8px var(--warning);
+    }
+
+    .proto-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .proto-btn {
+      background: transparent;
+      color: var(--text);
+      border: 1.5px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      font-family: inherit;
+    }
+    .proto-btn:hover {
+      background: var(--text);
+      color: var(--bg);
+      transform: translateY(-1px);
+    }
+    .proto-btn.primary {
+      background: var(--text);
+      color: var(--bg);
+    }
+    .proto-btn.primary:hover {
+      opacity: 0.88;
+      background: var(--text);
+      color: var(--bg);
+    }
+
+    /* MAIN CONTAINER (MOCKUP CANVAS) */
+    .mockup-canvas {
+      width: 100%;
+      max-width: 1200px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    /* TABS (PROGRESO / TERMINADO) */
+    .main-tabs {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 40px;
+      margin-bottom: 2px;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      font-size: 2.3rem;
+      font-weight: 900;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px 14px;
+      position: relative;
+      letter-spacing: -0.6px;
+      transition: color 0.2s ease;
+      font-family: inherit;
+    }
+    .tab-btn.active {
+      color: var(--text);
+    }
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -6px;
+      left: 14px;
+      right: 14px;
+      height: 4px;
+      background: var(--text);
+      border-radius: 4px;
+    }
+    .tab-btn:hover {
+      color: var(--text);
+    }
+    .tab-count {
+      font-size: 1.1rem;
+      vertical-align: super;
+      margin-left: 4px;
+      font-weight: 700;
+      opacity: 0.65;
+    }
+
+    /* SECTION TITLE (TRANSITO / TALLER) */
+    .section-title-wrapper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      margin: 8px 0;
+    }
+
+    .section-title {
+      font-size: 2.2rem;
+      font-weight: 900;
+      letter-spacing: -0.6px;
+      text-transform: lowercase;
+      cursor: pointer;
+      padding: 2px 14px;
+      border-radius: 10px;
+      transition: background 0.15s;
+    }
+    .section-title:hover {
+      background: var(--highlight);
+    }
+
+    /* CARD CONTAINERS (ROUNDED BORDERS AS IN MOCKUP) */
+    .unit-container-card {
+      background: var(--card-bg);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-card);
+      position: relative;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    /* 1. COLLAPSED VIEW (TOP BAR IN MOCKUP) */
+    .unit-collapsed-header {
+      padding: 32px 42px 36px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .unit-collapsed-header:hover {
+      background: var(--highlight);
+    }
+
+    .plates-pair-group {
+      display: flex;
+      align-items: flex-start;
+      gap: 36px;
+    }
+
+    .plate-block {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .plate-block .plate-title {
+      font-size: 1.25rem;
+      font-weight: 900;
+      letter-spacing: -0.3px;
+    }
+    .plate-block .plate-ot {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .plate-block .plate-tag {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+    }
+
+    /* SECTORS SUMMARY IN TOP BAR */
+    .sectors-summary-row {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      flex-wrap: wrap;
+    }
+
+    .sector-badge {
+      font-size: 0.95rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: all 0.15s;
+      color: var(--text);
+    }
+    .sector-badge:hover {
+      background: var(--text);
+      color: var(--bg);
+    }
+    .sector-badge.active-filter {
+      background: var(--text);
+      color: var(--bg);
+    }
+    .sector-badge.has-tasks {
+      text-decoration: underline text-decoration-thickness(2px);
+    }
+
+    /* PROGRESS DISPLAY */
+    .progress-number {
+      font-size: 2.3rem;
+      font-weight: 900;
+      letter-spacing: -1px;
+      min-width: 85px;
+      text-align: right;
+    }
+
+    /* ACCORDION TRIGGER ARROW (TRIANGLES AS IN MOCKUP) */
+    .arrow-trigger-bottom {
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 50px;
+      height: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      z-index: 5;
+    }
+
+    .triangle-down {
+      width: 0;
+      height: 0;
+      border-left: 14px solid transparent;
+      border-right: 14px solid transparent;
+      border-top: 14px solid var(--border);
+      transition: transform 0.25s ease;
+    }
+
+    .triangle-up {
+      width: 0;
+      height: 0;
+      border-left: 14px solid transparent;
+      border-right: 14px solid transparent;
+      border-bottom: 14px solid var(--border);
+      transition: transform 0.25s ease;
+    }
+
+    /* 2. EXPANDED DROPDOWN VIEW (BOTTOM CONTAINER IN MOCKUP) */
+    .unit-expanded-dropdown {
+      display: none;
+      padding: 36px 44px 48px;
+      border-top: 2px solid var(--border);
+      background: var(--card-bg);
+      animation: slideDown 0.25s ease forwards;
+    }
+
+    .unit-container-card.is-expanded .unit-expanded-dropdown {
+      display: block;
+    }
+
+    .unit-container-card.is-expanded .unit-collapsed-header {
+      background: var(--highlight);
+      border-bottom: 1px dashed var(--border-light);
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* TABLE HEADER ROW IN DROPDOWN */
+    .table-columns-header {
+      display: grid;
+      grid-template-columns: 140px 1fr 130px 140px 105px 105px 105px 70px;
+      gap: 16px;
+      align-items: center;
+      padding-bottom: 14px;
+      border-bottom: 1.5px solid var(--border);
+      font-size: 0.78rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text);
+      margin-bottom: 24px;
+    }
+
+    .th-unit { grid-column: 1; }
+    .th-task { grid-column: 2; }
+    .th-ubicacion { grid-column: 3; text-align: center; }
+    .th-operarios { grid-column: 4; text-align: center; }
+    .th-asignado { grid-column: 5; text-align: center; }
+    .th-empezo { grid-column: 6; text-align: center; }
+    .th-termino { grid-column: 7; text-align: center; }
+    .th-progress { grid-column: 8; text-align: right; }
+
+    /* SECTION SUB-BLOCK (TRACTOR / SEMI) */
+    .sub-vehicle-section {
+      display: grid;
+      grid-template-columns: 140px 1fr 70px;
+      gap: 16px;
+      padding-bottom: 26px;
+      margin-bottom: 26px;
+      border-bottom: 1.5px dashed var(--border-light);
+    }
+    .sub-vehicle-section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 12px;
+    }
+
+    .vehicle-info-col {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding-top: 4px;
+    }
+    .vehicle-info-col .v-plate {
+      font-size: 1.35rem;
+      font-weight: 900;
+      letter-spacing: -0.3px;
+    }
+    .vehicle-info-col .v-ot {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .vehicle-info-col .v-type {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .vehicle-tasks-col {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .task-item-row {
+      display: grid;
+      grid-template-columns: 1fr 130px 140px 105px 105px 105px;
+      gap: 16px;
+      align-items: center;
+      padding: 4px 6px;
+      border-radius: 8px;
+      transition: background 0.15s;
+    }
+    .task-item-row:hover {
+      background: var(--highlight);
+    }
+    .task-item-row.is-done {
+      opacity: 0.65;
+    }
+
+    .task-text {
+      font-size: 0.92rem;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .task-text .sector-tag {
+      font-weight: 700;
+      text-transform: capitalize;
+    }
+
+    /* PILL INPUT BOXES */
+    .pill-input {
+      height: 32px;
+      border: 1.5px solid var(--pill-border);
+      border-radius: 8px;
+      background: var(--pill-bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: center;
+    }
+    .pill-input:hover {
+      background: var(--pill-hover);
+      border-color: var(--text);
+      transform: scale(1.02);
+    }
+    .pill-input.empty {
+      background: transparent;
+      color: var(--text-muted);
+    }
+    .pill-input.filled {
+      background: var(--text);
+      color: var(--bg);
+      border-color: var(--text);
+    }
+
+    /* TIMESTAMPS */
+    .time-badge-slot {
+      font-size: 0.82rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text);
+      text-align: center;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 6px;
+      transition: all 0.15s;
+    }
+    .time-badge-slot:hover {
+      background: var(--highlight);
+      font-weight: 700;
+    }
+    .time-badge-slot.empty {
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+    .time-badge-slot.filled {
+      font-weight: 700;
+      color: var(--text);
+    }
+    .time-badge-slot.active-running {
+      color: var(--info);
+      font-weight: 800;
+      animation: pulseAnim 2s infinite;
+    }
+
+    @keyframes pulseAnim {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.55; }
+    }
+
+    /* VEHICLE PROGRESS COL */
+    .vehicle-progress-col {
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-end;
+      padding-top: 4px;
+    }
+    .vehicle-progress-col .pct {
+      font-size: 2.1rem;
+      font-weight: 900;
+      letter-spacing: -1px;
+    }
+
+    /* CARD ACTION CONTROLS */
+    .card-footer-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 20px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border-light);
+    }
+
+    /* MODALS & OVERLAYS */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-card {
+      background: var(--card-bg);
+      border: 2px solid var(--border);
+      border-radius: 20px;
+      width: 90%;
+      max-width: 540px;
+      padding: 28px;
+      box-shadow: var(--shadow-modal);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      transform: translateY(12px) scale(0.98);
+      transition: transform 0.2s ease;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-overlay.open .modal-card {
+      transform: translateY(0) scale(1);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-light);
+      padding-bottom: 12px;
+    }
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 900;
+    }
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 1.4rem;
+      cursor: pointer;
+      color: var(--text-muted);
+    }
+    .close-btn:hover {
+      color: var(--text);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .form-label {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      color: var(--text);
+      font-size: 0.95rem;
+      font-family: inherit;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--text);
+    }
+
+    .options-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .opt-chip {
+      padding: 8px 12px;
+      border: 1.5px solid var(--border-light);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .opt-chip:hover {
+      border-color: var(--border);
+      background: var(--highlight);
+    }
+    .opt-chip.selected {
+      background: var(--text);
+      color: var(--bg);
+      border-color: var(--text);
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      border-top: 1px solid var(--border-light);
+      padding-top: 16px;
+      margin-top: 8px;
+    }
+
+    /* TOAST NOTIFICATION */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--text);
+      color: var(--bg);
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.25s ease;
+      z-index: 2000;
+    }
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    /* JSON BOX */
+    .json-box {
+      background: #0d1117;
+      color: #7ee787;
+      padding: 14px;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      max-height: 280px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* EMPTY STATE */
+    .empty-state {
+      padding: 50px 20px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    @media (max-width: 900px) {
+      .table-columns-header { display: none; }
+      .sub-vehicle-section { grid-template-columns: 1fr; }
+      .task-item-row { grid-template-columns: 1fr 1fr; gap: 8px; border: 1px solid var(--border-light); padding: 10px; }
+      .task-text { grid-column: 1 / -1; }
+      .unit-collapsed-header { flex-direction: column; align-items: flex-start; gap: 16px; }
+      .sectors-summary-row { gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP PROTOTYPE TOOLBAR -->
+  <header class="prototype-bar">
+    <div class="proto-badge">
+      <span class="dot" id="serverConnDot"></span>
+      <span id="serverConnText">Conectando con DB_OT_TASKS...</span>
+    </div>
+    <div class="proto-actions">
+      <button class="proto-btn primary" onclick="syncLiveFromGoogleSheets()">🔄 Sincronizar con Tab 'ots'</button>
+      <button class="proto-btn" onclick="toggleAllUnits()">⚡ Expandir / Colapsar</button>
+      <button class="proto-btn" onclick="openApiSimModal()">🚀 Inspector Payload</button>
+      <button class="proto-btn" onclick="openJsonModal()">📥 Exportar / Importar</button>
+      <button class="proto-btn" onclick="resetMockData()">↺ Reset Mock</button>
+      <button class="proto-btn" onclick="toggleTheme()" id="themeBtn">🌓 Tema</button>
+    </div>
+  </header>
+
+  <!-- MOCKUP CANVAS -->
+  <main class="mockup-canvas">
+
+    <!-- NAVIGATION TABS (PROGRESO / TERMINADO) -->
+    <nav class="main-tabs">
+      <button class="tab-btn active" id="tabProgreso" onclick="switchTab('progreso')">
+        progreso <span class="tab-count" id="countProgreso">(0)</span>
+      </button>
+      <button class="tab-btn" id="tabTerminado" onclick="switchTab('terminado')">
+        terminado <span class="tab-count" id="countTerminado">(0)</span>
+      </button>
+    </nav>
+
+    <!-- SECTION TITLE: TRANSITO -->
+    <div class="section-title-wrapper">
+      <h2 class="section-title" id="sectionTitleDisplay" onclick="editSectionTitle()" title="Clic para cambiar estado / sección de flota">transito</h2>
+    </div>
+
+    <!-- UNITS ACCORDION CONTAINER -->
+    <div id="unitsCardsContainer">
+      <!-- Dynamic rendering from DB_OT_TASKS -->
+    </div>
+
+  </main>
+
+  <!-- MODAL: ASIGNAR UBICACION -->
+  <div class="modal-overlay" id="modalUbicacion">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Asignar Ubicación Física (Box / Fosa)</h3>
+        <button class="close-btn" onclick="closeModal('modalUbicacion')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Seleccione fosa, box o puesto de trabajo:</label>
+        <div class="options-grid" id="ubicacionesList">
+          <div class="opt-chip" onclick="selectUbicacionOpt('Fosa 1')">Fosa 1</div>
+          <div class="opt-chip" onclick="selectUbicacionOpt('Fosa 2')">Fosa 2</div>
+          <div class="opt-chip" onclick="selectUbicacionOpt('Fosa 3')">Fosa 3</div>
+          <div class="opt-chip" onclick="selectUbicacionOpt('Box Mecánica')">Box Mecánica</div>
+          <div class="opt-chip" onclick="selectUbicacionOpt('Box Electricidad')">Box Electricidad</div>
+          <div class="opt-chip" onclick="selectUbicacionOpt('Lavadero 1')">Lavadero 1</div>
+          <div class="opt-chip" onclick="selectUbicacionOpt('Lavadero 2')">Lavadero 2</div>
+          <div class="opt-chip" onclick="selectUbicacionOpt('Gomería')">Gomería</div>
+          <div class="opt-chip" onclick="selectUbicacionOpt('Lubricentro')">Lubricentro</div>
+          <div class="opt-chip" onclick="selectUbicacionOpt('Patio / Tránsito')">Patio / Tránsito</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">O escriba una ubicación personalizada:</label>
+        <input type="text" class="form-input" id="customUbicacionInput" placeholder="Ej: Bahía 4, Rampa norte...">
+      </div>
+      <div class="modal-footer">
+        <button class="proto-btn" onclick="clearCurrentUbicacion()">Limpiar</button>
+        <button class="proto-btn primary" onclick="saveUbicacion()">Guardar en DB_OT_TASKS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ASIGNAR OPERARIO(S) -->
+  <div class="modal-overlay" id="modalOperario">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Asignar Operario / Mecánico</h3>
+        <button class="close-btn" onclick="closeModal('modalOperario')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Seleccione del equipo de taller:</label>
+        <div class="options-grid" id="operariosList">
+          <!-- Populated from staff -->
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">O agregue nombres personalizados (separados por coma):</label>
+        <input type="text" class="form-input" id="customOperarioInput" placeholder="Ej: Mario Benítez, Carlos Gómez...">
+      </div>
+      <div class="modal-footer">
+        <button class="proto-btn" onclick="clearCurrentOperario()">Limpiar</button>
+        <button class="proto-btn primary" onclick="saveOperario()">Guardar en DB_OT_TASKS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDITAR TIMESTAMPS -->
+  <div class="modal-overlay" id="modalTime">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title" id="timeModalTitle">Registrar Tiempo</h3>
+        <button class="close-btn" onclick="closeModal('modalTime')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fecha y Hora:</label>
+        <input type="datetime-local" class="form-input" id="timeInput">
+      </div>
+      <div class="modal-footer">
+        <button class="proto-btn" onclick="setCurrentTimeToInput()">⏱️ Poner Ahora</button>
+        <button class="proto-btn" onclick="clearTimeSlot()">Limpiar</button>
+        <button class="proto-btn primary" onclick="saveTimeSlot()">Guardar en DB_OT_TASKS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SIMULADOR DE ENVÍO A RENDER API -->
+  <div class="modal-overlay" id="modalApiSim">
+    <div class="modal-card" style="max-width: 700px;">
+      <div class="modal-header">
+        <h3 class="modal-title">🚀 Inspector de Datos Live (DB_OT_TASKS)</h3>
+        <button class="close-btn" onclick="closeModal('modalApiSim')">&times;</button>
+      </div>
+      <p style="font-size: 0.88rem; color: var(--text-muted);">
+        Estructura activa de tareas y OTs sincronizadas con Google Sheets (<strong style="color:var(--text);">DB_OT_TASKS</strong> e <strong style="color:var(--text);">HISTORICO_COLD</strong>):
+      </p>
+      <div class="form-group">
+        <label class="form-label">Estado actual de la memoria / base de datos:</label>
+        <div class="json-box" id="jsonPayloadPreview"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="proto-btn" onclick="copyJsonPayload()">📋 Copiar JSON</button>
+        <button class="proto-btn primary" onclick="closeModal('modalApiSim')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: IMPORTAR / EXPORTAR JSON -->
+  <div class="modal-overlay" id="modalJson">
+    <div class="modal-card" style="max-width: 650px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Importar / Exportar Estado</h3>
+        <button class="close-btn" onclick="closeModal('modalJson')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">JSON de configuración:</label>
+        <textarea class="form-textarea" id="jsonArea" rows="11" style="font-family:'JetBrains Mono',monospace; font-size:0.8rem;"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="proto-btn" onclick="copyJsonArea()">Copiar</button>
+        <button class="proto-btn primary" onclick="importJsonData()">Importar y Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div class="toast" id="toastNotification">
+    <span id="toastMessage">Operación realizada con éxito</span>
+  </div>
+
+  <!-- JAVASCRIPT APPLICATION LOGIC -->
+  <script>
+    const ALL_SECTORS = ["ENGRASE", "GOMERIA", "LAVADERO", "MOTORES", "ELECTRICIDAD", "MECANICA", "ENA"];
+    
+    const TEAM_MEMBERS = [
+      "Carlos Gómez",
+      "Mario Benítez",
+      "Juan Pérez",
+      "Lucas Silva",
+      "Roberto Díaz",
+      "Martín Alvarez",
+      "Alejandro Ruiz"
+    ];
+
+    // INITIAL FALLBACK STATE (MOCKUP EXACT DATA)
+    const INITIAL_STATE = {
+      sectionTitle: "transito",
+      activeTab: "progreso",
+      selectedSectorFilter: null,
+      units: [
+        {
+          id: "unit_11110",
+          ot: "11110",
+          status: "progreso",
+          isExpanded: true,
+          tractor: {
+            plate: "AG147LK",
+            ot: "11110",
+            tasks: [
+              { id: "11110-AG147LK-1", sector: "ENGRASE", desc: "Engrasar Tractor Completo", ubicacion: "", operarios: "", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" },
+              { id: "11110-AG147LK-2", sector: "ENGRASE", desc: "Controlar Bulones Del Plato De Enganche", ubicacion: "", operarios: "", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" },
+              { id: "11110-AG147LK-3", sector: "GOMERIA", desc: "Revision De Nuematicos", ubicacion: "", operarios: "", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" },
+              { id: "11110-AG147LK-4", sector: "LUBRICENTRO", desc: "Cambio Filtro De Aceite", ubicacion: "", operarios: "", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" },
+              { id: "11110-AG147LK-5", sector: "LAVADERO", desc: "Lavado Completo", ubicacion: "", operarios: "", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" },
+              { id: "11110-AG147LK-6", sector: "MECANICA", desc: "Realizar Checklist Ingreso A Taller", ubicacion: "", operarios: "", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" }
+            ]
+          },
+          semi: {
+            plate: "AG172II",
+            ot: "11111",
+            tasks: [
+              { id: "11111-AG172II-1", sector: "ENGRASE", desc: "Engrasar Semi Completo", ubicacion: "", operarios: "", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" },
+              { id: "11111-AG172II-2", sector: "GOMERIA", desc: "Revision De Nuematicos", ubicacion: "", operarios: "", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" },
+              { id: "11111-AG172II-3", sector: "LAVADERO", desc: "Lavado Completo", ubicacion: "", operarios: "", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" },
+              { id: "11111-AG172II-4", sector: "MECANICA", desc: "Realizar Checklist Ingreso A Taller", ubicacion: "", operarios: "", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" }
+            ]
+          }
+        }
+      ]
+    };
+
+    let appState = JSON.parse(localStorage.getItem('ots_wireframe_composite_state')) || JSON.parse(JSON.stringify(INITIAL_STATE));
+    let isServerLive = false;
+
+    // ACTIVE EDIT CONTEXT
+    let activeEditContext = {
+      unitId: null,
+      subType: null, // 'tractor' | 'semi'
+      taskId: null,
+      timeField: null // 'asignado' | 'empezo' | 'termino'
+    };
+
+    function saveState() {
+      localStorage.setItem('ots_wireframe_composite_state', JSON.stringify(appState));
+      renderApp();
+    }
+
+    function resetMockData() {
+      if (confirm("¿Restablecer el mockup original con AG147LK (11110) y AG172II (11111)?")) {
+        appState = JSON.parse(JSON.stringify(INITIAL_STATE));
+        saveState();
+        showToast("Datos originales del mockup restablecidos");
+      }
+    }
+
+    // SERVER SYNC FUNCTIONS
+    async function fetchLiveTasks() {
+      try {
+        const res = await fetch('/api/tasks');
+        if (!res.ok) throw new Error('Status ' + res.status);
+        const data = await res.json();
+        if (data && data.units && data.units.length > 0) {
+          isServerLive = true;
+          document.getElementById('serverConnDot').className = 'dot';
+          document.getElementById('serverConnText').textContent = `DB_OT_TASKS Conectada (${data.totalActiveTasks} tareas)`;
+
+          // Combinar unidades por par Tractor / Semi si comparten correlación
+          appState.units = data.units.map(u => ({
+            ...u,
+            isExpanded: true
+          }));
+          saveState();
+        }
+      } catch (err) {
+        console.warn('Backend API no disponible (usando modo local/mock):', err.message);
+        isServerLive = false;
+        document.getElementById('serverConnDot').className = 'dot offline';
+        document.getElementById('serverConnText').textContent = 'Modo Local / Simulado';
+        renderApp();
+      }
+    }
+
+    async function syncLiveFromGoogleSheets() {
+      showToast("🔄 Sincronizando con pestaña 'ots' en Google Sheets...");
+      try {
+        const res = await fetch('/api/tasks/sync', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`✅ Sincronización exitosa: ${data.totalTasks} tareas cargadas.`);
+          await fetchLiveTasks();
+        } else {
+          showToast(`⚠️ Error en sync: ${data.error || 'Desconocido'}`);
+        }
+      } catch (e) {
+        // Fallback simulación local
+        showToast("✅ Tab 'ots' sincronizado (Modo local)");
+        renderApp();
+      }
+    }
+
+    async function postTaskUpdateToBackend(payload) {
+      if (!isServerLive) return;
+      try {
+        await fetch('/api/tasks/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch (e) {
+        console.warn('No se pudo enviar actualización al backend:', e.message);
+      }
+    }
+
+    // PROGRESS COMPUTATION
+    function calculateSubProgress(tasks) {
+      if (!tasks || tasks.length === 0) return 0;
+      const completed = tasks.filter(t => t.termino && t.termino.trim() !== "").length;
+      return Math.round((completed / tasks.length) * 100);
+    }
+
+    function calculateUnitTotalProgress(unit) {
+      const allTasks = [...(unit.tractor?.tasks || []), ...(unit.semi?.tasks || [])];
+      if (allTasks.length === 0) return 0;
+      const completed = allTasks.filter(t => t.termino && t.termino.trim() !== "").length;
+      return Math.round((completed / allTasks.length) * 100);
+    }
+
+    function formatTimeDisplay(isoOrStr) {
+      if (!isoOrStr) return "dd/mm 00:00";
+      try {
+        const d = new Date(isoOrStr);
+        if (isNaN(d.getTime())) return isoOrStr;
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        return `${dd}/${mm} ${hh}:${min}`;
+      } catch (e) {
+        return isoOrStr;
+      }
+    }
+
+    // RENDER FUNCTIONS
+    function renderApp() {
+      renderTabs();
+      renderUnits();
+    }
+
+    function renderTabs() {
+      const progresoCount = appState.units.filter(u => u.status === 'progreso').length;
+      const terminadoCount = appState.units.filter(u => u.status === 'terminado').length;
+
+      document.getElementById('countProgreso').textContent = `(${progresoCount})`;
+      document.getElementById('countTerminado').textContent = `(${terminadoCount})`;
+
+      document.getElementById('tabProgreso').classList.toggle('active', appState.activeTab === 'progreso');
+      document.getElementById('tabTerminado').classList.toggle('active', appState.activeTab === 'terminado');
+
+      document.getElementById('sectionTitleDisplay').textContent = appState.sectionTitle || 'transito';
+    }
+
+    function renderUnits() {
+      const container = document.getElementById('unitsCardsContainer');
+      container.innerHTML = '';
+
+      const filteredUnits = appState.units.filter(u => u.status === appState.activeTab);
+
+      if (filteredUnits.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            No hay unidades en estado "${appState.activeTab}".<br>
+            <button class="proto-btn primary" style="margin-top:16px;" onclick="syncLiveFromGoogleSheets()">🔄 Sincronizar desde Sheets</button>
+          </div>
+        `;
+        return;
+      }
+
+      filteredUnits.forEach(unit => {
+        const totalProgress = calculateUnitTotalProgress(unit);
+        const isExp = !!unit.isExpanded;
+
+        const unitTasks = [...(unit.tractor?.tasks || []), ...(unit.semi?.tasks || [])];
+        const activeSectorsInUnit = new Set(unitTasks.map(t => t.sector ? t.sector.toUpperCase() : 'GENERAL'));
+
+        const card = document.createElement('div');
+        card.className = `unit-container-card ${isExp ? 'is-expanded' : ''}`;
+        card.id = `unit_card_${unit.id}`;
+
+        // 1. COLLAPSED VIEW
+        const collapsedHeader = document.createElement('div');
+        collapsedHeader.className = 'unit-collapsed-header';
+        collapsedHeader.onclick = (e) => {
+          if (!e.target.classList.contains('sector-badge')) {
+            toggleUnitDropdown(unit.id);
+          }
+        };
+
+        const platesDiv = document.createElement('div');
+        platesDiv.className = 'plates-pair-group';
+        platesDiv.innerHTML = `
+          <div class="plate-block">
+            <span class="plate-title">${unit.tractor.plate || '---'}</span>
+            <span class="plate-ot">${unit.tractor.ot || unit.ot}</span>
+            <span class="plate-tag">Tractor</span>
+          </div>
+          <div class="plate-block">
+            <span class="plate-title">${unit.semi.plate || '---'}</span>
+            <span class="plate-ot">${unit.semi.ot || unit.ot}</span>
+            <span class="plate-tag">Semi</span>
+          </div>
+        `;
+
+        const sectorsDiv = document.createElement('div');
+        sectorsDiv.className = 'sectors-summary-row';
+        ALL_SECTORS.forEach(sec => {
+          const badge = document.createElement('span');
+          const isCurrentFilter = appState.selectedSectorFilter === sec;
+          const hasTasks = activeSectorsInUnit.has(sec);
+          badge.className = `sector-badge ${isCurrentFilter ? 'active-filter' : ''} ${hasTasks ? 'has-tasks' : ''}`;
+          badge.textContent = sec;
+          badge.title = hasTasks ? `Sector activo (clic para filtrar)` : `Sin tareas`;
+          badge.onclick = (evt) => {
+            evt.stopPropagation();
+            toggleSectorFilter(sec);
+          };
+          sectorsDiv.appendChild(badge);
+        });
+
+        const progDiv = document.createElement('div');
+        progDiv.className = 'progress-number';
+        progDiv.textContent = `${String(totalProgress).padStart(2, '0')}%`;
+
+        collapsedHeader.appendChild(platesDiv);
+        collapsedHeader.appendChild(sectorsDiv);
+        collapsedHeader.appendChild(progDiv);
+
+        const arrowBottom = document.createElement('div');
+        arrowBottom.className = 'arrow-trigger-bottom';
+        arrowBottom.onclick = (e) => {
+          e.stopPropagation();
+          toggleUnitDropdown(unit.id);
+        };
+        arrowBottom.innerHTML = `<div class="${isExp ? 'triangle-up' : 'triangle-down'}"></div>`;
+
+        // 2. EXPANDED DROPDOWN VIEW
+        const dropdownView = document.createElement('div');
+        dropdownView.className = 'unit-expanded-dropdown';
+
+        const colHeader = document.createElement('div');
+        colHeader.className = 'table-columns-header';
+        colHeader.innerHTML = `
+          <div class="th-unit">UNIDAD / OT</div>
+          <div class="th-task">TAREA / RUBRO</div>
+          <div class="th-ubicacion">UBICACION</div>
+          <div class="th-operarios">OPERARIO/S</div>
+          <div class="th-asignado">ASIGNADO</div>
+          <div class="th-empezo">EMPEZO</div>
+          <div class="th-termino">TERMINO</div>
+          <div class="th-progress">PROGRESO</div>
+        `;
+        dropdownView.appendChild(colHeader);
+
+        if (unit.tractor && unit.tractor.tasks && unit.tractor.tasks.length > 0) {
+          dropdownView.appendChild(createSubVehicleSection(unit, 'tractor', unit.tractor));
+        }
+
+        if (unit.semi && unit.semi.tasks && unit.semi.tasks.length > 0) {
+          dropdownView.appendChild(createSubVehicleSection(unit, 'semi', unit.semi));
+        }
+
+        const footerActions = document.createElement('div');
+        footerActions.className = 'card-footer-actions';
+        footerActions.innerHTML = `
+          <div style="font-size:0.85rem; color:var(--text-muted);">
+            OT Nº <strong style="color:var(--text);">${unit.ot}</strong> • Tareas: ${unitTasks.length}
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="proto-btn" onclick="toggleUnitDropdown('${unit.id}')">▲ Colapsar</button>
+          </div>
+        `;
+        dropdownView.appendChild(footerActions);
+
+        card.appendChild(collapsedHeader);
+        if (!isExp) {
+          card.appendChild(arrowBottom);
+        } else {
+          card.appendChild(dropdownView);
+        }
+
+        container.appendChild(card);
+      });
+    }
+
+    function createSubVehicleSection(unit, subType, subVehicle) {
+      const section = document.createElement('div');
+      section.className = 'sub-vehicle-section';
+
+      let tasksToDisplay = subVehicle.tasks || [];
+      if (appState.selectedSectorFilter) {
+        tasksToDisplay = tasksToDisplay.filter(t => (t.sector || '').toUpperCase() === appState.selectedSectorFilter.toUpperCase());
+      }
+
+      const infoCol = document.createElement('div');
+      infoCol.className = 'vehicle-info-col';
+      infoCol.innerHTML = `
+        <span class="v-plate">${subVehicle.plate || '---'}</span>
+        <span class="v-ot">${subVehicle.ot || unit.ot}</span>
+        <span class="v-type">${subType === 'tractor' ? 'Tractor' : 'Semi Remolque'}</span>
+      `;
+
+      const tasksCol = document.createElement('div');
+      tasksCol.className = 'vehicle-tasks-col';
+
+      if (tasksToDisplay.length === 0) {
+        tasksCol.innerHTML = `<div style="font-size:0.85rem; color:var(--text-muted); padding:6px 0;">No hay tareas para ${appState.selectedSectorFilter}.</div>`;
+      }
+
+      tasksToDisplay.forEach(task => {
+        const row = document.createElement('div');
+        const isDone = task.termino && task.termino.trim() !== "";
+        const isRunning = task.empezo && !isDone;
+
+        row.className = `task-item-row ${isDone ? 'is-done' : ''}`;
+        row.innerHTML = `
+          <div class="task-text">
+            <span class="sector-tag">[${task.sector || 'GENERAL'}]</span> ${task.desc}
+          </div>
+
+          <!-- UBICACION PILL -->
+          <div class="pill-input ${task.ubicacion ? 'filled' : 'empty'}" 
+               onclick="openUbicacionModal('${unit.id}', '${subType}', '${task.id}')"
+               title="Asignar fosa / box">
+            ${task.ubicacion || ''}
+          </div>
+
+          <!-- OPERARIO PILL -->
+          <div class="pill-input ${task.operarios ? 'filled' : 'empty'}" 
+               onclick="openOperarioModal('${unit.id}', '${subType}', '${task.id}')"
+               title="Asignar mecánico">
+            ${task.operarios || ''}
+          </div>
+
+          <!-- ASIGNADO TIME -->
+          <div class="time-badge-slot ${task.asignado ? 'filled' : 'empty'}" 
+               onclick="openTimeModal('${unit.id}', '${subType}', '${task.id}', 'asignado')"
+               title="Asignado">
+            ${formatTimeDisplay(task.asignado)}
+          </div>
+
+          <!-- EMPEZO TIME -->
+          <div class="time-badge-slot ${isRunning ? 'active-running' : (task.empezo ? 'filled' : 'empty')}" 
+               onclick="openTimeModal('${unit.id}', '${subType}', '${task.id}', 'empezo')"
+               title="Empezó">
+            ${formatTimeDisplay(task.empezo)}
+          </div>
+
+          <!-- TERMINO TIME -->
+          <div class="time-badge-slot ${task.termino ? 'filled' : 'empty'}" 
+               onclick="openTimeModal('${unit.id}', '${subType}', '${task.id}', 'termino')"
+               title="Terminó">
+            ${formatTimeDisplay(task.termino)}
+          </div>
+        `;
+        tasksCol.appendChild(row);
+      });
+
+      const progCol = document.createElement('div');
+      progCol.className = 'vehicle-progress-col';
+      if (subType === 'tractor') {
+        const unitTotal = calculateUnitTotalProgress(unit);
+        progCol.innerHTML = `<div class="pct">${String(unitTotal).padStart(2, '0')}%</div>`;
+      } else {
+        progCol.innerHTML = ``;
+      }
+
+      section.appendChild(infoCol);
+      section.appendChild(tasksCol);
+      section.appendChild(progCol);
+
+      return section;
+    }
+
+    // ACCORDION
+    function toggleUnitDropdown(unitId) {
+      const unit = appState.units.find(u => u.id === unitId);
+      if (unit) {
+        unit.isExpanded = !unit.isExpanded;
+        saveState();
+      }
+    }
+
+    function toggleAllUnits() {
+      const anyExpanded = appState.units.some(u => u.isExpanded);
+      appState.units.forEach(u => u.isExpanded = !anyExpanded);
+      saveState();
+      showToast(anyExpanded ? "Unidades colapsadas" : "Unidades desplegadas");
+    }
+
+    function switchTab(tab) {
+      appState.activeTab = tab;
+      saveState();
+    }
+
+    function toggleSectorFilter(sectorName) {
+      if (appState.selectedSectorFilter === sectorName) {
+        appState.selectedSectorFilter = null;
+        showToast("Filtro desactivado");
+      } else {
+        appState.selectedSectorFilter = sectorName;
+        showToast(`Filtrando: ${sectorName}`);
+      }
+      saveState();
+    }
+
+    function editSectionTitle() {
+      const current = appState.sectionTitle || 'transito';
+      const newTitle = prompt("Estado / Sección de flota:", current);
+      if (newTitle !== null && newTitle.trim() !== "") {
+        appState.sectionTitle = newTitle.trim().toLowerCase();
+        saveState();
+      }
+    }
+
+    // MODALS: UBICACION
+    function openUbicacionModal(unitId, subType, taskId) {
+      activeEditContext = { unitId, subType, taskId };
+      const unit = appState.units.find(u => u.id === unitId);
+      const sub = unit ? unit[subType] : null;
+      const task = sub?.tasks.find(t => t.id === taskId);
+      
+      const chips = document.querySelectorAll('#ubicacionesList .opt-chip');
+      chips.forEach(c => c.classList.toggle('selected', c.textContent.trim() === task?.ubicacion));
+      document.getElementById('customUbicacionInput').value = task?.ubicacion || '';
+      openModal('modalUbicacion');
+    }
+
+    function selectUbicacionOpt(val) {
+      document.getElementById('customUbicacionInput').value = val;
+      const chips = document.querySelectorAll('#ubicacionesList .opt-chip');
+      chips.forEach(c => c.classList.toggle('selected', c.textContent.trim() === val));
+    }
+
+    async function saveUbicacion() {
+      const val = document.getElementById('customUbicacionInput').value.trim();
+      const unit = appState.units.find(u => u.id === activeEditContext.unitId);
+      const sub = unit ? unit[activeEditContext.subType] : null;
+      const task = sub?.tasks.find(t => t.id === activeEditContext.taskId);
+      if (task) {
+        task.ubicacion = val;
+        if (val && !task.asignado) {
+          task.asignado = new Date().toISOString();
+        }
+        saveState();
+        showToast(`Ubicación "${val || 'S/D'}" guardada`);
+        await postTaskUpdateToBackend({
+          taskId: task.id,
+          ubicacion: task.ubicacion,
+          operario: task.operarios,
+          asignado: task.asignado
+        });
+      }
+      closeModal('modalUbicacion');
+    }
+
+    function clearCurrentUbicacion() {
+      document.getElementById('customUbicacionInput').value = '';
+      saveUbicacion();
+    }
+
+    // MODALS: OPERARIO
+    function openOperarioModal(unitId, subType, taskId) {
+      activeEditContext = { unitId, subType, taskId };
+      const unit = appState.units.find(u => u.id === unitId);
+      const sub = unit ? unit[subType] : null;
+      const task = sub?.tasks.find(t => t.id === taskId);
+      
+      const grid = document.getElementById('operariosList');
+      grid.innerHTML = '';
+      const currentOps = (task?.operarios || '').split(',').map(s => s.trim());
+
+      TEAM_MEMBERS.forEach(name => {
+        const chip = document.createElement('div');
+        chip.className = `opt-chip ${currentOps.includes(name) ? 'selected' : ''}`;
+        chip.textContent = name;
+        chip.onclick = () => toggleOperarioSelection(name, chip);
+        grid.appendChild(chip);
+      });
+
+      document.getElementById('customOperarioInput').value = task?.operarios || '';
+      openModal('modalOperario');
+    }
+
+    function toggleOperarioSelection(name, el) {
+      let currentVal = document.getElementById('customOperarioInput').value.trim();
+      let list = currentVal ? currentVal.split(',').map(s => s.trim()).filter(Boolean) : [];
+      if (list.includes(name)) {
+        list = list.filter(n => n !== name);
+        el.classList.remove('selected');
+      } else {
+        list.push(name);
+        el.classList.add('selected');
+      }
+      document.getElementById('customOperarioInput').value = list.join(', ');
+    }
+
+    async function saveOperario() {
+      const val = document.getElementById('customOperarioInput').value.trim();
+      const unit = appState.units.find(u => u.id === activeEditContext.unitId);
+      const sub = unit ? unit[activeEditContext.subType] : null;
+      const task = sub?.tasks.find(t => t.id === activeEditContext.taskId);
+      if (task) {
+        task.operarios = val;
+        if (val && !task.asignado) {
+          task.asignado = new Date().toISOString();
+        }
+        saveState();
+        showToast(`Operario "${val || 'S/D'}" guardado`);
+        await postTaskUpdateToBackend({
+          taskId: task.id,
+          ubicacion: task.ubicacion,
+          operario: task.operarios,
+          asignado: task.asignado
+        });
+      }
+      closeModal('modalOperario');
+    }
+
+    function clearCurrentOperario() {
+      document.getElementById('customOperarioInput').value = '';
+      saveOperario();
+    }
+
+    // MODALS: TIMESTAMPS
+    function openTimeModal(unitId, subType, taskId, timeField) {
+      activeEditContext = { unitId, subType, taskId, timeField };
+      const unit = appState.units.find(u => u.id === unitId);
+      const sub = unit ? unit[subType] : null;
+      const task = sub?.tasks.find(t => t.id === taskId);
+      
+      const fieldLabels = { asignado: 'ASIGNADO', empezo: 'EMPEZO', termino: 'TERMINO' };
+      document.getElementById('timeModalTitle').textContent = `Registrar ${fieldLabels[timeField]}`;
+      
+      const currentVal = task ? task[timeField] : "";
+      if (currentVal) {
+        const d = new Date(currentVal);
+        if (!isNaN(d.getTime())) {
+          const localIso = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+          document.getElementById('timeInput').value = localIso;
+        } else {
+          document.getElementById('timeInput').value = '';
+        }
+      } else {
+        const now = new Date();
+        const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        document.getElementById('timeInput').value = localIso;
+      }
+
+      openModal('modalTime');
+    }
+
+    function setCurrentTimeToInput() {
+      const now = new Date();
+      const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      document.getElementById('timeInput').value = localIso;
+    }
+
+    async function clearTimeSlot() {
+      const unit = appState.units.find(u => u.id === activeEditContext.unitId);
+      const sub = unit ? unit[activeEditContext.subType] : null;
+      const task = sub?.tasks.find(t => t.id === activeEditContext.taskId);
+      if (task && activeEditContext.timeField) {
+        task[activeEditContext.timeField] = "";
+        saveState();
+        showToast("Tiempo eliminado");
+        await postTaskUpdateToBackend({
+          taskId: task.id,
+          [activeEditContext.timeField]: ""
+        });
+      }
+      closeModal('modalTime');
+    }
+
+    async function saveTimeSlot() {
+      const rawVal = document.getElementById('timeInput').value;
+      const unit = appState.units.find(u => u.id === activeEditContext.unitId);
+      const sub = unit ? unit[activeEditContext.subType] : null;
+      const task = sub?.tasks.find(t => t.id === activeEditContext.taskId);
+      
+      if (task && activeEditContext.timeField) {
+        task[activeEditContext.timeField] = rawVal ? new Date(rawVal).toISOString() : "";
+        saveState();
+        showToast("Tiempo guardado en DB_OT_TASKS");
+
+        await postTaskUpdateToBackend({
+          taskId: task.id,
+          ubicacion: task.ubicacion,
+          operario: task.operarios,
+          asignado: task.asignado,
+          empezo: task.empezo,
+          termino: task.termino
+        });
+      }
+      closeModal('modalTime');
+    }
+
+    // JSON & API SIM
+    function openApiSimModal() {
+      const payload = {
+        databaseTab: "DB_OT_TASKS",
+        coldStorageTab: "HISTORICO_COLD",
+        serverEndpoint: "/api/tasks",
+        totalUnits: appState.units.length,
+        units: appState.units
+      };
+      document.getElementById('jsonPayloadPreview').textContent = JSON.stringify(payload, null, 2);
+      openModal('modalApiSim');
+    }
+
+    function copyJsonPayload() {
+      navigator.clipboard.writeText(document.getElementById('jsonPayloadPreview').textContent);
+      showToast("JSON copiado");
+    }
+
+    function openJsonModal() {
+      document.getElementById('jsonArea').value = JSON.stringify(appState, null, 2);
+      openModal('modalJson');
+    }
+
+    function copyJsonArea() {
+      navigator.clipboard.writeText(document.getElementById('jsonArea').value);
+      showToast("Copiado");
+    }
+
+    function importJsonData() {
+      try {
+        const parsed = JSON.parse(document.getElementById('jsonArea').value);
+        if (parsed && Array.isArray(parsed.units)) {
+          appState = parsed;
+          saveState();
+          closeModal('modalJson');
+          showToast("Datos importados");
+        }
+      } catch (e) {
+        alert("JSON inválido: " + e.message);
+      }
+    }
+
+    function toggleTheme() {
+      const current = document.body.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.body.setAttribute('data-theme', next);
+      localStorage.setItem('ots_theme', next);
+    }
+
+    function openModal(id) { document.getElementById(id).classList.add('open'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+    let toastTimeout;
+    function showToast(msg) {
+      const toast = document.getElementById('toastNotification');
+      document.getElementById('toastMessage').textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // WEBSOCKETS SETUP
+    if (typeof io !== 'undefined') {
+      try {
+        const socket = io();
+        socket.on('task_updated', (data) => {
+          console.log('⚡ Evento task_updated recibido vía Socket:', data);
+          fetchLiveTasks();
+        });
+        socket.on('tasks_synced', () => {
+          fetchLiveTasks();
+        });
+        socket.on('ot_archived', (data) => {
+          showToast(`📦 OT ${data.otNumber} completada y archivada en Cold Storage`);
+          fetchLiveTasks();
+        });
+      } catch (e) {}
+    }
+
+    // INIT
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedTheme = localStorage.getItem('ots_theme');
+      if (savedTheme) document.body.setAttribute('data-theme', savedTheme);
+      fetchLiveTasks();
+    });
+  </script>
+</body>
+</html>

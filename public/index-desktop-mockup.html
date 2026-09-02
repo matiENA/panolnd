@@ -1,0 +1,1675 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <title>Taller App — Terminal de Box</title>
+  
+  <script src="/socket.io/socket.io.min.js"></script>
+  <script src="/js/client-shim.js"></script>
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#365BA5"> 
+  
+  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/2950/2950663.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <style>
+    :root { 
+      --bg: #0A0B0B;
+      --panel-bg: #121518;
+      --card-bg: #1A1F24;
+      --card-hover: #222930;
+      --border: #2A323D;
+      --border-light: #3D4856;
+      
+      --text: #F3F4F6;
+      --text-muted: #9CA3AF;
+      --text-dim: #6B7280;
+      
+      --blue: #365BA5;
+      --blue-light: #4D76C9;
+      --blue-glow: rgba(54, 91, 165, 0.25);
+      
+      --green: #1E8449;
+      --green-light: #27AE60;
+      --green-glow: rgba(39, 174, 96, 0.2);
+      
+      --orange: #D97706;
+      --orange-light: #F59E0B;
+      
+      --danger: #E74C3C;
+      --danger-glow: rgba(231, 76, 60, 0.2);
+      
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 12px;
+    }
+    
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body { 
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* SCROLLBAR */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: var(--panel-bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+    .hidden { display: none !important; }
+    .fade-in { animation: fadeIn 0.3s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* === HEADER SUPERIOR LIMPIO === */
+    .top-header {
+      background: var(--panel-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-brand-group { display: flex; align-items: center; gap: 16px; }
+    .brand-title {
+      font-size: 1.1rem;
+      font-weight: 900;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .user-info-badge {
+      display: flex;
+      flex-direction: column;
+      border-left: 2px solid var(--border);
+      padding-left: 14px;
+    }
+    .user-info-badge .tag { font-size: 0.65rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .user-info-badge .name { font-size: 0.95rem; font-weight: 800; color: #60a5fa; }
+
+    /* SELECTOR DE BAHÍA (SOLO ICONO 📍 SIN LABEL) */
+    .box-selector-container { display: flex; align-items: center; gap: 6px; }
+    .box-location-icon { font-size: 1rem; }
+    .box-chips-bar { display: flex; gap: 4px; }
+    .box-chip {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .box-chip:hover { border-color: var(--blue-light); color: var(--text); }
+    .box-chip.active {
+      background: var(--blue);
+      color: white;
+      border-color: var(--blue);
+      box-shadow: 0 2px 8px var(--blue-glow);
+    }
+
+    .header-actions { display: flex; align-items: center; gap: 12px; }
+    
+    .btn-notif-bell {
+      position: relative;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .btn-notif-bell:hover { background: var(--card-hover); border-color: var(--border-light); }
+    .notif-badge-count {
+      background: var(--danger);
+      color: white;
+      font-size: 0.65rem;
+      font-weight: 900;
+      padding: 2px 6px;
+      border-radius: 10px;
+      display: none;
+    }
+    .notif-badge-count.show { display: inline-block; }
+
+    .btn-mobile-link {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .btn-mobile-link:hover { background: var(--card-hover); color: var(--text); }
+
+    .btn-logout {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-logout:hover { background: rgba(231, 76, 60, 0.2); border-color: var(--danger); color: #fca5a5; }
+
+    /* === PANTALLA DE LOGIN INICIAL === */
+    .login-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex: 1;
+      padding: 40px 20px;
+    }
+    .login-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 36px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      text-align: center;
+    }
+    .login-card h2 { font-size: 1.3rem; font-weight: 900; margin-bottom: 8px; color: var(--text); }
+    .login-card p { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 24px; }
+    
+    /* === WORKSPACE SPLIT-SCREEN (58% / 42%) === */
+    .workspace-grid {
+      display: grid;
+      grid-template-columns: 58% 42%;
+      gap: 20px;
+      padding: 20px 24px;
+      flex: 1;
+      max-width: 1700px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    @media (max-width: 1150px) {
+      .workspace-grid { grid-template-columns: 1fr; }
+    }
+
+    .col-left { display: flex; flex-direction: column; gap: 18px; }
+    .col-right { display: flex; flex-direction: column; gap: 18px; }
+
+    /* TARJETAS */
+    .card {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .card-header-title {
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* 1. VEHÍCULOS (TRACTOR + SEMI) */
+    .vehicles-dual-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+
+    .vehicle-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .vehicle-panel.tractor { border-left: 4px solid var(--blue); }
+    .vehicle-panel.semi { border-left: 4px solid var(--green-light); }
+
+    .vehicle-tag-row {
+      font-size: 0.7rem;
+      font-weight: 800;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .inputs-flex-row { display: flex; gap: 10px; }
+    .field-wrapper { flex: 1; display: flex; flex-direction: column; gap: 4px; position: relative; }
+    .field-wrapper label { font-size: 0.65rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; }
+
+    .input-dark {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 0.95rem;
+      font-weight: 700;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      outline: none;
+      width: 100%;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    .input-dark:focus { border-color: var(--blue-light); }
+    .input-dark::placeholder { color: var(--text-dim); font-weight: 500; font-size: 0.85rem; }
+
+    /* AUTOCOMPLETE */
+    .popover-autocomplete {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: #1e293b;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 50;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      margin-top: 4px;
+      display: none;
+    }
+    .popover-option {
+      padding: 10px 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .popover-option:last-child { border-bottom: none; }
+    .popover-option:hover { background: var(--blue); color: white; }
+    .popover-option strong { color: #60a5fa; }
+    .popover-option:hover strong { color: white; }
+
+    /* DESTINO SEGMENTADO */
+    .dest-segmented-control {
+      display: flex;
+      gap: 4px;
+      background: #0d1117;
+      padding: 3px 4px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+    }
+    .dest-chip-btn {
+      padding: 4px 10px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      font-weight: 800;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .dest-chip-btn.active.tractor {
+      background: rgba(54, 91, 165, 0.25);
+      border-color: var(--blue);
+      color: #93c5fd;
+    }
+    .dest-chip-btn.active.semi {
+      background: rgba(39, 174, 96, 0.25);
+      border-color: var(--green-light);
+      color: #86efac;
+    }
+
+    /* 2. CATÁLOGO LIMPIO */
+    .search-row-layout {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .select-category-dropdown {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      font-weight: 700;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .catalog-scroll-list {
+      max-height: 320px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-right: 4px;
+    }
+
+    .catalog-item-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 11px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .catalog-item-card:hover {
+      background: var(--card-hover);
+      border-color: var(--blue-light);
+      transform: translateX(3px);
+    }
+
+    .item-main-info { display: flex; flex-direction: column; gap: 3px; }
+    .item-title-text { font-size: 0.9rem; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .item-cat-text { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600; }
+    
+    .badge-canje-flag {
+      background: rgba(217, 119, 6, 0.2);
+      border: 1px solid var(--orange);
+      color: #fcd34d;
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .btn-quick-add {
+      background: rgba(39, 174, 96, 0.15);
+      border: 1px solid var(--green-light);
+      color: var(--green-light);
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 0.8rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-quick-add:hover { background: var(--green-light); color: white; }
+
+    .notes-detail-box {
+      margin-top: 12px;
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+    }
+    .notes-detail-box input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 0.85rem;
+      outline: none;
+      font-family: inherit;
+    }
+
+    /* 3. CARRITO ACTIVO */
+    .cart-section-box {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .cart-items-feed {
+      min-height: 130px;
+      max-height: 220px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .cart-empty-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      font-weight: 600;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius-md);
+      gap: 6px;
+    }
+
+    .cart-row {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .cart-row-title { font-size: 0.85rem; font-weight: 700; color: var(--text); }
+    .cart-dest-pill {
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 4px;
+      width: fit-content;
+      margin-top: 2px;
+    }
+    .cart-dest-pill.tractor { background: rgba(54, 91, 165, 0.2); color: #93c5fd; }
+    .cart-dest-pill.semi { background: rgba(39, 174, 96, 0.2); color: #86efac; }
+
+    .stepper-control {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #0d1117;
+      padding: 3px 6px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+    }
+    .btn-step {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: none; background: var(--border); color: white;
+      font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem;
+    }
+    .btn-step:hover { background: var(--blue-light); }
+    .step-val { font-weight: 800; font-size: 0.85rem; min-width: 18px; text-align: center; }
+
+    .btn-del-item {
+      background: none; border: none; color: var(--danger);
+      font-size: 1.1rem; cursor: pointer; padding: 0 4px;
+    }
+
+    .btn-confirm-batch {
+      background: var(--blue);
+      color: white;
+      border: none;
+      padding: 14px;
+      border-radius: var(--radius-md);
+      font-weight: 800;
+      font-size: 0.95rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      transition: all 0.2s;
+    }
+    .btn-confirm-batch:hover { background: var(--blue-light); }
+    .btn-confirm-batch:disabled { background: var(--border); color: var(--text-dim); cursor: not-allowed; }
+
+    /* 4. MIS PEDIDOS EN TALLER */
+    .orders-monitor-section {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .monitor-nav-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .tabs-pills-bar { display: flex; gap: 6px; }
+    .tab-nav-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-nav-btn.active { background: var(--blue); color: white; border-color: var(--blue); }
+
+    .orders-live-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 380px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .order-card-row {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      border-left: 5px solid var(--blue);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s;
+    }
+
+    /* RESALTE LISTO */
+    .order-card-row.status-LISTO {
+      border-left-color: var(--green-light);
+      background: rgba(39, 174, 96, 0.08);
+      border-color: rgba(39, 174, 96, 0.4);
+      box-shadow: 0 2px 12px var(--green-glow);
+    }
+
+    .status-badge-tag {
+      font-size: 0.7rem;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      display: inline-block;
+      margin-bottom: 6px;
+    }
+    .status-badge-tag.LISTO { background: rgba(39, 174, 96, 0.2); color: #86efac; border: 1px solid var(--green-light); }
+    .status-badge-tag.PENDIENTE { background: rgba(54, 91, 165, 0.2); color: #93c5fd; border: 1px solid var(--blue); }
+    .status-badge-tag.ENTREGADO { background: rgba(156, 163, 175, 0.2); color: #9ca3af; }
+
+    .order-items-preview { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+    .order-meta-info { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; }
+
+    .btn-return-refund {
+      background: rgba(231, 76, 60, 0.1);
+      border: 1px solid var(--danger);
+      color: #fca5a5;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-return-refund:hover { background: var(--danger); color: white; }
+
+    /* === MODAL DIALOGS === */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(3px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+    .modal-box {
+      background: var(--panel-bg);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+      overflow: hidden;
+    }
+    .modal-header {
+      background: #0d1117;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header h3 { font-size: 1rem; font-weight: 800; color: var(--text); }
+    .modal-body { padding: 20px; max-height: 60vh; overflow-y: auto; }
+    .modal-footer {
+      padding: 14px 20px;
+      background: #0d1117;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .btn-modal-btn { padding: 8px 16px; border-radius: var(--radius-sm); font-weight: 800; font-size: 0.85rem; cursor: pointer; border: none; }
+    .btn-m-cancel { background: var(--card-bg); border: 1px solid var(--border); color: var(--text-muted); }
+    .btn-m-confirm { background: var(--blue); color: white; }
+
+    /* SMART SHEET (AVISOS) */
+    .smart-sheet-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6); z-index: 210; opacity: 0; pointer-events: none; transition: 0.3s;
+    }
+    .smart-sheet-overlay.open { opacity: 1; pointer-events: all; }
+    .smart-sheet {
+      position: fixed; right: -420px; top: 0; width: 100%; max-width: 400px; height: 100%;
+      background: var(--panel-bg); border-left: 1px solid var(--border); z-index: 220;
+      box-shadow: -5px 0 25px rgba(0,0,0,0.5); transition: right 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      display: flex; flex-direction: column;
+    }
+    .smart-sheet.open { right: 0; }
+    .sheet-head { padding: 18px 20px; background: #0d1117; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .sheet-body { flex: 1; overflow-y: auto; padding: 20px; }
+
+    .notif-item-card {
+      background: var(--card-bg); border-radius: var(--radius-sm); padding: 14px;
+      margin-bottom: 12px; border: 1px solid var(--border); border-left: 4px solid var(--blue);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. PANTALLA DE LOGIN -->
+  <div id="login-section" class="login-container">
+    <div class="login-card fade-in">
+      <h2>🚛 Terminal de Taller</h2>
+      <p>Ingresa tu número de operario para comenzar</p>
+      <div style="margin-bottom: 20px; text-align: left;">
+        <label style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; display:block; margin-bottom:6px;">N° de Operario</label>
+        <input type="number" id="loginOpInput" class="input-dark" placeholder="Ej. 104" style="font-size:1.1rem; text-align:center;">
+      </div>
+      <button class="btn-confirm-batch" style="width:100%; padding:14px;" onclick="performLogin()">INGRESAR AL BOX</button>
+      <div style="margin-top:16px; font-size:0.75rem;">
+        <a href="/mobile" style="color:var(--text-dim); text-decoration:none;">📱 Abrir versión móvil clásica</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. APLICACIÓN PRINCIPAL (DESKTOP WORKSTATION) -->
+  <div id="app-section" class="hidden fade-in" style="flex:1; display:flex; flex-direction:column;">
+    
+    <!-- BARRA SUPERIOR LIMPIA -->
+    <header class="top-header">
+      <div class="header-brand-group">
+        <div class="brand-title">
+          <span>🚛</span> TALLER APP
+        </div>
+
+        <div class="user-info-badge">
+          <span class="tag">Operario Conectado</span>
+          <span class="name" id="display-name">---</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn-logout" onclick="logout()">
+          Salir
+        </button>
+      </div>
+    </header>
+
+    <!-- CONTENEDOR PRINCIPAL SPLIT-SCREEN -->
+    <main class="workspace-grid">
+      
+      <!-- COLUMNA IZQUIERDA: UNIDAD + CATÁLOGO -->
+      <div class="col-left">
+        
+        <!-- MÓDULO UNIDAD & OT -->
+        <div class="card">
+          <div class="card-header-title">
+            <span>🚛 UNIDAD & ORDEN DE TRABAJO</span>
+            <span style="font-size:0.7rem; color:var(--text-dim); font-weight:600;">Búsqueda bidireccional</span>
+          </div>
+
+          <div class="vehicles-dual-grid" style="margin-bottom:0;">
+            <!-- TRACTOR -->
+            <div class="vehicle-panel tractor">
+              <div class="vehicle-tag-row">
+                <span>TRACTOR</span>
+                <span style="color:#60a5fa;">PRINCIPAL</span>
+              </div>
+              <div class="inputs-flex-row">
+                <div class="field-wrapper">
+                  <label>Patente / Interno</label>
+                  <input type="text" id="unitInput" class="input-dark" placeholder="Ej. AA123CD..." autocomplete="off"
+                         onkeyup="filterUnitInput(this.value, 'unitInput', 'unitSuggestions', 'UNIT')"
+                         onblur="searchByField(this.value, 'UNIT')">
+                  <div id="unitSuggestions" class="popover-autocomplete"></div>
+                </div>
+                <div class="field-wrapper" style="max-width: 130px;">
+                  <label>N° OT</label>
+                  <input type="text" id="otInput" class="input-dark" placeholder="OT..." autocomplete="off"
+                         onkeyup="filterUnitInput(this.value, 'otInput', 'otSuggestions', 'OT'); autoFillSemiOt();"
+                         onblur="searchByField(this.value, 'OT'); autoFillSemiOt();">
+                  <div id="otSuggestions" class="popover-autocomplete"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SEMI -->
+            <div class="vehicle-panel semi">
+              <div class="vehicle-tag-row">
+                <span>SEMI / ACOPLADO</span>
+                <span style="color:#86efac;">OPCIONAL</span>
+              </div>
+              <div class="inputs-flex-row">
+                <div class="field-wrapper">
+                  <label>Patente Semi</label>
+                  <input type="text" id="semiUnitInput" class="input-dark" placeholder="Ej. 6040..." autocomplete="off"
+                         onkeyup="filterUnitInput(this.value, 'semiUnitInput', 'semiSuggestions', 'SEMI')"
+                         onblur="searchByField(this.value, 'SEMI')">
+                  <div id="semiSuggestions" class="popover-autocomplete"></div>
+                </div>
+                <div class="field-wrapper" style="max-width: 130px;">
+                  <label>OT Semi (+1)</label>
+                  <input type="text" id="semiOtInput" class="input-dark" placeholder="OT Semi..." autocomplete="off">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MÓDULO CATÁLOGO LIMPIO -->
+        <div class="card" style="flex:1;">
+          <div class="card-header-title">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span>📦 CATÁLOGO DE REPUESTOS</span>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+              <!-- SELECTOR DE BAHÍA / BOX (SOLO ICONO 📍) -->
+              <div class="box-selector-container">
+                <span class="box-location-icon">📍</span>
+                <div class="box-chips-bar" id="location-container">
+                  <!-- Renderizado dinámico de boxes -->
+                </div>
+              </div>
+
+              <!-- SELECTOR SEGMENTADO DE DESTINO -->
+              <div class="dest-segmented-control">
+                <button class="dest-chip-btn active tractor" id="optUnit" onclick="setDestination('UNIT')" type="button">
+                  🚛 Tractor
+                </button>
+                <button class="dest-chip-btn semi" id="optSemi" onclick="setDestination('SEMI')" type="button">
+                  📦 Semi
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <input type="hidden" id="currentItemDest" value="UNIT">
+          <input type="hidden" id="activeOpId">
+          <input type="hidden" id="activeMechName">
+
+          <div class="search-row-layout">
+            <select id="category-select" class="select-category-dropdown" onchange="onCategoryChange(this.value)">
+              <option value="">📂 Todos los Rubros</option>
+            </select>
+            <input type="text" id="itemInput" class="input-dark" placeholder="🔍 Escribe el nombre del repuesto o herramienta..." autocomplete="off" oninput="onItemSearch(this.value)">
+          </div>
+
+          <div class="catalog-scroll-list" id="catalog-results-list">
+            <!-- Render dinámico de repuestos -->
+          </div>
+
+          <div class="notes-detail-box">
+            <input type="text" id="notesInput" placeholder="📝 Agregar nota o detalle específico para Pañol...">
+          </div>
+        </div>
+
+      </div>
+
+      <!-- COLUMNA DERECHA: CARRITO + MIS PEDIDOS -->
+      <div class="col-right">
+
+        <!-- MÓDULO CARRITO ACTIVO -->
+        <div class="cart-section-box">
+          <div class="card-header-title">
+            <span>🛒 LISTA PARA ENVIAR</span>
+            <span id="cartCountBadge" style="background:var(--blue); color:white; font-size:0.75rem; font-weight:900; padding:2px 8px; border-radius:10px;">0 ÍTEMS</span>
+          </div>
+
+          <div class="cart-items-feed" id="cartContainer">
+            <div class="cart-empty-placeholder">
+              <span>📦</span>
+              <span>El carrito está vacío. Selecciona repuestos a la izquierda.</span>
+            </div>
+          </div>
+
+          <button class="btn-confirm-batch" id="submitBtn" onclick="submitBatchOrder()" disabled>
+            CONFIRMAR PEDIDO
+          </button>
+        </div>
+
+        <!-- MÓDULO MIS PEDIDOS EN TALLER -->
+        <div class="orders-monitor-section">
+          <div class="monitor-nav-header">
+            <div class="card-header-title" style="margin:0; padding:0; border:none;">
+              <span>📦 MIS PEDIDOS</span>
+            </div>
+            <div class="tabs-pills-bar">
+              <button class="tab-nav-btn active" id="btnActiveOrders" onclick="toggleHistory(false)">⚡ ACTIVOS</button>
+              <button class="tab-nav-btn" id="btnHistoryOrders" onclick="toggleHistory(true)">📜 HISTORIAL</button>
+              <button class="tab-nav-btn" onclick="refreshOrders()" title="Actualizar">🔄</button>
+            </div>
+          </div>
+
+          <div class="orders-live-feed" id="orders-container">
+            <div style="text-align:center; padding:30px; color:var(--text-dim);">Cargando pedidos...</div>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- MODAL DE CANJE OBLIGATORIO -->
+  <div id="customModal" class="modal-overlay">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modalTitle">Atención</h3>
+        <button style="background:none; border:none; color:#888; font-size:1.4rem; cursor:pointer;" onclick="closeModal()">×</button>
+      </div>
+      <div id="modalBody" class="modal-body"></div>
+      <div class="modal-footer">
+        <button id="modalBtnCancel" class="btn-modal-btn btn-m-cancel" onclick="closeModal()">Cancelar</button>
+        <button id="modalBtnConfirm" class="btn-modal-btn btn-m-confirm">ACEPTAR</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTRO DE MENSAJES (SMART SHEET) -->
+  <div id="smartSheetOverlay" class="smart-sheet-overlay" onclick="closeInbox()"></div>
+  <div id="smartSheet" class="smart-sheet">
+    <div class="sheet-head">
+      <div style="font-weight:800; font-size:1rem; display:flex; align-items:center; gap:8px;">
+        🔔 Avisos de Coordinación
+        <span id="sheetCount" style="background:var(--danger); color:white; padding:2px 6px; border-radius:10px; font-size:0.7rem;">0</span>
+      </div>
+      <button style="background:none; border:none; font-size:1.4rem; color:#888; cursor:pointer;" onclick="closeInbox()">×</button>
+    </div>
+    <div id="inboxContent" class="sheet-body"></div>
+  </div>
+
+  <!-- SCRIPT INTEGRADO Y ROBUSTO -->
+  <script>
+    let heartbeatTimer = null;
+    let msgTimer = null;
+    let cartItems = []; 
+    let currentBox = ""; 
+    let dbItems = []; 
+    let dbUnitList = []; 
+    let showHistory = false;
+    let allLoadedOrders = [];
+    let serverMessages = [];
+    let isPopulating = false;
+
+    window.onload = function() {
+      const savedOp = localStorage.getItem('mechanic_op');
+      if (savedOp) performLogin(savedOp);
+    };
+
+    // ===========================================
+    // 1. INBOX Y MENSAJERÍA
+    // ===========================================
+    function updateBadge() {
+      const count = serverMessages.length;
+      const badge = document.getElementById('bellBadge');
+      const sheetCount = document.getElementById('sheetCount');
+      if (badge) {
+        badge.innerText = count;
+        if (count > 0) badge.classList.add('show');
+        else badge.classList.remove('show');
+      }
+      if (sheetCount) sheetCount.innerText = count;
+    }
+
+    function openInbox() {
+      renderInbox();
+      document.getElementById('smartSheetOverlay').classList.add('open');
+      document.getElementById('smartSheet').classList.add('open');
+    }
+
+    function closeInbox() {
+      document.getElementById('smartSheetOverlay').classList.remove('open');
+      document.getElementById('smartSheet').classList.remove('open');
+    }
+
+    function renderInbox() {
+      const container = document.getElementById('inboxContent');
+      container.innerHTML = "";
+      
+      if (serverMessages.length === 0) {
+        container.innerHTML = "<div style='text-align:center; color:#999; margin-top:40px;'>No tienes mensajes nuevos de Pañol.</div>";
+        return;
+      }
+
+      serverMessages.forEach(msg => {
+        const div = document.createElement('div');
+        div.className = 'notif-item-card';
+        div.innerHTML = `
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.75rem; color:#888; font-weight:700;">
+            <span>${msg.unit || 'Aviso General'}</span>
+            <span style="color:var(--blue-light);">De: Coordinación</span>
+          </div>
+          <div style="font-size:0.9rem; font-weight:600; margin-bottom:10px;">${msg.body}</div>
+          <input type="text" id="response-${msg.id}" class="input-dark" placeholder="Escribe tu respuesta..." style="margin-bottom:8px;" onkeydown="if(event.key==='Enter') resolveNotif('${msg.id}')">
+          <button class="btn-confirm-batch" style="width:100%; padding:8px; font-size:0.8rem;" onclick="resolveNotif('${msg.id}')">✓ ENVIAR RESPUESTA</button>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function resolveNotif(id) {
+      const inputEl = document.getElementById(`response-${id}`);
+      const text = inputEl ? inputEl.value.trim() : '';
+      if(!text) return;
+
+      serverMessages = serverMessages.filter(m => m.id !== id);
+      updateBadge();
+      renderInbox();
+      if(serverMessages.length === 0) closeInbox();
+
+      google.script.run.resolveFeedback(id, text);
+    }
+
+    function pollMessages() {
+      const opId = document.getElementById('activeOpId').value;
+      if(!opId) return;
+      google.script.run.withSuccessHandler(msgs => {
+        serverMessages = msgs || [];
+        updateBadge();
+      }).pollInbox(opId);
+    }
+
+    // ===========================================
+    // 2. AUTH & INICIALIZACIÓN
+    // ===========================================
+    function performLogin(autoId = null) {
+      const id = autoId || document.getElementById('loginOpInput').value.trim();
+      const btn = document.querySelector('#login-section button');
+      if(!id) return showModal("Error", "Ingresa tu número de operario.", "⛔");
+      if (btn) { btn.textContent = "Verificando..."; btn.disabled = true; }
+      
+      google.script.run.withSuccessHandler(config => {
+        if(config && config.success) {
+          localStorage.setItem('mechanic_op', id);
+          initApp(id, config);
+        } else {
+          showModal("No Encontrado", (config && config.error) || "Operario no registrado o sin acceso.", "❌");
+          if (btn) { btn.textContent = "INGRESAR AL BOX"; btn.disabled = false; }
+        }
+      }).withFailureHandler(err => {
+        showModal("Error de Conexión", err.message || "No se pudo conectar al servidor.", "❌");
+        if (btn) { btn.textContent = "INGRESAR AL BOX"; btn.disabled = false; }
+      }).getMechanicConfig(id);
+    }
+
+    function initApp(id, config) {
+      document.getElementById('login-section').classList.add('hidden');
+      document.getElementById('app-section').classList.remove('hidden');
+      document.getElementById('display-name').textContent = config.name || ('Operario ' + id);
+      document.getElementById('activeOpId').value = id;
+      document.getElementById('activeMechName').value = config.name || ('Operario ' + id);
+      
+      renderBoxSelector(config.boxes);
+      startAutoUpdate();
+      fetchCatalog();
+      fetchUnitCatalog();
+    }
+
+    function logout() {
+      showModal("Cerrar Sesión", "¿Deseas salir de la terminal del box?", "👋", true, () => {
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+        if (msgTimer) clearInterval(msgTimer);
+        localStorage.removeItem('mechanic_op');
+        cartItems = []; currentBox = ""; dbItems = []; serverMessages = []; dbUnitList = [];
+        document.getElementById('loginOpInput').value = "";
+        document.getElementById('unitInput').value = ""; 
+        document.getElementById('otInput').value = "";   
+        document.getElementById('itemInput').value = "";
+        document.getElementById('notesInput').value = "";
+        document.getElementById('location-container').innerHTML = "";
+        document.getElementById('cartContainer').innerHTML = "";
+        document.getElementById('app-section').classList.add('hidden');
+        document.getElementById('login-section').classList.remove('hidden');
+        const loginBtn = document.querySelector('#login-section button');
+        if (loginBtn) { loginBtn.textContent = "INGRESAR AL BOX"; loginBtn.disabled = false; }
+      });
+    }
+
+    // ===========================================
+    // 3. SELECTOR DE BOXES (SOLO ICONO 📍)
+    // ===========================================
+    function renderBoxSelector(boxes) {
+      const container = document.getElementById('location-container');
+      if (!boxes || boxes.length === 0) {
+        container.innerHTML = `<button class="box-chip active" onclick="selectBoxChip(this, '01')">Box 01</button>`;
+        currentBox = "01";
+        return;
+      }
+      currentBox = boxes[0];
+      let html = "";
+      boxes.forEach((box, index) => {
+        const activeClass = index === 0 ? 'active' : '';
+        html += `<button class="box-chip ${activeClass}" onclick="selectBoxChip(this, '${box}')">Box ${box}</button>`;
+      });
+      container.innerHTML = html;
+    }
+
+    function selectBoxChip(el, boxName) {
+      document.querySelectorAll('.box-chip').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      currentBox = boxName;
+    }
+
+    // ===========================================
+    // 4. CATÁLOGO & BÚSQUEDA LIMPIA
+    // ===========================================
+    function fetchCatalog() {
+      google.script.run.withSuccessHandler(items => {
+        dbItems = items || [];
+        populateCategories();
+        renderCatalogItems(dbItems);
+      }).getItemCatalog();
+    }
+
+    function populateCategories() {
+      const select = document.getElementById('category-select');
+      const categories = [...new Set(dbItems.map(i => i.category || 'GENERAL'))].sort();
+      select.innerHTML = `<option value="">📂 Todos los Rubros</option>` + categories.map(c => `<option value="${c}">${c}</option>`).join('');
+    }
+
+    function onCategoryChange(cat) {
+      filterCatalogView();
+    }
+
+    function onItemSearch(term) {
+      filterCatalogView();
+    }
+
+    function filterCatalogView() {
+      const cat = document.getElementById('category-select').value;
+      const q = document.getElementById('itemInput').value.toLowerCase().trim();
+
+      const filtered = dbItems.filter(item => {
+        const itemName = (item.name || item).toLowerCase();
+        const itemCat = item.category || 'GENERAL';
+        const matchCat = !cat || itemCat === cat;
+        const matchQ = !q || itemName.includes(q);
+        return matchCat && matchQ;
+      });
+
+      renderCatalogItems(filtered);
+    }
+
+    function renderCatalogItems(items) {
+      const container = document.getElementById('catalog-results-list');
+      container.innerHTML = "";
+
+      if (!items || items.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-dim);">Sin repuestos coincidentes.</div>`;
+        return;
+      }
+
+      items.slice(0, 40).forEach(item => {
+        const itemName = item.name || item;
+        const itemCat = item.category || 'GENERAL';
+        const reqCanje = item.requiereCanje === true || String(item.requiereCanje).toUpperCase() === 'TRUE';
+
+        const div = document.createElement('div');
+        div.className = 'catalog-item-card';
+
+        const canjeTag = reqCanje ? `<span class="badge-canje-flag">♻️ Requiere Canje</span>` : '';
+
+        div.innerHTML = `
+          <div class="item-main-info">
+            <div class="item-title-text">
+              <span>${itemName}</span>
+              ${canjeTag}
+            </div>
+            <div class="item-cat-text">Rubro: ${itemCat}</div>
+          </div>
+          <button class="btn-quick-add" onclick="addItemToCart('${itemName.replace(/'/g, "\\'")}')">
+            + Agregar
+          </button>
+        `;
+
+        div.onclick = (e) => {
+          if (e.target.tagName !== 'BUTTON') addItemToCart(itemName);
+        };
+
+        container.appendChild(div);
+      });
+    }
+
+    // ===========================================
+    // 5. AUTOCOMPLETADO DE UNIDADES & DESTINO
+    // ===========================================
+    function fetchUnitCatalog() {
+      google.script.run.withSuccessHandler(list => {
+        dbUnitList = list || [];
+      }).getUnitCatalog();
+    }
+
+    function setDestination(type) {
+      document.querySelectorAll('.dest-chip-btn').forEach(el => el.classList.remove('active'));
+      if (type === 'UNIT') document.getElementById('optUnit').classList.add('active');
+      else document.getElementById('optSemi').classList.add('active');
+      document.getElementById('currentItemDest').value = type;
+    }
+
+    function updateDestToggle(unitPlate, semiPlate) {
+      const optUnit = document.getElementById('optUnit');
+      const optSemi = document.getElementById('optSemi');
+      if (unitPlate) optUnit.innerText = `🚛 ${unitPlate}`;
+      if (semiPlate) optSemi.innerText = `📦 ${semiPlate}`;
+    }
+
+    function filterUnitInput(query, inputId, listId, type) {
+      const list = document.getElementById(listId);
+      list.innerHTML = "";
+      if (!query || query.length < 2) { list.style.display = "none"; return; }
+
+      const q = query.toUpperCase();
+      const matches = dbUnitList.filter(plate => plate.includes(q)).slice(0, 8);
+      if (matches.length === 0) { list.style.display = "none"; return; }
+
+      matches.forEach(plate => {
+        const div = document.createElement('div');
+        div.className = 'popover-option';
+        div.innerText = plate;
+        div.onclick = () => {
+          document.getElementById(inputId).value = plate;
+          list.style.display = "none";
+          searchByField(plate, type);
+        };
+        list.appendChild(div);
+      });
+      list.style.display = "block";
+    }
+
+    document.addEventListener('click', function(e) {
+      ['unitSuggestions', 'otSuggestions', 'semiSuggestions'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.parentElement.contains(e.target)) el.style.display = "none";
+      });
+    });
+
+    function autoFillSemiOt() {
+      const otInput = document.getElementById('otInput');
+      const semiOtInput = document.getElementById('semiOtInput');
+      if (!otInput || !semiOtInput) return;
+      const otVal = otInput.value.trim();
+      if (otVal) {
+        const match = otVal.match(/\d+/);
+        if (match) {
+          const num = parseInt(match[0], 10);
+          semiOtInput.value = otVal.replace(match[0], String(num + 1));
+        }
+      }
+    }
+
+    function searchByField(val, type) {
+      if (!val || val.length < 3 || isPopulating) return;
+
+      const unitInput = document.getElementById('unitInput');
+      const otInput = document.getElementById('otInput');
+      const semiUnitInput = document.getElementById('semiUnitInput');
+      const semiOtInput = document.getElementById('semiOtInput');
+
+      google.script.run.withSuccessHandler(res => {
+        if (res && res.success) {
+          isPopulating = true;
+          if (res.unit) unitInput.value = res.unit;
+          if (res.ot) otInput.value = res.ot;
+          if (res.semi) semiUnitInput.value = res.semi;
+          if (res.semiOt) semiOtInput.value = res.semiOt;
+          updateDestToggle(res.unit, res.semi);
+          autoFillSemiOt();
+          isPopulating = false;
+        }
+      }).findUnitOrOt(val, type);
+    }
+
+    // ===========================================
+    // 6. CARRITO & DESPACHO
+    // ===========================================
+    function addItemToCart(itemName) {
+      const otVal = document.getElementById('otInput').value.trim();
+      const destType = document.getElementById('currentItemDest').value;
+      const noteVal = document.getElementById('notesInput').value.trim();
+      const semiPlate = document.getElementById('semiUnitInput').value.trim();
+
+      let finalItemName = itemName;
+      if (destType === 'SEMI' && semiPlate) {
+        finalItemName = `${itemName} [PARA SEMI: ${semiPlate}]`;
+      }
+
+      const foundItem = dbItems.find(i => (i.name || i) === itemName);
+      const reqCanje = foundItem ? (foundItem.requiereCanje === true || String(foundItem.requiereCanje).toUpperCase() === 'TRUE') : false;
+
+      const existing = cartItems.find(i => i.item === finalItemName);
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        cartItems.push({
+          item: finalItemName,
+          displayItem: itemName,
+          qty: 1,
+          notes: noteVal,
+          destination: destType,
+          requiereCanje: reqCanje
+        });
+      }
+
+      document.getElementById('notesInput').value = "";
+      renderCart();
+    }
+
+    function renderCart() {
+      const container = document.getElementById('cartContainer');
+      const badge = document.getElementById('cartCountBadge');
+      const btn = document.getElementById('submitBtn');
+
+      container.innerHTML = "";
+
+      if (cartItems.length === 0) {
+        container.innerHTML = `
+          <div class="cart-empty-placeholder">
+            <span>📦</span>
+            <span>El carrito está vacío. Selecciona repuestos a la izquierda.</span>
+          </div>
+        `;
+        badge.innerText = "0 ÍTEMS";
+        btn.disabled = true;
+        btn.innerText = "CONFIRMAR PEDIDO";
+        return;
+      }
+
+      const totalQty = cartItems.reduce((sum, i) => sum + parseInt(i.qty), 0);
+      badge.innerText = `${totalQty} ÍTEMS`;
+      btn.disabled = false;
+      btn.innerText = `CONFIRMAR PEDIDO (${totalQty} ÍTEMS)`;
+
+      cartItems.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = 'cart-row';
+
+        const destTag = item.destination === 'SEMI'
+          ? `<span class="cart-dest-pill semi">📦 SEMI</span>`
+          : `<span class="cart-dest-pill tractor">🚛 TRACTOR</span>`;
+
+        div.innerHTML = `
+          <div>
+            <div class="cart-row-title">${item.displayItem}</div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              ${destTag}
+              ${item.notes ? `<span style="font-size:0.7rem; color:var(--text-dim);">${item.notes}</span>` : ''}
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="stepper-control">
+              <button class="btn-step" onclick="updateCartQty(${index}, -1)">−</button>
+              <span class="step-val">${item.qty}</span>
+              <button class="btn-step" onclick="updateCartQty(${index}, 1)">+</button>
+            </div>
+            <button class="btn-del-item" onclick="removeCartItem(${index})">×</button>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function updateCartQty(index, change) {
+      let newVal = parseInt(cartItems[index].qty) + change;
+      if(newVal < 1) return;
+      cartItems[index].qty = newVal;
+      renderCart();
+    }
+
+    function removeCartItem(index) {
+      cartItems.splice(index, 1);
+      renderCart();
+    }
+
+    function submitBatchOrder() {
+      if(cartItems.length === 0) return showModal("Vacío", "Agrega al menos un repuesto.", "⚠️");
+      const otVal = document.getElementById('otInput').value.trim();
+      const unitVal = document.getElementById('unitInput').value.trim();
+      if(!otVal && !unitVal) return showModal("Falta Unidad", "Ingresa la Patente o N° de OT.", "⚠️");
+
+      const itemsCanje = cartItems.filter(i => i.requiereCanje);
+      if (itemsCanje.length > 0) {
+        promptCanje(itemsCanje);
+      } else {
+        executeSubmit();
+      }
+    }
+
+    function promptCanje(itemsCanje) {
+      let html = `<div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">
+        Los siguientes repuestos requieren por protocolo la entrega de la pieza averiada a Pañol:
+      </div>`;
+
+      itemsCanje.forEach((item, idx) => {
+        const safeId = `canje_${idx}`;
+        const qty = parseInt(item.qty, 10);
+
+        html += `
+          <div style="background:var(--card-bg); border:1px solid var(--orange); border-radius:var(--radius-md); padding:12px; margin-bottom:10px;">
+            <div style="font-weight:800; font-size:0.9rem; margin-bottom:6px;">
+              🔸 ${item.displayItem} (Cant: ${qty})
+            </div>
+            <div style="display:flex; gap:16px; margin-bottom:6px;">
+              <label style="cursor:pointer; display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+                <input type="radio" name="${safeId}" value="OK" checked onchange="document.getElementById('m_${safeId}').style.display='none'">
+                Entrego usada
+              </label>
+              <label style="cursor:pointer; display:flex; align-items:center; gap:6px; font-size:0.85rem;">
+                <input type="radio" name="${safeId}" value="FALTA" onchange="document.getElementById('m_${safeId}').style.display='block'">
+                Faltante
+              </label>
+            </div>
+            <input type="text" id="m_${safeId}" placeholder="Motivo de la pieza faltante..." class="input-dark" style="display:none; font-size:0.8rem; padding:8px; margin-top:6px;">
+          </div>
+        `;
+      });
+
+      document.getElementById('modalTitle').innerText = "♻️ Canje Obligatorio";
+      document.getElementById('modalBody').innerHTML = html;
+      
+      const btnCancel = document.getElementById('modalBtnCancel');
+      const btnConfirm = document.getElementById('modalBtnConfirm');
+      btnCancel.style.display = "block";
+      btnConfirm.innerText = "CONFIRMAR PEDIDO";
+
+      const newConfirm = btnConfirm.cloneNode(true);
+      btnConfirm.parentNode.replaceChild(newConfirm, btnConfirm);
+
+      newConfirm.onclick = () => {
+        let allValid = true;
+        itemsCanje.forEach((item, idx) => {
+          const safeId = `canje_${idx}`;
+          const isOk = document.querySelector(`input[name="${safeId}"]:checked`).value === 'OK';
+          if (isOk) {
+            item.canjeStatus = 'OK';
+          } else {
+            const motive = document.getElementById(`m_${safeId}`).value.trim();
+            if (!motive) allValid = false;
+            else item.canjeStatus = `FALTA: ${motive}`;
+          }
+        });
+
+        if (!allValid) {
+          showModal("Atención", "Justifica el motivo de las piezas faltantes.", "⚠️");
+        } else {
+          closeModal();
+          executeSubmit();
+        }
+      };
+
+      document.getElementById('customModal').classList.add('open');
+    }
+
+    function executeSubmit() {
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true; btn.textContent = "ENVIANDO...";
+
+      const baseName = document.getElementById('activeMechName').value;
+      const finalName = currentBox ? `${baseName} [Box ${currentBox}]` : baseName;
+
+      let finalUnit = document.getElementById('unitInput').value;
+      let finalOt = document.getElementById('otInput').value;
+      const semiUnit = document.getElementById('semiUnitInput').value.trim();
+      const semiOt = document.getElementById('semiOtInput').value.trim();
+
+      if (semiUnit || semiOt) {
+        finalUnit = `${finalUnit} + [${semiUnit || '?'}]`;
+        finalOt = `${finalOt} + [${semiOt || '?'}]`;
+      }
+
+      const cleanItems = cartItems.map(i => ({
+        item: i.item,
+        qty: i.qty,
+        notes: i.notes,
+        canjeStatus: i.canjeStatus || null
+      }));
+
+      const payload = {
+        opId: document.getElementById('activeOpId').value,
+        mechanicName: finalName,
+        otNumber: finalOt,
+        unitId: finalUnit,
+        items: cleanItems
+      };
+
+      google.script.run.withSuccessHandler((res) => {
+        btn.disabled = false;
+        if(res && res.success) {
+          showModal("Pedido Enviado", "Tu pedido fue registrado en Pañol.", "✅");
+          cartItems = [];
+          renderCart();
+          document.getElementById('unitInput').value = "";
+          document.getElementById('otInput').value = "";
+          document.getElementById('semiUnitInput').value = "";
+          document.getElementById('semiOtInput').value = "";
+          refreshOrders();
+        } else {
+          showModal("Error", (res && res.error) || "No se pudo registrar el pedido.", "⛔");
+        }
+      }).submitBatchRequest(payload);
+    }
+
+    // ===========================================
+    // 7. MONITOR DE PEDIDOS EN VIVO & DEVOLUCIONES
+    // ===========================================
+    function toggleHistory(hist) {
+      showHistory = hist;
+      document.getElementById('btnActiveOrders').classList.toggle('active', !hist);
+      document.getElementById('btnHistoryOrders').classList.toggle('active', hist);
+      renderOrders(allLoadedOrders);
+    }
+
+    function startAutoUpdate() {
+      refreshOrders();
+      pollMessages();
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+      if (msgTimer) clearInterval(msgTimer);
+      heartbeatTimer = setInterval(refreshOrders, 10000);
+      msgTimer = setInterval(pollMessages, 15000);
+    }
+
+    function refreshOrders() {
+      const opId = document.getElementById('activeOpId').value;
+      if(opId) {
+        google.script.run.withSuccessHandler(orders => {
+          allLoadedOrders = orders || [];
+          renderOrders(allLoadedOrders);
+        }).getMechanicOrders(opId);
+      }
+    }
+
+    // WebSockets listener en vivo
+    if (typeof io !== 'undefined') {
+      try {
+        const socket = io();
+        socket.on('orders_sync', function(orders) {
+          if (Array.isArray(orders)) {
+            allLoadedOrders = orders;
+            renderOrders(allLoadedOrders);
+          }
+        });
+      } catch(e) {}
+    }
+
+    function renderOrders(orders) {
+      const container = document.getElementById('orders-container');
+      if (!Array.isArray(orders)) {
+        container.innerHTML = `<div style='text-align:center; padding:30px; color:#999;'>Cargando datos...</div>`;
+        return;
+      }
+
+      const currentOpId = String(document.getElementById('activeOpId')?.value || '').trim();
+      const currentMechName = String(document.getElementById('activeMechName')?.value || '').toLowerCase().trim();
+
+      // Filtrar por operario
+      let filtered = orders.filter(o => {
+        const rowOpId = String(o.opId || '').trim();
+        const rowOpInfo = String(o.opInfo || '').toLowerCase();
+        const matchOpId = currentOpId && (rowOpId === currentOpId || rowOpInfo.includes(currentOpId));
+        const matchOpName = currentMechName && rowOpInfo.includes(currentMechName);
+        return matchOpId || matchOpName;
+      });
+
+      // Filtrar activos vs historial
+      filtered = filtered.filter(o => {
+        if (showHistory) return o.status === "ENTREGADO" || o.status === "DEVOLUCION";
+        return o.status === "PENDIENTE" || o.status === "LISTO";
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div style='text-align:center; padding:30px; color:#999;'>
+          ${showHistory ? 'Sin pedidos en historial.' : 'No tienes pedidos activos en curso.'}
+        </div>`;
+        return;
+      }
+
+      let html = "";
+      filtered.forEach(o => {
+        let statusBadge = "";
+        let action = "";
+        let statusClass = "status-" + o.status;
+
+        if (o.status === "LISTO") {
+          statusBadge = `<span class="status-badge-tag LISTO">⚡ LISTO</span>`;
+          action = `<span style="color:var(--green-light); font-weight:800; font-size:0.8rem;">📦 En camino</span>`;
+        } else if (o.status === "PENDIENTE") {
+          statusBadge = `<span class="status-badge-tag PENDING">⏳ EN PREPARACIÓN</span>`;
+          action = `<span style="color:var(--text-dim); font-size:0.75rem;">Pañolero preparando...</span>`;
+        } else if (o.status === "ENTREGADO") {
+          statusBadge = `<span class="status-badge-tag ENTREGADO">✅ ENTREGADO</span>`;
+          action = `<button class="btn-return-refund" onclick="tryReturn('${o.reqId}')">↩️ Devolver</button>`;
+        } else if (o.status === "DEVOLUCION") {
+          statusBadge = `<span class="status-badge-tag" style="background:#3b1d1d; color:#fca5a5;">↩️ DEVUELTO</span>`;
+          action = `<span style="font-size:0.75rem; color:#fca5a5;">Stock restaurado</span>`;
+        }
+
+        const itemsHtml = (o.items || []).map(i => {
+          const strike = i.status === "DEVOLUCION" ? "text-decoration:line-through; color:#777;" : "";
+          return `<div style="${strike}">• ${i.name} <strong>x${i.qty}</strong></div>`;
+        }).join('');
+
+        html += `
+          <div class="order-card-row ${statusClass}">
+            <div>
+              ${statusBadge}
+              <div class="order-items-preview">${itemsHtml}</div>
+              <div class="order-meta-info">
+                <strong>${o.reqId}</strong> • OT: ${o.otNumber || 'N/A'} • ${o.unitInfo || ''}
+              </div>
+            </div>
+            <div>${action}</div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    function tryReturn(reqId) {
+      const order = allLoadedOrders.find(o => o.reqId === reqId);
+      if (!order) return;
+
+      const returnableItems = (order.items || []).filter(i => i.status === "ENTREGADO");
+      if (returnableItems.length === 0) return showModal("Atención", "No hay repuestos entregados para devolver.", "⚠️");
+
+      const optionsHtml = returnableItems.map(i => `<option value="${i.name}" data-qty="${i.qty}">${i.name} (Max: ${i.qty})</option>`).join('');
+
+      const htmlContent = `
+        <div style="text-align:left; font-size:0.85rem; color:#aaa; margin-bottom:6px; font-weight:800;">1. Repuesto a Devolver</div>
+        <select id="returnItemSelect" class="input-dark" style="margin-bottom:12px;">${optionsHtml}</select>
+
+        <div style="text-align:left; font-size:0.85rem; color:#aaa; margin-bottom:6px; font-weight:800;">2. Cantidad a Devolver</div>
+        <input type="number" id="returnQtyInput" class="input-dark" value="${returnableItems[0].qty}" min="1" max="${returnableItems[0].qty}" style="max-width:110px; margin-bottom:12px;">
+
+        <div style="text-align:left; font-size:0.85rem; color:#aaa; margin-bottom:6px; font-weight:800;">3. Motivo de la Devolución</div>
+        <input type="text" id="returnReasonInput" class="input-dark" placeholder="Ej. Sobrante, Pieza equivocada...">
+      `;
+
+      showModal("Devolución a Pañol", htmlContent, "↩️", true, () => {
+        const itemName = document.getElementById('returnItemSelect').value;
+        const returnQty = parseInt(document.getElementById('returnQtyInput').value, 10) || 1;
+        const reason = document.getElementById('returnReasonInput').value.trim() || "Devolución desde Box";
+
+        google.script.run.withSuccessHandler(res => {
+          refreshOrders();
+        }).requestRefund(reqId, itemName, reason, returnQty);
+      });
+    }
+
+    // ===========================================
+    // 8. MODALES GENÉRICOS
+    // ===========================================
+    function showModal(title, msg, icon, isConfirm = false, callback = null) {
+      document.getElementById('modalTitle').innerText = title;
+      document.getElementById('modalBody').innerHTML = msg;
+      const btnCancel = document.getElementById('modalBtnCancel');
+      const btnConfirm = document.getElementById('modalBtnConfirm');
+
+      btnCancel.style.display = isConfirm ? "block" : "none";
+      btnConfirm.innerText = isConfirm ? "CONFIRMAR" : "ENTENDIDO";
+
+      const newConfirm = btnConfirm.cloneNode(true);
+      btnConfirm.parentNode.replaceChild(newConfirm, btnConfirm);
+
+      newConfirm.onclick = () => {
+        closeModal();
+        if(callback) callback();
+      };
+
+      document.getElementById('customModal').classList.add('open');
+    }
+
+    function closeModal() {
+      document.getElementById('customModal').classList.remove('open');
+    }
+  </script>
+</body>
+</html>
