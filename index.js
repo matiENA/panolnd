@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const { Server } = require('socket.io');
 const { google } = require('googleapis');
 const { extractCleanPlate } = require('./plateNormalizer');
-const { extractPlates, processSingleOtUpdate, syncFullOtDatabase } = require('./otSyncService');
+const { extractPlates, processSingleOtUpdate, syncFullOtDatabase, syncCanonicalFleetToDbOtList } = require('./otSyncService');
 const {
   syncOtsToTasksDatabase,
   startAutomaticTaskSync,
@@ -994,12 +994,13 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
       const users = { "1": "Ema", "6": "Matias" };
       result = users[key] || ("Operador " + key);
     }
-    else if (action === 'syncOtList') {
-      console.log('🔄 Ejecutando sincronización masiva de OTs vía RPC...');
-      result = await syncFullOtDatabase({
+    else if (action === 'syncCanonicalFleet' || action === 'syncOtList') {
+      console.log('🛡️ Ejecutando blindaje y sincronización canónica de DB_OT_LIST vía RPC...');
+      result = await syncCanonicalFleetToDbOtList({
         sheetsClient: sheets,
-        sourceSpreadsheetId: SOURCE_SPREADSHEET_ID,
-        targetSpreadsheetId: SPREADSHEET_ID
+        targetSpreadsheetId: SPREADSHEET_ID,
+        movimientosSpreadsheetId: process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8',
+        formSpreadsheetId: SOURCE_SPREADSHEET_ID
       });
       io.emit('ot_sync_completed', result);
     }
@@ -1038,6 +1039,22 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
   } catch (e) {
     console.error('❌ RPC Error en ' + action + ':', e.message);
     res.json({ error: e.message });
+  }
+});
+
+// === ENDPOINTS REST: FLOTA CANÓNICA & DB_OT_LIST ===
+app.post('/api/fleet/sync', async (req, res) => {
+  try {
+    const result = await syncCanonicalFleetToDbOtList({
+      sheetsClient: sheets,
+      targetSpreadsheetId: SPREADSHEET_ID,
+      movimientosSpreadsheetId: process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8',
+      formSpreadsheetId: SOURCE_SPREADSHEET_ID
+    });
+    io.emit('ot_sync_completed', result);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

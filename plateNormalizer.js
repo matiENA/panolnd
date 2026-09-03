@@ -1,19 +1,46 @@
-/**
- * Extrae una patente válida ignorando texto basura.
- * @param {string} dirtyString - El valor crudo del formulario
- * @returns {string|null} - La patente limpia o null
- */
 function extractCleanPlate(dirtyString) {
-  if (!dirtyString) return null;
-
-  // Sanitización: Mayúsculas y eliminación de espacios, guiones y puntos
-  const normalizedString = String(dirtyString).toUpperCase().replace(/[\s\-_.]/g, '');
-
-  // Regex para Patentes Argentinas (Mercosur o Tradicionales)
-  const plateRegex = /([A-Z]{2}\d{3}[A-Z]{2}|[A-Z]{3}\d{3})/g;
-
-  const match = normalizedString.match(plateRegex);
-  return match ? match[0] : null;
+  const plates = extractPlates(dirtyString);
+  return plates.length > 0 ? plates[0] : null;
 }
 
-module.exports = { extractCleanPlate };
+/**
+ * Extrae patentes válidas argentinas desde cualquier string crudo o sucio.
+ * Soporta formato Mercosur (AA123BB) y Tradicional (AAA123).
+ * Descarta falsos positivos de nombres de maquinaria o palabras compuestas.
+ * @param {string} rawString 
+ * @returns {string[]} Lista de patentes limpias únicas
+ */
+function extractPlates(rawString) {
+  if (!rawString) return [];
+  const upper = String(rawString).toUpperCase().trim();
+
+  const cleaned = upper
+    .replace(/\b(BOBCAT|CATERPILLAR|CARGADORA|MOTO|MOTONIVELADORA|MANITU|ELEVADOR|IZUZU|CHASIS|INTERNO|TALLER|ACOPLADO|PALA|GRUPO)\b/g, ' ')
+    .trim();
+
+  const tokens = cleaned.split(/[\/+,;\n\r\t()\[\]]+/);
+  const plates = [];
+
+  for (const token of tokens) {
+    const t = token.trim();
+    if (!t) continue;
+
+    const mercosurMatch = t.match(/\b([A-Z]{2})[\s\-_.]*(\d{3})[\s\-_.]*([A-Z]{2})\b/);
+    if (mercosurMatch) {
+      const p = `${mercosurMatch[1]}${mercosurMatch[2]}${mercosurMatch[3]}`;
+      if (!plates.includes(p)) plates.push(p);
+      continue;
+    }
+
+    const tradMatch = t.match(/\b([A-Z]{3})[\s\-_.]*(\d{3})\b/);
+    if (tradMatch) {
+      const p = `${tradMatch[1]}${tradMatch[2]}`;
+      if (!plates.includes(p)) plates.push(p);
+      continue;
+    }
+  }
+
+  return plates;
+}
+
+module.exports = { extractCleanPlate, extractPlates };

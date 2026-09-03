@@ -126,29 +126,21 @@ async function processSingleOtUpdate({ sheetsClient, targetSpreadsheetId, dirtyP
     }
   }
 
-  // Si recorrimos toda la DB y no hubo coincidencias, creamos UNA fila nueva completa
+  // Si no hubo coincidencias en la flota canónica activa, BLINDAMOS DB_OT_LIST y omitimos inserción
   if (!dbUpdated) {
-    matchedPlate = tractorPlate;
-    matchedType = "NEW_ENTRY";
-
-    // Append de [tractor, cleanOt, semi, "", "GENERAL", "", ""]
-    const appendRes = await sheetsClient.spreadsheets.values.append({
-      spreadsheetId: targetSpreadsheetId,
-      range: "'DB_OT_LIST'!A:G",
-      valueInputOption: 'USER_ENTERED',
-      insertDataOption: 'INSERT_ROWS',
-      requestBody: {
-        values: [[tractorPlate, cleanOt, semiPlate, "", "GENERAL", "", ""]]
-      }
-    });
-
-    targetRow = appendRes.data.updates ? appendRes.data.updates.updatedRange : 'APPENDED';
-    dbUpdated = true;
+    console.warn(`🛡️ [Blindaje DB_OT_LIST] Patente (${dirtyPlate} -> ${matches.join(', ')}) no pertenece a la flota canónica activa. Inserción omitida.`);
+    return {
+      success: false,
+      action: 'IGNORED_NOT_IN_CANONICAL_FLEET',
+      detectedPlates: matches,
+      otNumber: cleanOt,
+      message: 'La patente no pertenece a la flota canónica activa de DB_OT_LIST'
+    };
   }
 
   return {
     success: true,
-    action: matchedType === 'NEW_ENTRY' ? 'INSERTED' : 'UPDATED',
+    action: 'UPDATED',
     row: targetRow,
     matchedType: matchedType,
     matchedPlate: matchedPlate,
@@ -352,9 +344,12 @@ async function syncFullOtDatabase({ sheetsClient, sourceSpreadsheetId, targetSpr
   };
 }
 
+const { syncCanonicalFleetToDbOtList } = require('./fleetMasterSyncService');
+
 module.exports = {
   extractPlates,
   processSingleOtUpdate,
-  syncFullOtDatabase
+  syncFullOtDatabase,
+  syncCanonicalFleetToDbOtList
 };
 
