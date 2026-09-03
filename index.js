@@ -168,7 +168,10 @@ async function syncDataFromSheets(force = false) {
     });
 
     const rows = transRes.data.values || [];
-    if (rows.length < 2) return [];
+    if (rows.length < 2) {
+      ordersCache = [];
+      return ordersCache;
+    }
 
     const ordersMap = {};
     for (let i = Math.max(1, rows.length - 1000); i < rows.length; i++) {
