@@ -18,7 +18,6 @@ const DB_TASKS_HEADERS = [
   'TASK_ID',
   'OT_NUMBER',
   'DOMINIO',
-  'INTERNO_TIPO',
   'RUBRO',
   'DESCRIPCION',
   'UBICACION',
@@ -33,7 +32,6 @@ const COLD_STORAGE_HEADERS = [
   'TASK_ID',
   'OT_NUMBER',
   'DOMINIO',
-  'INTERNO_TIPO',
   'RUBRO',
   'DESCRIPCION',
   'UBICACION',
@@ -92,29 +90,29 @@ async function ensureSheetsStructure(sheetsClient, spreadsheetId) {
       console.log(`✅ Pestañas inicializadas: ${requests.map(r => r.addSheet.properties.title).join(', ')}`);
     }
 
-    // Asegurar encabezados en DB_OT_TASKS
+    // Asegurar encabezados en DB_OT_TASKS (11 columnas A1:K1)
     const tasksRes = await sheetsClient.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${DB_TASKS_TAB}'!A1:L1`
+      range: `'${DB_TASKS_TAB}'!A1:K1`
     });
     if (!tasksRes.data.values || tasksRes.data.values.length === 0) {
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${DB_TASKS_TAB}'!A1:L1`,
+        range: `'${DB_TASKS_TAB}'!A1:K1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [DB_TASKS_HEADERS] }
       });
     }
 
-    // Asegurar encabezados en HISTORICO_COLD
+    // Asegurar encabezados en HISTORICO_COLD (14 columnas A1:N1)
     const coldRes = await sheetsClient.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${COLD_STORAGE_TAB}'!A1:O1`
+      range: `'${COLD_STORAGE_TAB}'!A1:N1`
     });
     if (!coldRes.data.values || coldRes.data.values.length === 0) {
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${COLD_STORAGE_TAB}'!A1:O1`,
+        range: `'${COLD_STORAGE_TAB}'!A1:N1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [COLD_STORAGE_HEADERS] }
       });
@@ -156,33 +154,20 @@ function parseTasksFromString(rawTasksString) {
 }
 
 /**
- * Parsea el dominio e interno/tipo desde cadenas como "AG147LK | 727 (T)" o "AG172II | 732 (A)".
+ * Parsea el dominio desde cadenas como "AG147LK | 727 (T)" o "AG172II | 732 (A)".
+ */
+function parseDominio(rawDominioString) {
+  if (!rawDominioString) return '';
+  const parts = String(rawDominioString).split('|').map(s => s.trim());
+  return parts[0] ? parts[0].toUpperCase().replace(/[\s\-_.]/g, '') : '';
+}
+
+/**
+ * Función de compatibilidad
  */
 function parseDominioAndInterno(rawDominioString) {
-  const result = {
-    plate: '',
-    interno: 'S/D',
-    tipo: 'TRACTOR'
-  };
-
-  if (!rawDominioString) return result;
-
-  const parts = String(rawDominioString).split('|').map(s => s.trim());
-  result.plate = parts[0] ? parts[0].toUpperCase().replace(/[\s\-_.]/g, '') : '';
-
-  if (parts.length > 1) {
-    result.interno = parts[1] || '';
-    const upper = result.interno.toUpperCase();
-    if (upper.includes('(A)') || upper.includes('SEMI') || upper.includes('ACOPLADO')) {
-      result.tipo = 'SEMI';
-    } else if (upper.includes('(T)') || upper.includes('TRACTOR')) {
-      result.tipo = 'TRACTOR';
-    }
-  } else {
-    result.tipo = 'TRACTOR';
-  }
-
-  return result;
+  const plate = parseDominio(rawDominioString);
+  return { plate, interno: '', tipo: 'TRACTOR' };
 }
 
 /**
@@ -201,7 +186,7 @@ function makeTaskFingerprint(otNumber, plate, rubro, descripcion) {
  * - NO sobreescribe ninguna fila existente.
  * - NO toca ninguna fecha ni horario.
  * - NO procesa tareas ya existentes en DB_OT_TASKS ni en HISTORICO_COLD.
- * - Solo inserta (APPEND) tareas nuevas.
+ * - Solo inserta (APPEND) tareas nuevas sin columna INTERNO_TIPO.
  */
 async function syncOtsToTasksDatabase({ sheetsClient, spreadsheetId }) {
   if (!sheetsClient || !spreadsheetId) throw new Error('Cliente o Spreadsheet ID inválido');
@@ -228,17 +213,17 @@ async function syncOtsToTasksDatabase({ sheetsClient, spreadsheetId }) {
       return { success: true, count: 0, message: "No hay datos en la pestaña 'ots'" };
     }
 
-    // 2. Leer tareas existentes en 'DB_OT_TASKS'
+    // 2. Leer tareas existentes en 'DB_OT_TASKS' (A:E para indexar TASK_ID, OT, DOMINIO, RUBRO, DESCRIPCION)
     const currentTasksRes = await sheetsClient.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${DB_TASKS_TAB}'!A2:F1500`
+      range: `'${DB_TASKS_TAB}'!A2:E1500`
     });
     const currentTaskRows = currentTasksRes.data.values || [];
 
     // 3. Leer tareas ya archivadas en 'HISTORICO_COLD' (para no re-crear OTs cerradas)
     const coldTasksRes = await sheetsClient.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${COLD_STORAGE_TAB}'!A2:F3000`
+      range: `'${COLD_STORAGE_TAB}'!A2:E3000`
     });
     const coldTaskRows = coldTasksRes.data.values || [];
 
@@ -250,8 +235,8 @@ async function syncOtsToTasksDatabase({ sheetsClient, spreadsheetId }) {
       const taskId = String(r[0] || '').trim();
       const ot = String(r[1] || '').trim();
       const plate = String(r[2] || '').trim();
-      const rubro = String(r[4] || '').trim();
-      const desc = String(r[5] || '').trim();
+      const rubro = String(r[3] || '').trim();
+      const desc = String(r[4] || '').trim();
       if (taskId) existingTaskIds.add(taskId);
       if (ot && desc) existingFingerprints.add(makeTaskFingerprint(ot, plate, rubro, desc));
     });
@@ -260,8 +245,8 @@ async function syncOtsToTasksDatabase({ sheetsClient, spreadsheetId }) {
       const taskId = String(r[0] || '').trim();
       const ot = String(r[1] || '').trim();
       const plate = String(r[2] || '').trim();
-      const rubro = String(r[4] || '').trim();
-      const desc = String(r[5] || '').trim();
+      const rubro = String(r[3] || '').trim();
+      const desc = String(r[4] || '').trim();
       if (taskId) existingTaskIds.add(taskId);
       if (ot && desc) existingFingerprints.add(makeTaskFingerprint(ot, plate, rubro, desc));
     });
@@ -278,7 +263,7 @@ async function syncOtsToTasksDatabase({ sheetsClient, spreadsheetId }) {
       if (!rawOt || !rawTasks) continue;
 
       const cleanOt = rawOt.replace(/^0+/, '') || rawOt;
-      const { plate, interno, tipo } = parseDominioAndInterno(rawDominio);
+      const plate = parseDominio(rawDominio);
       const parsedTaskList = parseTasksFromString(rawTasks);
 
       parsedTaskList.forEach((item, idx) => {
@@ -291,12 +276,11 @@ async function syncOtsToTasksDatabase({ sheetsClient, spreadsheetId }) {
           return;
         }
 
-        // Es una tarea genuinamente nueva
+        // Es una tarea genuinamente nueva (11 columnas: A:K)
         newRowsToAppend.push([
           taskId,
           cleanOt,
           plate,
-          `${interno} (${tipo})`,
           item.rubro,
           item.descripcion,
           '', // Ubicación (vacía para asignar)
@@ -317,7 +301,7 @@ async function syncOtsToTasksDatabase({ sheetsClient, spreadsheetId }) {
     if (newRowsToAppend.length > 0) {
       await sheetsClient.spreadsheets.values.append({
         spreadsheetId,
-        range: `'${DB_TASKS_TAB}'!A:L`,
+        range: `'${DB_TASKS_TAB}'!A:K`,
         valueInputOption: 'USER_ENTERED',
         insertDataOption: 'INSERT_ROWS',
         requestBody: { values: newRowsToAppend }
@@ -378,15 +362,52 @@ function startAutomaticTaskSync({ sheetsClient, spreadsheetId, io, intervalMinut
 
 /**
  * Obtiene todas las tareas activas de 'DB_OT_TASKS' estructuradas en Equipos (Tractor + Semi).
+ * La diferenciación y unión entre Tractor y Semi se sirve directamente por la disposición de Col A y Col C en DB_OT_LIST.
  */
 async function getActiveTasksBoard({ sheetsClient, spreadsheetId }) {
   if (!sheetsClient || !spreadsheetId) return { units: [] };
 
   await ensureSheetsStructure(sheetsClient, spreadsheetId);
 
+  // 1. Mapeo maestro de diferenciación y unión Tractor/Semi desde DB_OT_LIST (Cols A y C)
+  const plateToType = new Map();
+  const pairByPlate = new Map();
+  const pairByOt = new Map();
+
+  try {
+    const otListRes = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: "'DB_OT_LIST'!A2:C"
+    });
+    const otListRows = otListRes.data.values || [];
+
+    otListRows.forEach(r => {
+      const tractor = String(r[0] || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+      const ot = String(r[1] || '').trim();
+      const semi = String(r[2] || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+
+      const pair = { tractor, semi, ot };
+
+      if (tractor) {
+        plateToType.set(tractor, 'TRACTOR');
+        pairByPlate.set(tractor, pair);
+      }
+      if (semi) {
+        plateToType.set(semi, 'SEMI');
+        pairByPlate.set(semi, pair);
+      }
+      if (ot) {
+        pairByOt.set(ot, pair);
+      }
+    });
+  } catch (err) {
+    console.error('Error al cargar DB_OT_LIST para mapeo Tractor/Semi:', err.message);
+  }
+
+  // 2. Leer tareas activas desde DB_OT_TASKS (11 columnas: A:K)
   const res = await sheetsClient.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${DB_TASKS_TAB}'!A2:L1500`
+    range: `'${DB_TASKS_TAB}'!A2:K1500`
   });
 
   const rows = res.data.values || [];
@@ -395,20 +416,29 @@ async function getActiveTasksBoard({ sheetsClient, spreadsheetId }) {
   rows.forEach(r => {
     const taskId = String(r[0] || '').trim();
     const otNumber = String(r[1] || '').trim();
-    const dominio = String(r[2] || '').trim();
-    const internoTipo = String(r[3] || '').trim();
-    const rubro = String(r[4] || '').trim();
-    const desc = String(r[5] || '').trim();
-    const ubicacion = String(r[6] || '').trim();
-    const operario = String(r[7] || '').trim();
-    const asignado = String(r[8] || '').trim();
-    const empezo = String(r[9] || '').trim();
-    const termino = String(r[10] || '').trim();
-    const estado = String(r[11] || 'PENDIENTE').trim();
+    const dominio = String(r[2] || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+    const rubro = String(r[3] || '').trim();
+    const desc = String(r[4] || '').trim();
+    const ubicacion = String(r[5] || '').trim();
+    const operario = String(r[6] || '').trim();
+    const asignado = String(r[7] || '').trim();
+    const empezo = String(r[8] || '').trim();
+    const termino = String(r[9] || '').trim();
+    const estado = String(r[10] || 'PENDIENTE').trim();
 
     if (!taskId || !otNumber) return;
 
-    const isSemi = internoTipo.toUpperCase().includes('SEMI') || internoTipo.toUpperCase().includes('(A)');
+    // Diferenciación confiable basada en DB_OT_LIST (Cols A y C)
+    let type = plateToType.get(dominio);
+    const pair = pairByPlate.get(dominio) || pairByOt.get(otNumber) || {};
+
+    if (!type) {
+      if (pair.semi === dominio) type = 'SEMI';
+      else if (pair.tractor === dominio) type = 'TRACTOR';
+      else type = 'TRACTOR'; // Fallback seguro
+    }
+
+    const isSemi = (type === 'SEMI');
     const groupKey = otNumber;
 
     if (!unitsMap.has(groupKey)) {
@@ -416,12 +446,25 @@ async function getActiveTasksBoard({ sheetsClient, spreadsheetId }) {
         id: `unit_${otNumber}`,
         ot: otNumber,
         status: 'progreso',
-        tractor: { plate: isSemi ? '' : dominio, ot: otNumber, tasks: [] },
-        semi: { plate: isSemi ? dominio : '', ot: otNumber, tasks: [] }
+        tractor: {
+          plate: pair.tractor || (!isSemi ? dominio : ''),
+          ot: pair.ot || otNumber,
+          tasks: []
+        },
+        semi: {
+          plate: pair.semi || (isSemi ? dominio : ''),
+          ot: pair.ot || otNumber,
+          tasks: []
+        }
       });
     }
 
     const unit = unitsMap.get(groupKey);
+
+    // Asegurar patentes del par desde DB_OT_LIST
+    if (pair.tractor && !unit.tractor.plate) unit.tractor.plate = pair.tractor;
+    if (pair.semi && !unit.semi.plate) unit.semi.plate = pair.semi;
+
     const taskObj = {
       id: taskId,
       sector: rubro,
@@ -469,10 +512,10 @@ async function updateTaskExecution({ sheetsClient, spreadsheetId, taskId, ubicac
     throw new Error('Parámetros requeridos: sheetsClient, spreadsheetId, taskId');
   }
 
-  // 1. Buscar la fila exacta en DB_OT_TASKS
+  // 1. Buscar la fila exacta en DB_OT_TASKS (11 columnas A:K)
   const res = await sheetsClient.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${DB_TASKS_TAB}'!A:L`
+    range: `'${DB_TASKS_TAB}'!A:K`
   });
 
   const rows = res.data.values || [];
@@ -492,13 +535,14 @@ async function updateTaskExecution({ sheetsClient, spreadsheetId, taskId, ubicac
   }
 
   // 2. Preservar valores previos si el parámetro no viene definido
-  const newUbicacion = ubicacion !== undefined ? ubicacion : (currentRowData[6] || '');
-  const newOperario = operario !== undefined ? operario : (currentRowData[7] || '');
-  const newAsignado = asignado !== undefined ? asignado : (currentRowData[8] || '');
-  const newEmpezo = empezo !== undefined ? empezo : (currentRowData[9] || '');
-  const newTermino = termino !== undefined ? termino : (currentRowData[10] || '');
+  // Indices: 5: UBICACION, 6: OPERARIO, 7: ASIGNADO, 8: EMPEZO, 9: TERMINO, 10: ESTADO
+  const newUbicacion = ubicacion !== undefined ? ubicacion : (currentRowData[5] || '');
+  const newOperario = operario !== undefined ? operario : (currentRowData[6] || '');
+  const newAsignado = asignado !== undefined ? asignado : (currentRowData[7] || '');
+  const newEmpezo = empezo !== undefined ? empezo : (currentRowData[8] || '');
+  const newTermino = termino !== undefined ? termino : (currentRowData[9] || '');
 
-  let newEstado = estado !== undefined ? estado : (currentRowData[11] || 'PENDIENTE');
+  let newEstado = estado !== undefined ? estado : (currentRowData[10] || 'PENDIENTE');
   if (newTermino && newTermino.trim() !== '') {
     newEstado = 'COMPLETADA';
   } else if (newEmpezo && newEmpezo.trim() !== '') {
@@ -507,10 +551,10 @@ async function updateTaskExecution({ sheetsClient, spreadsheetId, taskId, ubicac
     newEstado = 'ASIGNADA';
   }
 
-  // 3. Escribir actualización en rango G{row}:L{row}
+  // 3. Escribir actualización en rango F{row}:K{row}
   await sheetsClient.spreadsheets.values.update({
     spreadsheetId,
-    range: `'${DB_TASKS_TAB}'!G${targetRowIndex}:L${targetRowIndex}`,
+    range: `'${DB_TASKS_TAB}'!F${targetRowIndex}:K${targetRowIndex}`,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
       values: [[newUbicacion, newOperario, newAsignado, newEmpezo, newTermino, newEstado]]
@@ -553,7 +597,7 @@ async function updateTaskExecution({ sheetsClient, spreadsheetId, taskId, ubicac
 async function checkAndArchiveIfOtFinished({ sheetsClient, spreadsheetId, otNumber, io }) {
   const res = await sheetsClient.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${DB_TASKS_TAB}'!A:L`
+    range: `'${DB_TASKS_TAB}'!A:K`
   });
 
   const rows = res.data.values || [];
@@ -569,15 +613,15 @@ async function checkAndArchiveIfOtFinished({ sheetsClient, spreadsheetId, otNumb
 
   if (otRows.length === 0) return { archived: false };
 
-  // Verificar si todas tienen fecha TERMINO o están marcadas completadas/descartadas
+  // Verificar si todas tienen fecha TERMINO o están marcadas completadas/descartadas (Índice 9 y 10)
   const allCompleted = otRows.every(r => {
-    const term = String(r[10] || '').trim();
-    const st = String(r[11] || '').toUpperCase().trim();
+    const term = String(r[9] || '').trim();
+    const st = String(r[10] || '').toUpperCase().trim();
     return term !== '' || st === 'DESCARTADA' || st === 'COMPLETADA';
   });
 
   if (!allCompleted) {
-    return { archived: false, pendingCount: otRows.filter(r => !r[10]).length };
+    return { archived: false, pendingCount: otRows.filter(r => !r[9]).length };
   }
 
   console.log(`📦 ¡OT ${otNumber} completada al 100%! Archivando en Cold Storage (${COLD_STORAGE_TAB})...`);
@@ -587,9 +631,9 @@ async function checkAndArchiveIfOtFinished({ sheetsClient, spreadsheetId, otNumb
   const coldRows = otRows.map(r => {
     let duracionMin = 0;
     try {
-      if (r[9] && r[10]) {
-        const tIni = new Date(r[9]).getTime();
-        const tFin = new Date(r[10]).getTime();
+      if (r[8] && r[9]) {
+        const tIni = new Date(r[8]).getTime();
+        const tFin = new Date(r[9]).getTime();
         if (!isNaN(tIni) && !isNaN(tFin) && tFin >= tIni) {
           duracionMin = Math.round((tFin - tIni) / 60000);
         }
@@ -600,25 +644,24 @@ async function checkAndArchiveIfOtFinished({ sheetsClient, spreadsheetId, otNumb
       r[0], // TASK_ID
       r[1], // OT_NUMBER
       r[2], // DOMINIO
-      r[3], // INTERNO_TIPO
-      r[4], // RUBRO
-      r[5], // DESCRIPCION
-      r[6], // UBICACION
-      r[7], // OPERARIO
-      r[8], // ASIGNADO
-      r[9], // EMPEZO
-      r[10], // TERMINO
-      r[11] || 'COMPLETADA', // ESTADO
+      r[3], // RUBRO
+      r[4], // DESCRIPCION
+      r[5], // UBICACION
+      r[6], // OPERARIO
+      r[7], // ASIGNADO
+      r[8], // EMPEZO
+      r[9], // TERMINO
+      r[10] || 'COMPLETADA', // ESTADO
       archiveTimestamp, // FECHA_ARCHIVADO
       duracionMin, // DURACION_MINUTOS
       'Archivado automático tras completar 100% de tareas' // OBSERVACIONES
     ];
   });
 
-  // 1. Append a HISTORICO_COLD
+  // 1. Append a HISTORICO_COLD (14 columnas A:N)
   await sheetsClient.spreadsheets.values.append({
     spreadsheetId,
-    range: `'${COLD_STORAGE_TAB}'!A:O`,
+    range: `'${COLD_STORAGE_TAB}'!A:N`,
     valueInputOption: 'USER_ENTERED',
     insertDataOption: 'INSERT_ROWS',
     requestBody: { values: coldRows }
@@ -670,7 +713,7 @@ async function getHistoricalTasks({ sheetsClient, spreadsheetId, limit = 500 }) 
 
   const res = await sheetsClient.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${COLD_STORAGE_TAB}'!A2:O${limit + 1}`
+    range: `'${COLD_STORAGE_TAB}'!A2:N${limit + 1}`
   });
 
   return {
@@ -685,6 +728,7 @@ module.exports = {
   OTS_SOURCE_TAB,
   ensureSheetsStructure,
   parseTasksFromString,
+  parseDominio,
   parseDominioAndInterno,
   syncOtsToTasksDatabase,
   startAutomaticTaskSync,
