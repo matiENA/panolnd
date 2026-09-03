@@ -14,6 +14,11 @@ function extractPlates(rawString) {
   if (!rawString) return [];
   const upper = String(rawString).toUpperCase().trim();
 
+  // Excepción permanente para pedidos no destinados a unidad (Taller / General)
+  if (upper.includes('INTERNO TALLER')) {
+    return ['INTERNO TALLER'];
+  }
+
   const cleaned = upper
     .replace(/\b(BOBCAT|CATERPILLAR|CARGADORA|MOTO|MOTONIVELADORA|MANITU|ELEVADOR|IZUZU|CHASIS|INTERNO|TALLER|ACOPLADO|PALA|GRUPO)\b/g, ' ')
     .trim();

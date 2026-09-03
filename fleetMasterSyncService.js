@@ -175,22 +175,58 @@ async function syncCanonicalFleetToDbOtList({
   const startTime = Date.now();
   console.log('🛡️ INICIANDO BLINDAJE DE DB_OT_LIST...');
 
-  // 1. Preservar marcas conocidas de la base actual
+  // 1. Preservar marcas conocidas y excepciones manuales del sistema (ej: INTERNO TALLER)
   const existingRes = await sheetsClient.spreadsheets.values.get({
     spreadsheetId: targetSpreadsheetId,
     range: "'DB_OT_LIST'!A2:G"
   });
   const existingRows = existingRes.data.values || [];
   const brandMap = new Map();
+  const manualExceptions = new Map();
 
   existingRows.forEach(r => {
-    const t = cleanPlate(r[0]);
-    const s = cleanPlate(r[2]);
+    const rawT = String(r[0] || '').trim();
+    const rawS = String(r[2] || '').trim();
+    const ot = String(r[1] || '').trim();
+    const semiOt = String(r[3] || '').trim();
+    const prod = String(r[4] || '').trim();
     const marcaT = String(r[5] || '').trim();
     const marcaS = String(r[6] || '').trim();
-    if (t && marcaT) brandMap.set(t, marcaT);
-    if (s && marcaS) brandMap.set(s, marcaS);
+
+    const tClean = cleanPlate(rawT);
+    const sClean = cleanPlate(rawS);
+    if (tClean && marcaT) brandMap.set(tClean, marcaT);
+    if (sClean && marcaS) brandMap.set(sClean, marcaS);
+
+    // Detectar y preservar excepciones permanentes como INTERNO TALLER
+    const upperT = rawT.toUpperCase();
+    const upperS = rawS.toUpperCase();
+    if (upperT === 'INTERNO TALLER' || upperS === 'INTERNO TALLER' || upperT.startsWith('INTERNO') || upperS.startsWith('INTERNO')) {
+      const key = `${upperT}__${upperS}`;
+      manualExceptions.set(key, {
+        tractor: rawT || 'INTERNO TALLER',
+        otNumber: ot,
+        semi: rawS || 'INTERNO TALLER',
+        semiOt: semiOt,
+        producto: prod || 'TALLER',
+        marca: marcaT,
+        marcaSemi: marcaS
+      });
+    }
   });
+
+  // Regla fija: Garantizar que la excepción "INTERNO TALLER" siempre esté presente
+  if (!manualExceptions.has('INTERNO TALLER__INTERNO TALLER')) {
+    manualExceptions.set('INTERNO TALLER__INTERNO TALLER', {
+      tractor: 'INTERNO TALLER',
+      otNumber: '',
+      semi: 'INTERNO TALLER',
+      semiOt: '',
+      producto: 'TALLER',
+      marca: '',
+      marcaSemi: ''
+    });
+  }
 
   // 2. Extraer Flota Canónica
   const { tabName, fleet } = await extractCanonicalFleet({
@@ -235,14 +271,27 @@ async function syncCanonicalFleetToDbOtList({
     ]);
   });
 
-  // 5. Escritura Atómica en DB_OT_LIST: Limpieza de filas obsoletas + Escritura canónica
-  // Limpiar rango A2:Z3000 para remover cualquier residuo anterior
-  await sheetsClient.spreadsheets.values.clear({
-    spreadsheetId: targetSpreadsheetId,
-    range: 'DB_OT_LIST!A2:Z3000'
+  // Regla de Negocio: Inyectar al final las excepciones manuales del sistema protegidas
+  manualExceptions.forEach(ex => {
+    canonicalRows.push([
+      ex.tractor,
+      ex.otNumber || '',
+      ex.semi,
+      ex.semiOt || '',
+      ex.producto || 'TALLER',
+      ex.marca || '',
+      ex.marcaSemi || ''
+    ]);
   });
 
-  // Escribir las filas limpias
+  // 5. Escritura Atómica en DB_OT_LIST: Limpieza de filas obsoletas + Escritura canónica
+  // Limpiar rango A2:Z5000 para remover cualquier residuo anterior
+  await sheetsClient.spreadsheets.values.clear({
+    spreadsheetId: targetSpreadsheetId,
+    range: 'DB_OT_LIST!A2:Z5000'
+  });
+
+  // Escribir las filas limpias protegidas
   await sheetsClient.spreadsheets.values.update({
     spreadsheetId: targetSpreadsheetId,
     range: `'DB_OT_LIST'!A2:G${canonicalRows.length + 1}`,
