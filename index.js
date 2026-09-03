@@ -1158,11 +1158,13 @@ app.post('/webhook/nueva-ot', async (req, res) => {
 // Endpoint manual / cron para sincronización masiva de OTs
 app.all('/api/sync-ots', async (req, res) => {
   try {
-    console.log('🔄 Disparando sincronización masiva de OTs desde /api/sync-ots...');
-    const result = await syncFullOtDatabase({
+    console.log('🛡️ Disparando sincronización canónica de OTs desde /api/sync-ots...');
+    const result = await syncCanonicalFleetToDbOtList({
       sheetsClient: sheets,
       sourceSpreadsheetId: SOURCE_SPREADSHEET_ID,
-      targetSpreadsheetId: SPREADSHEET_ID
+      targetSpreadsheetId: SPREADSHEET_ID,
+      movimientosSpreadsheetId: process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8',
+      formSpreadsheetId: SOURCE_SPREADSHEET_ID
     });
     io.emit('ot_sync_completed', result);
     res.json(result);
@@ -1186,11 +1188,13 @@ if (OT_SYNC_INTERVAL_MINUTES > 0) {
   const syncIntervalMs = OT_SYNC_INTERVAL_MINUTES * 60 * 1000;
   setInterval(async () => {
     try {
-      console.log(`⏰ Ejecución programada de sincronización de OTs (cada ${OT_SYNC_INTERVAL_MINUTES} min)...`);
-      const result = await syncFullOtDatabase({
+      console.log(`⏰ Ejecución programada de sincronización canónica de OTs (cada ${OT_SYNC_INTERVAL_MINUTES} min)...`);
+      const result = await syncCanonicalFleetToDbOtList({
         sheetsClient: sheets,
         sourceSpreadsheetId: SOURCE_SPREADSHEET_ID,
-        targetSpreadsheetId: SPREADSHEET_ID
+        targetSpreadsheetId: SPREADSHEET_ID,
+        movimientosSpreadsheetId: process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8',
+        formSpreadsheetId: SOURCE_SPREADSHEET_ID
       });
       io.emit('ot_sync_completed', result);
     } catch (e) {
@@ -1206,11 +1210,13 @@ server.listen(PORT, async () => {
 
   // Sincronización inicial de OTs al arrancar
   try {
-    console.log('🚀 Ejecutando sincronización inicial de OTs al arrancar servidor...');
-    const otSyncRes = await syncFullOtDatabase({
+    console.log('🚀 Ejecutando sincronización inicial canónica de OTs al arrancar servidor...');
+    const otSyncRes = await syncCanonicalFleetToDbOtList({
       sheetsClient: sheets,
       sourceSpreadsheetId: SOURCE_SPREADSHEET_ID,
-      targetSpreadsheetId: SPREADSHEET_ID
+      targetSpreadsheetId: SPREADSHEET_ID,
+      movimientosSpreadsheetId: process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8',
+      formSpreadsheetId: SOURCE_SPREADSHEET_ID
     });
     console.log('✅ Sincronización inicial de OTs finalizada:', otSyncRes);
   } catch (e) {

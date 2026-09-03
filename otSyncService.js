@@ -151,197 +151,22 @@ async function processSingleOtUpdate({ sheetsClient, targetSpreadsheetId, dirtyP
 }
 
 /**
- * Sincronización masiva de OTs (Batch / Cron) desde el formulario de origen hacia DB_OT_LIST.
- * Extrae todas las respuestas históricas y recientes, actualiza OTs existentes,
- * completa celdas vacías e inyecta nuevas patentes/unidades que no existían en DB_OT_LIST.
- * @param {object} params
- * @param {object} params.sheetsClient - Cliente autenticado de Google Sheets
- * @param {string} params.sourceSpreadsheetId - ID del spreadsheet de respuestas (1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk)
- * @param {string} params.targetSpreadsheetId - ID de la base de datos destino (1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc)
- * @returns {Promise<object>} Estadísticas de la sincronización
+ * Sincronización de OTs delimitada estrictamente por la planilla mensual de Movimientos.
+ * Regla de Oro: DB_OT_LIST está 100% delimitada por la flota activa de 1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8.
+ * No se permite la inyección sistemática de patentes viejas o dadas de baja.
  */
-async function syncFullOtDatabase({ sheetsClient, sourceSpreadsheetId, targetSpreadsheetId }) {
-  if (!sheetsClient) throw new Error("Cliente de Google Sheets no inicializado");
-  if (!sourceSpreadsheetId) throw new Error("ID de spreadsheet origen requerido");
-  if (!targetSpreadsheetId) throw new Error("ID de spreadsheet destino requerido");
-
-  const startTime = Date.now();
-
-  // 1. Leer columnas de formulario origen (Rango A:K para capturar Fecha, Patente y OT)
-  const sourceRes = await sheetsClient.spreadsheets.values.get({
-    spreadsheetId: sourceSpreadsheetId,
-    range: "'Respuestas de formulario 4'!A1:K"
+async function syncFullOtDatabase({
+  sheetsClient,
+  sourceSpreadsheetId,
+  targetSpreadsheetId,
+  movimientosSpreadsheetId
+}) {
+  return syncCanonicalFleetToDbOtList({
+    sheetsClient,
+    targetSpreadsheetId,
+    movimientosSpreadsheetId: movimientosSpreadsheetId || process.env.MES_MOVIMIENTOS_ID,
+    formSpreadsheetId: sourceSpreadsheetId
   });
-
-  const sourceData = sourceRes.data.values || [];
-  if (sourceData.length < 2) {
-    return { success: false, error: "No se encontraron datos en el formulario origen" };
-  }
-
-  // 2. Extracción LIFO (Lo último reportado es lo válido)
-  const latestOts = new Map();
-  const latestEntryByPlate = new Map();
-  const recentFormPairs = [];
-
-  for (let i = sourceData.length - 1; i >= 1; i--) {
-    const rawPlateCell = sourceData[i][4]; // Col E (Índice 4)
-    const otNumberCell = sourceData[i][8]; // Col I (Índice 8)
-    const timestamp = sourceData[i][2];    // Col C (Índice 2)
-
-    const otNumber = String(otNumberCell || '').trim();
-    if (otNumber && otNumber !== '#REF!' && rawPlateCell) {
-      const plates = extractPlates(rawPlateCell);
-      if (plates.length > 0) {
-        const tractor = plates[0];
-        const semi = plates.length > 1 ? plates[1] : '';
-
-        plates.forEach(plate => {
-          if (!latestOts.has(plate)) {
-            latestOts.set(plate, otNumber);
-            latestEntryByPlate.set(plate, { tractor, semi, otNumber, timestamp });
-          }
-        });
-
-        recentFormPairs.push({ tractor, semi, otNumber, timestamp });
-      }
-    }
-  }
-
-  // 3. Lectura de la base de datos destino DB_OT_LIST
-  const targetRes = await sheetsClient.spreadsheets.values.get({
-    spreadsheetId: targetSpreadsheetId,
-    range: "'DB_OT_LIST'!A1:G"
-  });
-
-  const targetData = targetRes.data.values || [];
-  if (targetData.length < 2) {
-    return { success: false, error: "La pestaña DB_OT_LIST está vacía o sin encabezados" };
-  }
-
-  const updatedRows = [];
-  const dbPlatesMatched = new Set();
-  let updatedCount = 0;
-  let changedCount = 0;
-  let filledTractorCount = 0;
-
-  // 4. Actualizar filas existentes en DB_OT_LIST
-  for (let i = 1; i < targetData.length; i++) {
-    const row = [...targetData[i]];
-    while (row.length < 7) row.push('');
-
-    const originalTractor = String(row[0] || '').trim();
-    const originalOt = String(row[1] || '').trim();
-    const originalSemi = String(row[2] || '').trim();
-    const originalSemiOt = String(row[3] || '').trim();
-    const originalProd = String(row[4] || '').trim();
-    const originalMarca = String(row[5] || '').trim();
-    const originalMarcaSemi = String(row[6] || '').trim();
-
-    const cleanTractor = extractPlates(originalTractor)[0] || '';
-    const cleanSemi = extractPlates(originalSemi)[0] || '';
-
-    let updatedTractor = originalTractor;
-    let updatedOt = originalOt;
-
-    // Coincidencia por Tractor o por Semi
-    if (cleanTractor && latestOts.has(cleanTractor)) {
-      updatedOt = latestOts.get(cleanTractor);
-      dbPlatesMatched.add(cleanTractor);
-      if (cleanSemi) dbPlatesMatched.add(cleanSemi);
-      updatedCount++;
-    } else if (cleanSemi && latestOts.has(cleanSemi)) {
-      updatedOt = latestOts.get(cleanSemi);
-      dbPlatesMatched.add(cleanSemi);
-      updatedCount++;
-
-      // Si el Tractor estaba vacío y el Semi fue reportado con un Tractor conocido, completar Col A
-      if (!originalTractor && latestEntryByPlate.has(cleanSemi)) {
-        const pair = latestEntryByPlate.get(cleanSemi);
-        if (pair.tractor && pair.tractor !== cleanSemi) {
-          updatedTractor = pair.tractor;
-          dbPlatesMatched.add(pair.tractor);
-          filledTractorCount++;
-        }
-      }
-    }
-
-    if (updatedOt !== originalOt || updatedTractor !== originalTractor) {
-      changedCount++;
-    }
-
-    updatedRows.push([
-      updatedTractor,
-      updatedOt,
-      originalSemi,
-      originalSemiOt,
-      originalProd,
-      originalMarca,
-      originalMarcaSemi
-    ]);
-  }
-
-  // 5. Detectar nuevas patentes e inyectar filas para unidades no registradas en DB_OT_LIST
-  const newRowsToAppend = [];
-  const addedPlates = new Set();
-
-  for (const pair of recentFormPairs) {
-    const t = pair.tractor;
-    const s = pair.semi;
-
-    const tExists = dbPlatesMatched.has(t) || addedPlates.has(t);
-    const sExists = s ? (dbPlatesMatched.has(s) || addedPlates.has(s)) : true;
-
-    if (!tExists) {
-      addedPlates.add(t);
-      if (s) addedPlates.add(s);
-
-      newRowsToAppend.push([
-        t,
-        pair.otNumber,
-        s || '',
-        '',
-        'GENERAL',
-        '',
-        ''
-      ]);
-    }
-  }
-
-  // 6. Transacción Atómica en bloque sobre DB_OT_LIST!A2:G
-  if (updatedRows.length > 0) {
-    await sheetsClient.spreadsheets.values.update({
-      spreadsheetId: targetSpreadsheetId,
-      range: `'DB_OT_LIST'!A2:G${updatedRows.length + 1}`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: updatedRows }
-    });
-  }
-
-  // 7. Si hay filas nuevas, inyectarlas al final de la tabla
-  if (newRowsToAppend.length > 0) {
-    await sheetsClient.spreadsheets.values.append({
-      spreadsheetId: targetSpreadsheetId,
-      range: "'DB_OT_LIST'!A:G",
-      valueInputOption: 'USER_ENTERED',
-      insertDataOption: 'INSERT_ROWS',
-      requestBody: { values: newRowsToAppend }
-    });
-  }
-
-  const durationMs = Date.now() - startTime;
-  console.log(`✅ Sincronización masiva de OTs completada en ${durationMs}ms: ${updatedRows.length} filas actualizadas (${changedCount} cambios, ${filledTractorCount} tractores completados), ${newRowsToAppend.length} nuevas patentes añadidas.`);
-
-  return {
-    success: true,
-    totalRows: updatedRows.length + newRowsToAppend.length,
-    existingRowsUpdated: updatedRows.length,
-    changedCount: changedCount,
-    filledTractorCount: filledTractorCount,
-    newRowsAppended: newRowsToAppend.length,
-    uniqueExtractedPlates: latestOts.size,
-    durationMs: durationMs,
-    timestamp: new Date().toISOString()
-  };
 }
 
 const { syncCanonicalFleetToDbOtList } = require('./fleetMasterSyncService');
