@@ -12,6 +12,8 @@
 
 /**
  * Extrae patentes válidas argentinas desde cualquier string crudo o sucio.
+ * Soporta formato Mercosur (AA123BB, AA 123 BB, AA-123-BB) y Tradicional (AAA123, AAA 123, AAA-123).
+ * Descarta falsos positivos de nombres de maquinaria o palabras compuestas.
  * @param {string} rawString 
  * @returns {string[]} Lista de patentes limpias únicas
  */
@@ -19,29 +21,33 @@ function extractPlates(rawString) {
   if (!rawString) return [];
   const upper = String(rawString).toUpperCase().trim();
 
-  // 1. Detección por límites de palabra con o sin separadores internos
-  const wordRegex = /\b([A-Z]{2}[\s\-_.]*\d{3}[\s\-_.]*[A-Z]{2}|[A-Z]{3}[\s\-_.]*\d{3})\b/g;
-  const rawMatches = upper.match(wordRegex) || [];
+  // Filtrar nombres y términos de maquinaria común
+  const cleaned = upper
+    .replace(/\b(BOBCAT|CATERPILLAR|CARGADORA|MOTO|MOTONIVELADORA|MANITU|ELEVADOR|IZUZU|CHASIS|INTERNO|TALLER|ACOPLADO|PALA|GRUPO)\b/g, ' ')
+    .trim();
+
+  // Dividir por delimitadores estándar de formularios y combinaciones
+  const tokens = cleaned.split(/[\/+,;\n\r\t()\[\]]+/);
   const plates = [];
 
-  for (const m of rawMatches) {
-    const clean = m.replace(/[\s\-_.]/g, '');
-    if (/^[A-Z]{2}\d{3}[A-Z]{2}$|^[A-Z]{3}\d{3}$/.test(clean)) {
-      if (!plates.includes(clean)) plates.push(clean);
-    }
-  }
+  for (const token of tokens) {
+    const t = token.trim();
+    if (!t) continue;
 
-  // 2. Si no encontró coincidencias con límites de palabra (ej: delimitadores tipo / o +), dividir por tokens
-  if (plates.length === 0) {
-    const tokens = upper.split(/[\/+,;\n\r\t]+/);
-    for (const t of tokens) {
-      const cleanToken = t.replace(/[\s\-_.]/g, '');
-      const subMatches = cleanToken.match(/([A-Z]{2}\d{3}[A-Z]{2}|[A-Z]{3}\d{3})/g);
-      if (subMatches) {
-        for (const sm of subMatches) {
-          if (!plates.includes(sm)) plates.push(sm);
-        }
-      }
+    // 1. Mercosur (2 letras, 3 números, 2 letras)
+    const mercosurMatch = t.match(/\b([A-Z]{2})[\s\-_.]*(\d{3})[\s\-_.]*([A-Z]{2})\b/);
+    if (mercosurMatch) {
+      const p = `${mercosurMatch[1]}${mercosurMatch[2]}${mercosurMatch[3]}`;
+      if (!plates.includes(p)) plates.push(p);
+      continue;
+    }
+
+    // 2. Tradicional (3 letras, 3 números)
+    const tradMatch = t.match(/\b([A-Z]{3})[\s\-_.]*(\d{3})\b/);
+    if (tradMatch) {
+      const p = `${tradMatch[1]}${tradMatch[2]}`;
+      if (!plates.includes(p)) plates.push(p);
+      continue;
     }
   }
 
@@ -71,10 +77,10 @@ async function processSingleOtUpdate({ sheetsClient, targetSpreadsheetId, dirtyP
     return { success: false, error: "El número de OT es requerido" };
   }
 
-  // Leer rango A:C de DB_OT_LIST para verificar existencia
+  // Leer rango A:G de DB_OT_LIST para verificar existencia completa
   const getRes = await sheetsClient.spreadsheets.values.get({
     spreadsheetId: targetSpreadsheetId,
-    range: "'DB_OT_LIST'!A:C"
+    range: "'DB_OT_LIST'!A:G"
   });
 
   const dbData = getRes.data.values || [];
@@ -82,6 +88,9 @@ async function processSingleOtUpdate({ sheetsClient, targetSpreadsheetId, dirtyP
   let targetRow = null;
   let matchedType = null;
   let matchedPlate = null;
+
+  const tractorPlate = matches[0];
+  const semiPlate = matches.length > 1 ? matches[1] : "";
 
   // Prägnanz: Unificación de búsqueda - Comparamos con Tractor (Col A) y Semi (Col C)
   for (let i = 1; i < dbData.length; i++) {
@@ -94,8 +103,7 @@ async function processSingleOtUpdate({ sheetsClient, targetSpreadsheetId, dirtyP
       matchedPlate = found;
       matchedType = (dbTractor && found === dbTractor) ? "TRACTOR" : "SEMI";
 
-      // 1. Sobreescribimos SOLO la Columna B (Índice 2)
-      // 2. IGNORAMOS la Columna D por completo
+      // 1. Sobreescribimos la Columna B (Índice 2)
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId: targetSpreadsheetId,
         range: `'DB_OT_LIST'!B${targetRow}`,
@@ -103,24 +111,34 @@ async function processSingleOtUpdate({ sheetsClient, targetSpreadsheetId, dirtyP
         requestBody: { values: [[cleanOt]] }
       });
 
+      // Si la fila tenía el Tractor vacío y ahora vino emparejado con un Semi conocido, completamos Col A
+      if (!dbTractor && tractorPlate && tractorPlate !== dbSemi) {
+        await sheetsClient.spreadsheets.values.update({
+          spreadsheetId: targetSpreadsheetId,
+          range: `'DB_OT_LIST'!A${targetRow}`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [[tractorPlate]] }
+        });
+      }
+
       dbUpdated = true;
       break; // Poka-Yoke: Detenemos el bucle al instante para evitar cualquier duplicación
     }
   }
 
-  // Si recorrimos toda la DB y no hubo coincidencias, creamos UNA SOLA fila nueva
+  // Si recorrimos toda la DB y no hubo coincidencias, creamos UNA fila nueva completa
   if (!dbUpdated) {
-    matchedPlate = matches[0];
+    matchedPlate = tractorPlate;
     matchedType = "NEW_ENTRY";
 
-    // Append de [matches[0], newOt, "", ""]
+    // Append de [tractor, cleanOt, semi, "", "GENERAL", "", ""]
     const appendRes = await sheetsClient.spreadsheets.values.append({
       spreadsheetId: targetSpreadsheetId,
-      range: "'DB_OT_LIST'!A:D",
+      range: "'DB_OT_LIST'!A:G",
       valueInputOption: 'USER_ENTERED',
       insertDataOption: 'INSERT_ROWS',
       requestBody: {
-        values: [[matchedPlate, cleanOt, "", ""]]
+        values: [[tractorPlate, cleanOt, semiPlate, "", "GENERAL", "", ""]]
       }
     });
 
@@ -142,6 +160,8 @@ async function processSingleOtUpdate({ sheetsClient, targetSpreadsheetId, dirtyP
 
 /**
  * Sincronización masiva de OTs (Batch / Cron) desde el formulario de origen hacia DB_OT_LIST.
+ * Extrae todas las respuestas históricas y recientes, actualiza OTs existentes,
+ * completa celdas vacías e inyecta nuevas patentes/unidades que no existían en DB_OT_LIST.
  * @param {object} params
  * @param {object} params.sheetsClient - Cliente autenticado de Google Sheets
  * @param {string} params.sourceSpreadsheetId - ID del spreadsheet de respuestas (1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk)
@@ -155,10 +175,10 @@ async function syncFullOtDatabase({ sheetsClient, sourceSpreadsheetId, targetSpr
 
   const startTime = Date.now();
 
-  // 1. Leer columnas E a I desde 'Respuestas de formulario 4'
+  // 1. Leer columnas de formulario origen (Rango A:K para capturar Fecha, Patente y OT)
   const sourceRes = await sheetsClient.spreadsheets.values.get({
     spreadsheetId: sourceSpreadsheetId,
-    range: "'Respuestas de formulario 4'!E:I"
+    range: "'Respuestas de formulario 4'!A1:K"
   });
 
   const sourceData = sourceRes.data.values || [];
@@ -168,26 +188,37 @@ async function syncFullOtDatabase({ sheetsClient, sourceSpreadsheetId, targetSpr
 
   // 2. Extracción LIFO (Lo último reportado es lo válido)
   const latestOts = new Map();
+  const latestEntryByPlate = new Map();
+  const recentFormPairs = [];
 
   for (let i = sourceData.length - 1; i >= 1; i--) {
-    const rawPlateCell = sourceData[i][0]; // Col E (Índice 0 dentro del rango E:I)
-    const otNumberCell = sourceData[i][4]; // Col I (Índice 4 dentro del rango E:I)
+    const rawPlateCell = sourceData[i][4]; // Col E (Índice 4)
+    const otNumberCell = sourceData[i][8]; // Col I (Índice 8)
+    const timestamp = sourceData[i][2];    // Col C (Índice 2)
 
     const otNumber = String(otNumberCell || '').trim();
-    if (otNumber && rawPlateCell) {
+    if (otNumber && otNumber !== '#REF!' && rawPlateCell) {
       const plates = extractPlates(rawPlateCell);
-      for (const plate of plates) {
-        if (!latestOts.has(plate)) {
-          latestOts.set(plate, otNumber);
-        }
+      if (plates.length > 0) {
+        const tractor = plates[0];
+        const semi = plates.length > 1 ? plates[1] : '';
+
+        plates.forEach(plate => {
+          if (!latestOts.has(plate)) {
+            latestOts.set(plate, otNumber);
+            latestEntryByPlate.set(plate, { tractor, semi, otNumber, timestamp });
+          }
+        });
+
+        recentFormPairs.push({ tractor, semi, otNumber, timestamp });
       }
     }
   }
 
-  // 3. Preparación de la base de datos destino
+  // 3. Lectura de la base de datos destino DB_OT_LIST
   const targetRes = await sheetsClient.spreadsheets.values.get({
     spreadsheetId: targetSpreadsheetId,
-    range: "'DB_OT_LIST'!A:C"
+    range: "'DB_OT_LIST'!A1:G"
   });
 
   const targetData = targetRes.data.values || [];
@@ -195,58 +226,126 @@ async function syncFullOtDatabase({ sheetsClient, sourceSpreadsheetId, targetSpr
     return { success: false, error: "La pestaña DB_OT_LIST está vacía o sin encabezados" };
   }
 
-  const updates = [];
+  const updatedRows = [];
+  const dbPlatesMatched = new Set();
   let updatedCount = 0;
   let changedCount = 0;
+  let filledTractorCount = 0;
 
-  // Recorrer filas de la DB destino
+  // 4. Actualizar filas existentes en DB_OT_LIST
   for (let i = 1; i < targetData.length; i++) {
-    const tractorRaw = targetData[i][0];
-    const currentOt = String(targetData[i][1] || '').trim();
-    const semiRaw = targetData[i][2];
+    const row = [...targetData[i]];
+    while (row.length < 7) row.push('');
 
-    const tractorPlates = extractPlates(tractorRaw);
-    const semiPlates = extractPlates(semiRaw);
+    const originalTractor = String(row[0] || '').trim();
+    const originalOt = String(row[1] || '').trim();
+    const originalSemi = String(row[2] || '').trim();
+    const originalSemiOt = String(row[3] || '').trim();
+    const originalProd = String(row[4] || '').trim();
+    const originalMarca = String(row[5] || '').trim();
+    const originalMarcaSemi = String(row[6] || '').trim();
 
-    const cleanTractor = tractorPlates[0] || null;
-    const cleanSemi = semiPlates[0] || null;
+    const cleanTractor = extractPlates(originalTractor)[0] || '';
+    const cleanSemi = extractPlates(originalSemi)[0] || '';
 
-    let targetOt = currentOt;
+    let updatedTractor = originalTractor;
+    let updatedOt = originalOt;
 
-    // Si coincide el Tractor o el Semi con una OT reciente en el mapa
+    // Coincidencia por Tractor o por Semi
     if (cleanTractor && latestOts.has(cleanTractor)) {
-      targetOt = latestOts.get(cleanTractor);
+      updatedOt = latestOts.get(cleanTractor);
+      dbPlatesMatched.add(cleanTractor);
+      if (cleanSemi) dbPlatesMatched.add(cleanSemi);
       updatedCount++;
     } else if (cleanSemi && latestOts.has(cleanSemi)) {
-      targetOt = latestOts.get(cleanSemi);
+      updatedOt = latestOts.get(cleanSemi);
+      dbPlatesMatched.add(cleanSemi);
       updatedCount++;
+
+      // Si el Tractor estaba vacío y el Semi fue reportado con un Tractor conocido, completar Col A
+      if (!originalTractor && latestEntryByPlate.has(cleanSemi)) {
+        const pair = latestEntryByPlate.get(cleanSemi);
+        if (pair.tractor && pair.tractor !== cleanSemi) {
+          updatedTractor = pair.tractor;
+          dbPlatesMatched.add(pair.tractor);
+          filledTractorCount++;
+        }
+      }
     }
 
-    if (targetOt !== currentOt) {
+    if (updatedOt !== originalOt || updatedTractor !== originalTractor) {
       changedCount++;
     }
 
-    updates.push([targetOt]);
+    updatedRows.push([
+      updatedTractor,
+      updatedOt,
+      originalSemi,
+      originalSemiOt,
+      originalProd,
+      originalMarca,
+      originalMarcaSemi
+    ]);
   }
 
-  // 4. Transacción Atómica en bloque sobre Col B (Rango B2:B)
-  if (updates.length > 0) {
+  // 5. Detectar nuevas patentes e inyectar filas para unidades no registradas en DB_OT_LIST
+  const newRowsToAppend = [];
+  const addedPlates = new Set();
+
+  for (const pair of recentFormPairs) {
+    const t = pair.tractor;
+    const s = pair.semi;
+
+    const tExists = dbPlatesMatched.has(t) || addedPlates.has(t);
+    const sExists = s ? (dbPlatesMatched.has(s) || addedPlates.has(s)) : true;
+
+    if (!tExists) {
+      addedPlates.add(t);
+      if (s) addedPlates.add(s);
+
+      newRowsToAppend.push([
+        t,
+        pair.otNumber,
+        s || '',
+        '',
+        'GENERAL',
+        '',
+        ''
+      ]);
+    }
+  }
+
+  // 6. Transacción Atómica en bloque sobre DB_OT_LIST!A2:G
+  if (updatedRows.length > 0) {
     await sheetsClient.spreadsheets.values.update({
       spreadsheetId: targetSpreadsheetId,
-      range: `'DB_OT_LIST'!B2:B${updates.length + 1}`,
+      range: `'DB_OT_LIST'!A2:G${updatedRows.length + 1}`,
       valueInputOption: 'USER_ENTERED',
-      requestBody: { values: updates }
+      requestBody: { values: updatedRows }
+    });
+  }
+
+  // 7. Si hay filas nuevas, inyectarlas al final de la tabla
+  if (newRowsToAppend.length > 0) {
+    await sheetsClient.spreadsheets.values.append({
+      spreadsheetId: targetSpreadsheetId,
+      range: "'DB_OT_LIST'!A:G",
+      valueInputOption: 'USER_ENTERED',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values: newRowsToAppend }
     });
   }
 
   const durationMs = Date.now() - startTime;
-  console.log(`✅ Sincronización masiva de OTs completada en ${durationMs}ms: ${updates.length} filas procesadas, ${changedCount} cambios aplicados.`);
+  console.log(`✅ Sincronización masiva de OTs completada en ${durationMs}ms: ${updatedRows.length} filas actualizadas (${changedCount} cambios, ${filledTractorCount} tractores completados), ${newRowsToAppend.length} nuevas patentes añadidas.`);
 
   return {
     success: true,
-    totalRows: updates.length,
-    matchedCount: updatedCount,
+    totalRows: updatedRows.length + newRowsToAppend.length,
+    existingRowsUpdated: updatedRows.length,
     changedCount: changedCount,
+    filledTractorCount: filledTractorCount,
+    newRowsAppended: newRowsToAppend.length,
     uniqueExtractedPlates: latestOts.size,
     durationMs: durationMs,
     timestamp: new Date().toISOString()
@@ -258,3 +357,4 @@ module.exports = {
   processSingleOtUpdate,
   syncFullOtDatabase
 };
+
