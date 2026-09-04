@@ -224,7 +224,21 @@ async function syncDataFromSheets(force = false) {
       }
     }
 
-    ordersCache = Object.values(ordersMap);
+    ordersCache = Object.values(ordersMap).map(order => {
+      const itemStatuses = order.items.map(i => i.status);
+      if (itemStatuses.includes("PENDIENTE")) {
+        order.status = "PENDIENTE";
+      } else if (itemStatuses.includes("LISTO")) {
+        order.status = "LISTO";
+      } else if (itemStatuses.includes("ENTREGADO")) {
+        order.status = "ENTREGADO";
+      } else if (itemStatuses.includes("DEVOLUCION PENDIENTE")) {
+        order.status = "DEVOLUCION PENDIENTE";
+      } else {
+        order.status = "DEVOLUCION";
+      }
+      return order;
+    });
     return ordersCache;
   } catch (e) {
     console.error('❌ Error en syncDataFromSheets:', e.message);

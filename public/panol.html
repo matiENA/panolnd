@@ -521,7 +521,9 @@
 
         let filtered = allOrders.filter(order => {
           if (filters.status === 'ALL') {
-            if (order.status === 'ENTREGADO') return false;
+            if (order.status !== 'PENDIENTE' && order.status !== 'LISTO') return false;
+          } else if (filters.status === 'ENTREGADO') {
+            if (order.status !== 'ENTREGADO' && order.status !== 'DEVOLUCION') return false;
           } else {
             if (order.status !== filters.status) return false;
           }
@@ -628,6 +630,12 @@
           const itemLoc = item.loc || 'S/D';
           const safeItemName = item.name.replace(/'/g, "\\'");
 
+          const isItemDevuelto = item.status === 'DEVOLUCION';
+          let itemDevueltoBadge = '';
+          if (isItemDevuelto) {
+            itemDevueltoBadge = ` <span style="font-size: 0.7rem; color: #f87171; font-weight: 800; background: rgba(239, 68, 68, 0.15); padding: 1px 6px; border-radius: 4px;">DEVUELTO</span>`;
+          }
+
           let qtyHtml;
           if (isPendiente) {
             const currentStock = item.stock || 0;
@@ -645,6 +653,8 @@
                 <span class="stock-badge ${stockClass}" title="Stock actual en estantería">📦${currentStock}</span>
                 <button class="btn-remove-item" onclick="removeItem('${o.reqId}','${safeItemName}')" title="Eliminar ítem">✕</button>
               </div>`;
+          } else if (isItemDevuelto) {
+            qtyHtml = `<span class="item-qty" style="background: rgba(239, 68, 68, 0.2); color: #f87171; text-decoration: line-through;">x${item.qty}</span>`;
           } else {
             qtyHtml = `<span class="item-qty">x${item.qty}</span>`;
           }
@@ -652,7 +662,7 @@
           itemsHtml += `
             <div class="item-row ${highlightClass}">
               <div class="item-primary">
-                <span class="item-name">${item.name}</span>
+                <span class="item-name">${item.name}${itemDevueltoBadge}</span>
                 ${qtyHtml}
               </div>
               <div class="item-secondary">
@@ -685,9 +695,12 @@
         }).join('');
 
         const isDelivered = o.status === 'ENTREGADO';
+        const isDevolucion = o.status === 'DEVOLUCION';
         let footerHtml;
         if (isDelivered) {
           footerHtml = `<div class="status-complete" style="background: rgba(139, 148, 158, 0.12); color: #8b949e;">✅ ENTREGADO Y CERRADO</div>`;
+        } else if (isDevolucion) {
+          footerHtml = `<div class="status-complete" style="background: rgba(239, 68, 68, 0.12); color: #ef4444;">↩️ DEVUELTO A PAÑOL</div>`;
         } else if (isReady) {
           footerHtml = `<div class="status-complete">⚡ LISTO PARA ENTREGAR</div>`;
         } else if (undoTimers[o.reqId]) {
@@ -698,7 +711,7 @@
                  <span style="background: rgba(0,0,0,0.3); padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">${secs}s</span>
                </button>
              </div>`;
-        } else {
+        } else if (isPendiente) {
           footerHtml = `<div class="action-group">
                <select id="panol-op-${o.reqId}" 
                        class="panol-select" 
@@ -710,6 +723,8 @@
                </select>
                <button class="btn-action btn-ready" onclick="markReady('${o.reqId}')">✓ LISTO</button>
              </div>`;
+        } else {
+          footerHtml = `<div class="status-complete" style="background: rgba(139, 148, 158, 0.12); color: #8b949e;">${o.status}</div>`;
         }
 
         return `
