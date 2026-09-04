@@ -1331,9 +1331,8 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
           if (pendingInOrder.length > 0) pendingNewCount += pendingInOrder.length;
 
           if (eligibleItems.length > 0) {
-            const rowsHtml = eligibleItems.map((i, idx) => {
-              const safeItemName = i.name.replace(/'/g, "\\'");
-              const itemTag = `newret-${o.reqId}-${idx}`;
+            const isPendingSubtab = currentNewReturnsSubtab === 'pending';
+            const itemsListHtml = eligibleItems.map((i, idx) => {
               const isPending = i.status === 'DEVOLUCION PENDIENTE';
 
               let reasonText = '';
@@ -1347,39 +1346,22 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
               }
 
               return `
-                <div class="ret-row" style="display: flex; align-items: center; padding: 10px 20px; min-height: 54px; ${idx > 0 ? 'border-top: 1px solid #21262d;' : ''}">
-                  <div id="${itemTag}" style="display: flex; justify-content: space-between; align-items: center; flex: 1; gap: 24px; padding-right: 20px; ${!isPending ? 'opacity: 0.5;' : ''}">
-                    <div style="display: flex; flex-direction: column; gap: 4px;">
-                      <div style="font-size: 0.95rem; font-weight: 800; color: #F0F6FC; letter-spacing: -0.2px;">
-                        • ${i.name} <span style="color: #8B949E; font-weight: 500; font-size: 0.85rem;">(Cant. a devolver: x${i.qty})</span>
-                      </div>
-                      <div style="font-size: 0.75rem; color: ${isPending ? '#f59e0b' : '#3fb950'}; font-weight: 700;">
-                        ${isPending ? '↳ Solicitado para devolución por el mecánico' : '✓ Reintegrado a stock'}
-                      </div>
+                <div class="ret-item-row" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; ${idx > 0 ? 'border-top: 1px solid #21262d;' : ''}">
+                  <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <div style="font-size: 0.95rem; font-weight: 800; color: #F0F6FC; letter-spacing: -0.2px;">
+                      • ${i.name} <span style="color: #8B949E; font-weight: 500; font-size: 0.85rem;">(Cant. a devolver: x${i.qty})</span>
                     </div>
-                    
-                    ${reasonText ? `
-                      <div style="display: flex; gap: 8px; align-items: baseline; max-width: 480px; font-size: 0.85rem; line-height: 1.4; margin-left: auto;">
-                        <span style="color: #f59e0b; font-weight: 800; white-space: nowrap;">Motivo:</span>
-                        <span style="color: #e6edf3; font-weight: 600;">${reasonText}</span>
-                      </div>
-                    ` : ''}
+                    <div style="font-size: 0.75rem; color: ${isPending ? '#f59e0b' : '#3fb950'}; font-weight: 700;">
+                      ${isPending ? '↳ Solicitado para devolución por el mecánico' : '✓ Reintegrado a stock'}
+                    </div>
                   </div>
-
-                  <!-- Botón Reintegrar / Estado 100% alineado con este ítem -->
-                  <div id="act-${itemTag}" style="width: 260px; padding-left: 20px; box-sizing: border-box; flex-shrink: 0; border-left: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center;">
-                    ${!isPending ? `
-                      <div style="width: 100%; text-align: center; padding: 7px 12px; font-size: 0.75rem; font-weight: 900; border-radius: 6px; background: rgba(35, 134, 54, 0.15); color: #3FB950; border: 1px solid #238636;">
-                        ✓ REINTEGRADO A STOCK
-                      </div>
-                    ` : `
-                      <button class="btn-ch ok" 
-                              onclick="confirmNewItemReturn('${o.reqId}', '${safeItemName}', ${i.qty}, '${itemTag}')"
-                              style="width: 100%; padding: 8px 12px; font-size: 0.75rem; font-weight: 900; background: rgba(35, 134, 54, 0.2); color: #3fb950; border: 1px solid #238636; border-radius: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.3px; transition: 0.2s;">
-                          ✓ REINTEGRAR A STOCK
-                      </button>
-                    `}
-                  </div>
+                  
+                  ${reasonText ? `
+                    <div style="display: flex; gap: 8px; align-items: baseline; max-width: 480px; font-size: 0.85rem; line-height: 1.4; margin-left: auto;">
+                      <span style="color: #f59e0b; font-weight: 800; white-space: nowrap;">Motivo:</span>
+                      <span style="color: #e6edf3; font-weight: 600;">${reasonText}</span>
+                    </div>
+                  ` : ''}
                 </div>`;
             }).join('');
 
@@ -1399,18 +1381,30 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
                   <span style="font-size: 0.8rem; font-weight: 800; color: #8B949E; text-transform: uppercase; margin-top: 2px;">${cleanMechName}</span>
                 </div>
                 
-                <div style="flex: 1; display: flex; flex-direction: column;">
-                  <div style="display: flex; justify-content: flex-end; padding: 14px 20px 8px 20px;">
-                    <div style="width: 260px; padding-left: 20px; box-sizing: border-box; flex-shrink: 0;">
-                      <select id="newret-op-${o.reqId}" class="panol-select" onchange="pendingSelections['newret_${o.reqId}'] = this.value" onfocus="pausePolling()" onblur="resumePolling()" style="width:100%; background:#090d16; border:1px solid #30363d; border-radius:6px; padding:7px 12px; color:white; font-weight:700; font-size:0.85rem;">
-                        <option value="" disabled ${!savedOpId ? 'selected' : ''}>👤 Revisa Pañolero...</option>
-                        ${staffOptions}
-                      </select>
-                    </div>
+                <div class="ch-middle" style="flex: 1; padding: 16px 24px; display: flex; flex-direction: column; justify-content: center;">
+                  ${itemsListHtml}
+                </div>
+
+                <div class="ch-right" style="width: 260px; min-width: 260px; padding: 20px; box-sizing: border-box; flex-shrink: 0; border-left: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; justify-content: center; gap: 12px; background: rgba(0,0,0,0.15);">
+                  <div>
+                    <select id="newret-op-${o.reqId}" class="panol-select" onchange="pendingSelections['newret_${o.reqId}'] = this.value" onfocus="pausePolling()" onblur="resumePolling()" style="width:100%; background:#090d16; border:1px solid #30363d; border-radius:6px; padding:9px 12px; color:white; font-weight:700; font-size:0.85rem;">
+                      <option value="" disabled ${!savedOpId ? 'selected' : ''}>👤 Revisa Pañolero...</option>
+                      ${staffOptions}
+                    </select>
                   </div>
                   
-                  <div style="display: flex; flex-direction: column; flex: 1; justify-content: center; padding-bottom: 8px;">
-                    ${rowsHtml}
+                  <div id="act-newret-box-${o.reqId}">
+                    ${isPendingSubtab ? `
+                      <button class="btn-ch ok" id="act-newret-btn-${o.reqId}"
+                              onclick="confirmNewReturnRow('${o.reqId}')"
+                              style="width: 100%; padding: 12px 14px; font-size: 0.8rem; font-weight: 900; background: rgba(35, 134, 54, 0.2); color: #3fb950; border: 1px solid #238636; border-radius: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.3px; transition: 0.2s;">
+                          ✓ REINTEGRAR A STOCK
+                      </button>
+                    ` : `
+                      <div style="width: 100%; text-align: center; padding: 10px 12px; font-size: 0.75rem; font-weight: 900; border-radius: 6px; background: rgba(35, 134, 54, 0.15); color: #3FB950; border: 1px solid #238636;">
+                        ✓ REINTEGRADO A STOCK
+                      </div>
+                    `}
                   </div>
                 </div>
               </div>`;
@@ -1720,6 +1714,52 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
       }
 
 
+
+      function confirmNewReturnRow(reqId) {
+        const selectEl = document.getElementById(`newret-op-${reqId}`);
+        const panolOpId = selectEl ? selectEl.value : null;
+
+        if (!panolOpId) {
+          if (selectEl) {
+            selectEl.classList.remove('shake-error');
+            void selectEl.offsetWidth; 
+            selectEl.classList.add('shake-error');
+          }
+          return;
+        }
+
+        const btnEl = document.getElementById(`act-newret-btn-${reqId}`);
+        const cardEl = document.getElementById(`newret-card-${reqId}`);
+
+        if (btnEl) {
+          btnEl.disabled = true;
+          btnEl.style.opacity = '0.6';
+          btnEl.innerHTML = `⏳ REINTEGRANDO...`;
+        }
+        if (cardEl) {
+          cardEl.style.opacity = '0.7';
+          cardEl.style.pointerEvents = 'none';
+        }
+
+        google.script.run
+          .withSuccessHandler(() => {
+            loadData();
+          })
+          .withFailureHandler(err => {
+            console.error('Error al reintegrar stock:', err);
+            if (btnEl) {
+              btnEl.disabled = false;
+              btnEl.style.opacity = '1';
+              btnEl.innerHTML = `✓ REINTEGRAR A STOCK`;
+            }
+            if (cardEl) {
+              cardEl.style.opacity = '1';
+              cardEl.style.pointerEvents = 'auto';
+            }
+            alert('Error al reintegrar repuestos a stock: ' + (err && err.message ? err.message : err));
+          })
+          .confirmNewReturn(reqId, 'ALL', null, panolOpId);
+      }
 
       function confirmNewItemReturn(reqId, itemName, returnQty, itemTag) {
         const selectEl = document.getElementById(`newret-op-${reqId}`);

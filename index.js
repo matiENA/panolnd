@@ -794,44 +794,103 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
       io.emit('orders_sync', ordersCache);
       result = { success: updated };
     }
-    else if (action === 'confirmNewReturn' || action === 'processNewItemReturn') {
+    else if (action === 'confirmNewReturn' || action === 'processNewItemReturn' || action === 'confirmNewReturnRow') {
       const reqId = String(args[0] || '').trim();
       const itemName = String(args[1] || '').trim();
-      const returnQty = Number(args[2]) || 1;
-      const panolOpId = args[3] || args[4];
+      const returnQty = Number(args[2]) || null;
+      const panolOpId = args[3] || args[4] || '';
       let updated = false;
 
-      if (sheets) {
+      if (sheets && reqId) {
         const transRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A:R' });
         const rows = transRes.data.values || [];
+        const isAll = !itemName || itemName.toUpperCase() === 'ALL' || itemName === '__ALL__';
 
+        const panolNote = `DEVOLUCIÓN ACEPTADA: OK [OP: ${panolOpId || 'PAÑOL'}]`;
+        const updates = [];
+        const stockItemsToRestore = [];
+
+        // 1. Identificar filas a procesar
+        const targetIndices = [];
         for (let i = 1; i < rows.length; i++) {
           const rReq = String(rows[i][1] || '').trim();
-          const rItem = String(rows[i][6] || '').trim().toLowerCase();
+          if (rReq !== reqId) continue;
+
           const rStatus = String(rows[i][8] || '').trim();
+          const rItem = String(rows[i][6] || '').trim();
 
-          if (rReq === reqId && rItem === itemName.toLowerCase() && (rStatus === 'DEVOLUCION PENDIENTE' || rStatus === 'ENTREGADO' || rStatus === 'LISTO')) {
-            const originalQty = Number(rows[i][7]) || 0;
-            const rowNum = i + 1;
-            const panolNote = `DEVOLUCIÓN ACEPTADA: OK [OP: ${panolOpId || 'PAÑOL'}]`;
-            const existingNote = String(rows[i][14] || '').trim();
-            const finalNote = existingNote ? `${existingNote} | ${panolNote}` : panolNote;
+          if (isAll) {
+            // Toda la row: procesar ítems con status DEVOLUCION PENDIENTE
+            if (rStatus === 'DEVOLUCION PENDIENTE') {
+              targetIndices.push(i);
+            }
+          } else {
+            // Ítem específico (compatibilidad)
+            if (rItem.toLowerCase() === itemName.toLowerCase() && 
+               (rStatus === 'DEVOLUCION PENDIENTE' || rStatus === 'ENTREGADO' || rStatus === 'LISTO')) {
+              targetIndices.push(i);
+              break;
+            }
+          }
+        }
 
-            await sheets.spreadsheets.values.update({
+        // Si es isAll y no había ninguno explícitamente en DEVOLUCION PENDIENTE, fallback a ENTREGADO o LISTO
+        if (isAll && targetIndices.length === 0) {
+          for (let i = 1; i < rows.length; i++) {
+            const rReq = String(rows[i][1] || '').trim();
+            if (rReq !== reqId) continue;
+            const rStatus = String(rows[i][8] || '').trim();
+            if (rStatus === 'ENTREGADO' || rStatus === 'LISTO') {
+              targetIndices.push(i);
+            }
+          }
+        }
+
+        for (const idx of targetIndices) {
+          const rowNum = idx + 1;
+          const rItem = String(rows[idx][6] || '').trim();
+          const origQty = Number(rows[idx][7]) || 1;
+          const qtyToRestore = (!isAll && returnQty) ? returnQty : origQty;
+
+          const existingNote = String(rows[idx][14] || '').trim();
+          const finalNote = existingNote ? `${existingNote} | ${panolNote}` : panolNote;
+
+          updates.push({
+            range: `DB_TRANSACTIONS!I${rowNum}`,
+            values: [['DEVOLUCION']]
+          });
+          updates.push({
+            range: `DB_TRANSACTIONS!O${rowNum}`,
+            values: [[finalNote]]
+          });
+
+          stockItemsToRestore.push({ itemName: rItem, qty: qtyToRestore });
+          updated = true;
+        }
+
+        if (updates.length > 0) {
+          try {
+            await sheets.spreadsheets.values.batchUpdate({
               spreadsheetId: SPREADSHEET_ID,
-              range: `DB_TRANSACTIONS!I${rowNum}`,
-              valueInputOption: 'USER_ENTERED',
-              requestBody: { values: [['DEVOLUCION']] }
+              requestBody: {
+                valueInputOption: 'USER_ENTERED',
+                data: updates
+              }
             });
-            await sheets.spreadsheets.values.update({
-              spreadsheetId: SPREADSHEET_ID,
-              range: `DB_TRANSACTIONS!O${rowNum}`,
-              valueInputOption: 'USER_ENTERED',
-              requestBody: { values: [[finalNote]] }
-            });
-            await updateStockByName(itemName, returnQty || originalQty);
-            updated = true;
-            break;
+          } catch(batchErr) {
+            console.warn('batchUpdate falló, aplicando updates individuales:', batchErr.message);
+            for (const u of updates) {
+              await sheets.spreadsheets.values.update({
+                spreadsheetId: SPREADSHEET_ID,
+                range: u.range,
+                valueInputOption: 'USER_ENTERED',
+                requestBody: { values: u.values }
+              });
+            }
+          }
+
+          for (const s of stockItemsToRestore) {
+            await updateStockByName(s.itemName, s.qty);
           }
         }
       }
