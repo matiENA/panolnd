@@ -41,6 +41,8 @@
       @media (max-width: 768px) { 
         .card-horizontal { flex-direction: column; } 
         .ch-left, .ch-right { border: none; border-bottom: 1px dashed var(--border); min-width: 100%; } 
+        .ret-row { flex-direction: column; align-items: stretch !important; gap: 10px; }
+        .ret-row > div:last-child { width: 100% !important; border-left: none !important; padding-left: 0 !important; }
       }
 
       /* === SHAKE DE TARJETA (Alerta Global) === */
@@ -1176,7 +1178,7 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
           if (returnItems.length > 0 && hasPendingItems) {
             pendingReturnsCount++;
             
-            const itemsHtml = returnItems.map((i, idx) => {
+            const rowsHtml = returnItems.map((i, idx) => {
               let canjeJson = null;
               if (typeof i.estadoCanje === 'string' && i.estadoCanje.trim().startsWith('{')) {
                 try {
@@ -1203,51 +1205,6 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
               } else {
                 const partialMatch = String(i.estadoCanje || '').match(/(\d+)\s*entregada/i);
                 if (partialMatch && partialMatch[1]) {
-                    returnedQty = parseInt(partialMatch[1], 10);
-                } else if (String(i.estadoCanje || '').startsWith('FALTA:') || i.estadoCanje === 'FALTA') {
-                    returnedQty = 0;
-                }
-              }
-
-              const itemTag = `${o.reqId}-${idx}`;
-              const isResolved = i.panolConfirmacion.includes('OK') || i.panolConfirmacion.includes('INCOMPLETO');
-              const isLast = idx === returnItems.length - 1;
-
-              return `
-                <div id="ret-item-${itemTag}" style="display:flex; justify-content:space-between; align-items:center; min-height:48px; padding:10px 0; ${!isLast ? 'border-bottom: 1px solid rgba(255,255,255,0.06);' : ''} ${isResolved ? 'opacity: 0.45; filter: grayscale(0.2); pointer-events: none;' : ''}">
-                  <div style="display:flex; flex-direction:column;">
-                    <div style="font-size: 0.95rem; font-weight: 800; color: #F0F6FC; letter-spacing: -0.2px;">
-                      • ${i.name} <span style="color: #8B949E; font-weight: 500; font-size: 0.82rem;">[Pedido Original: x${i.qty}]</span>
-                    </div>
-                    ${(canjeJson && canjeJson.tipo === 'FALTANTE' && reasonText) ? `
-                      <div style="font-size: 0.75rem; color: #f59e0b; margin-top: 3px; font-weight: 600;">
-                        ⚠ Motivo faltante: ${reasonText}
-                      </div>
-                    ` : ''}
-                  </div>
-                  <div style="display:flex; align-items:baseline; gap:8px; margin-left:24px;">
-                    <span style="color: #F59E0B; font-weight: 700; font-size: 0.85rem;">entrega:</span>
-                    <span style="color: #FFFFFF; font-size: 1.6rem; font-weight: 900; min-width: 20px; text-align: right; line-height: 1;">${returnedQty}</span>
-                  </div>
-                </div>`;
-            }).join('');
-
-            const actionsHtml = returnItems.map((i, idx) => {
-              let canjeJson = null;
-              if (typeof i.estadoCanje === 'string' && i.estadoCanje.trim().startsWith('{')) {
-                try { canjeJson = JSON.parse(i.estadoCanje); } catch(e) {}
-              }
-
-              let returnedQty = i.qty;
-              if (canjeJson) {
-                if (canjeJson.tipo === 'ENTREGO_USADA') {
-                  returnedQty = canjeJson.cant_entregada !== undefined ? canjeJson.cant_entregada : i.qty;
-                } else if (canjeJson.tipo === 'FALTANTE') {
-                  returnedQty = canjeJson.cant_entregada !== undefined ? canjeJson.cant_entregada : 0;
-                }
-              } else {
-                const partialMatch = String(i.estadoCanje || '').match(/(\d+)\s*entregada/i);
-                if (partialMatch && partialMatch[1]) {
                   returnedQty = parseInt(partialMatch[1], 10);
                 } else if (String(i.estadoCanje || '').startsWith('FALTA:') || i.estadoCanje === 'FALTA') {
                   returnedQty = 0;
@@ -1257,35 +1214,59 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
               const safeItemName = i.name.replace(/'/g, "\\'");
               const itemTag = `${o.reqId}-${idx}`;
               const isResolved = i.panolConfirmacion.includes('OK') || i.panolConfirmacion.includes('INCOMPLETO');
-
-              if (isResolved) {
-                const isOk = i.panolConfirmacion.includes('OK');
-                return `
-                  <div id="ret-act-${itemTag}" style="display:flex; align-items:center; justify-content:center; min-height:48px; padding:6px 0;">
-                    <span style="width:100%; text-align:center; padding: 7px 12px; font-size: 0.75rem; font-weight: 900; border-radius: 6px; background: ${isOk ? 'rgba(35, 134, 54, 0.15)' : 'rgba(217, 119, 6, 0.15)'}; color: ${isOk ? '#3FB950' : '#F59E0B'}; border: 1px solid ${isOk ? '#238636' : '#D97706'};">
-                      ${isOk ? '✓ AUDITADO OK' : '⚠ AUDITADO INCOMPLETO'}
-                    </span>
-                  </div>`;
-              }
+              const isLast = idx === returnItems.length - 1;
 
               const btnOkText = `✓ RECIBÍ ${returnedQty}`;
               const btnOkTooltip = `Confirmar que recibiste exactamente ${returnedQty} unidad(es) de las ${i.qty} solicitadas originalmente.`;
               const btnIncTooltip = `Reportar que NO recibiste las ${returnedQty} unidad(es) declaradas por el mecánico.`;
 
+              const isOk = i.panolConfirmacion.includes('OK');
+
               return `
-                <div id="ret-act-${itemTag}" style="display:flex; gap:8px; align-items:center; min-height:48px; padding:6px 0;">
-                  <button class="btn-ch ok" 
-                          title="${btnOkTooltip}" 
-                          onclick="submitReturnAudit('${o.reqId}', '${safeItemName}', 'OK', null, '${itemTag}')"
-                          style="flex:1; padding: 7px 10px; font-size: 0.75rem; font-weight: 900; background: rgba(35, 134, 54, 0.15); color: #3fb950; border: 1px solid #238636; border-radius: 6px; cursor: pointer; text-transform: uppercase; white-space: nowrap;">
-                      ${btnOkText}
-                  </button>
-                  <button class="btn-ch inc" 
-                          title="${btnIncTooltip}" 
-                          onclick="openIncompletePopup('${o.reqId}', '${safeItemName}', ${i.qty}, ${returnedQty}, '${itemTag}')"
-                          style="flex:1; padding: 7px 10px; font-size: 0.75rem; font-weight: 900; background: transparent; color: #f59e0b; border: 1px solid #d97706; border-radius: 6px; cursor: pointer; text-transform: uppercase; white-space: nowrap;">
-                      INCOMPLETO
-                  </button>
+                <div class="ret-row" style="display:flex; align-items:center; padding:10px 20px; min-height:54px; ${!isLast ? 'border-bottom: 1px solid rgba(255,255,255,0.06);' : ''}">
+                  
+                  <!-- Ítem info + entrega count -->
+                  <div id="ret-item-${itemTag}" style="flex:1; display:flex; justify-content:space-between; align-items:center; padding-right:28px; ${isResolved ? 'opacity: 0.45; filter: grayscale(0.2); pointer-events: none;' : ''}">
+                    <div style="display:flex; flex-direction:column;">
+                      <div style="font-size: 0.95rem; font-weight: 800; color: #F0F6FC; letter-spacing: -0.2px;">
+                        • ${i.name} <span style="color: #8B949E; font-weight: 500; font-size: 0.82rem;">[Pedido Original: x${i.qty}]</span>
+                      </div>
+                      ${(canjeJson && canjeJson.tipo === 'FALTANTE' && reasonText) ? `
+                        <div style="font-size: 0.75rem; color: #f59e0b; margin-top: 3px; font-weight: 600;">
+                          ⚠ Motivo faltante: ${reasonText}
+                        </div>
+                      ` : ''}
+                    </div>
+                    <div style="display:flex; align-items:baseline; gap:8px; flex-shrink:0; margin-left:20px;">
+                      <span style="color: #F59E0B; font-weight: 700; font-size: 0.85rem;">entrega:</span>
+                      <span style="color: #FFFFFF; font-size: 1.6rem; font-weight: 900; min-width: 24px; text-align: right; line-height: 1;">${returnedQty}</span>
+                    </div>
+                  </div>
+
+                  <!-- Botones de acción / Estado auditado 100% alineados con este ítem -->
+                  <div id="ret-act-${itemTag}" style="width:300px; padding-left:20px; box-sizing:border-box; flex-shrink:0; border-left:1px solid rgba(255,255,255,0.1); display:flex; align-items:center;">
+                    ${isResolved ? `
+                      <div style="width:100%; text-align:center; padding:7px 12px; font-size:0.75rem; font-weight:900; border-radius:6px; background: ${isOk ? 'rgba(35, 134, 54, 0.15)' : 'rgba(217, 119, 6, 0.15)'}; color: ${isOk ? '#3FB950' : '#F59E0B'}; border: 1px solid ${isOk ? '#238636' : '#D97706'};">
+                        ${isOk ? '✓ AUDITADO OK' : '⚠ AUDITADO INCOMPLETO'}
+                      </div>
+                    ` : `
+                      <div style="display:flex; gap:8px; width:100%;">
+                        <button class="btn-ch ok" 
+                                title="${btnOkTooltip}" 
+                                onclick="submitReturnAudit('${o.reqId}', '${safeItemName}', 'OK', null, '${itemTag}')"
+                                style="flex:1; padding:8px 10px; font-size:0.75rem; font-weight:900; background:rgba(35, 134, 54, 0.15); color:#3fb950; border:1px solid #238636; border-radius:6px; cursor:pointer; text-transform:uppercase; white-space:nowrap;">
+                            ${btnOkText}
+                        </button>
+                        <button class="btn-ch inc" 
+                                title="${btnIncTooltip}" 
+                                onclick="openIncompletePopup('${o.reqId}', '${safeItemName}', ${i.qty}, ${returnedQty}, '${itemTag}')"
+                                style="flex:1; padding:8px 10px; font-size:0.75rem; font-weight:900; background:transparent; color:#f59e0b; border:1px solid #d97706; border-radius:6px; cursor:pointer; text-transform:uppercase; white-space:nowrap;">
+                            INCOMPLETO
+                        </button>
+                      </div>
+                    `}
+                  </div>
+
                 </div>`;
             }).join('');
 
@@ -1298,24 +1279,25 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
 
             html += `
               <div class="card-horizontal" id="ret-card-${o.reqId}" style="margin-bottom: 16px; border-radius: 12px; background: #161b22; border: 1px solid #30363d; border-left: 6px solid #f59e0b; display: flex; align-items: stretch;">
-                <div class="ch-left" style="padding: 20px; display: flex; flex-direction: column; justify-content: center; border-right: 1px dashed rgba(255,255,255,0.15); min-width: 220px;">
+                <div class="ch-left" style="padding: 20px; display: flex; flex-direction: column; justify-content: center; border-right: 1px dashed rgba(255,255,255,0.15); min-width: 200px; max-width: 220px; flex-shrink: 0;">
                   <span style="font-size: 0.8rem; font-weight: 800; color: #8B949E; letter-spacing: 0.05em; text-transform: uppercase;">${locObj.label}</span>
                   <span style="font-size: 1.8rem; font-weight: 900; color: var(--text-white); margin: 2px 0 6px 0; line-height: 1.1;">${locObj.number || 'PRUEBA'}</span>
                   <span style="font-size: 0.85rem; font-weight: 700; color: #58A6FF; font-family: monospace;">OT: ${o.otNumber || '--'}</span>
                   <span style="font-size: 0.8rem; font-weight: 800; color: #8B949E; text-transform: uppercase; margin-top: 2px;">${cleanMechName}</span>
                 </div>
                 
-                <div class="ch-middle" style="padding: 16px 24px; flex: 1; display: flex; flex-direction: column; justify-content: center;">
-                  ${itemsHtml}
-                </div>
-                
-                <div class="ch-right" style="padding: 16px 20px; border-left: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); display: flex; flex-direction: column; justify-content: flex-start; min-width: 320px;">
-                  <select id="ret-op-${o.reqId}" class="panol-select" onchange="pendingSelections['ret_${o.reqId}'] = this.value" onfocus="pausePolling()" onblur="resumePolling()" style="width:100%; background:#090d16; border:1px solid #30363d; border-radius:6px; padding:7px 10px; color:white; font-weight:700; font-size:0.85rem; margin-bottom: 8px;">
-                    <option value="" disabled ${!savedOpId ? 'selected' : ''}>👤 Revisa Pañolero...</option>
-                    ${staffOptions}
-                  </select>
-                  <div style="display:flex; flex-direction:column;">
-                    ${actionsHtml}
+                <div style="flex: 1; display: flex; flex-direction: column;">
+                  <div style="display: flex; justify-content: flex-end; padding: 14px 20px 8px 20px;">
+                    <div style="width: 300px; padding-left: 20px; box-sizing: border-box; flex-shrink: 0;">
+                      <select id="ret-op-${o.reqId}" class="panol-select" onchange="pendingSelections['ret_${o.reqId}'] = this.value" onfocus="pausePolling()" onblur="resumePolling()" style="width:100%; background:#090d16; border:1px solid #30363d; border-radius:6px; padding:7px 12px; color:white; font-weight:700; font-size:0.85rem;">
+                        <option value="" disabled ${!savedOpId ? 'selected' : ''}>👤 Revisa Pañolero...</option>
+                        ${staffOptions}
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div style="display: flex; flex-direction: column; flex: 1; justify-content: center; padding-bottom: 8px;">
+                    ${rowsHtml}
                   </div>
                 </div>
               </div>`;
@@ -1349,7 +1331,7 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
           if (pendingInOrder.length > 0) pendingNewCount += pendingInOrder.length;
 
           if (eligibleItems.length > 0) {
-            const itemsHtml = eligibleItems.map((i, idx) => {
+            const rowsHtml = eligibleItems.map((i, idx) => {
               const safeItemName = i.name.replace(/'/g, "\\'");
               const itemTag = `newret-${o.reqId}-${idx}`;
               const isPending = i.status === 'DEVOLUCION PENDIENTE';
@@ -1364,40 +1346,39 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
                 reasonText = String(o.notes).trim();
               }
 
-              if (!isPending) {
-                return `
-                  <div id="${itemTag}" style="display:flex; justify-content:space-between; align-items:center; flex:1; gap:24px; opacity:0.5;">
-                    <div>
-                      <div style="font-size: 1.15rem; font-weight: 900; color: var(--text-white);">
-                        • ${i.name} <span style="color: #94a3b8; font-weight: 600; font-size: 0.85rem;">(x${i.qty})</span>
+              return `
+                <div class="ret-row" style="display: flex; align-items: center; padding: 10px 20px; min-height: 54px; ${idx > 0 ? 'border-top: 1px solid #21262d;' : ''}">
+                  <div id="${itemTag}" style="display: flex; justify-content: space-between; align-items: center; flex: 1; gap: 24px; padding-right: 20px; ${!isPending ? 'opacity: 0.5;' : ''}">
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                      <div style="font-size: 0.95rem; font-weight: 800; color: #F0F6FC; letter-spacing: -0.2px;">
+                        • ${i.name} <span style="color: #8B949E; font-weight: 500; font-size: 0.85rem;">(Cant. a devolver: x${i.qty})</span>
                       </div>
-                      <div style="font-size: 0.85rem; color: #22c55e; font-weight: 800; margin-top: 4px;">
-                        ✓ REINTEGRADO A STOCK
+                      <div style="font-size: 0.75rem; color: ${isPending ? '#f59e0b' : '#3fb950'}; font-weight: 700;">
+                        ${isPending ? '↳ Solicitado para devolución por el mecánico' : '✓ Reintegrado a stock'}
                       </div>
                     </div>
+                    
                     ${reasonText ? `
-                      <div style="display:flex; gap:10px; align-items:flex-start; max-width:480px; font-size:0.85rem; line-height:1.4;">
-                        <span style="color: #f59e0b; font-weight: 900; white-space: nowrap;">Motivo:</span>
-                        <span style="color: #94a3b8; font-weight: 500;">${reasonText}</span>
+                      <div style="display: flex; gap: 8px; align-items: baseline; max-width: 480px; font-size: 0.85rem; line-height: 1.4; margin-left: auto;">
+                        <span style="color: #f59e0b; font-weight: 800; white-space: nowrap;">Motivo:</span>
+                        <span style="color: #e6edf3; font-weight: 600;">${reasonText}</span>
                       </div>
                     ` : ''}
-                  </div>`;
-              }
-
-              return `
-                <div id="${itemTag}" style="display:flex; justify-content:space-between; align-items:center; flex:1; gap:24px;">
-                  <div style="display:flex; flex-direction:column; gap:4px;">
-                    <div style="font-size: 1.15rem; font-weight: 900; color: var(--text-white); letter-spacing: -0.2px;">
-                      • ${i.name} <span style="color: #94a3b8; font-weight: 600; font-size: 0.85rem;">(Cant. a devolver: x${i.qty})</span>
-                    </div>
-                    <div style="font-size: 0.85rem; color: #f59e0b; font-weight: 800;">
-                      ↳ Solicitado para devolución por el mecánico
-                    </div>
                   </div>
-                  
-                  <div style="display:flex; gap:10px; align-items:flex-start; max-width:480px; font-size:0.85rem; line-height:1.4;">
-                    <span style="color: #f59e0b; font-weight: 900; white-space: nowrap;">Motivo:</span>
-                    <span style="color: #e2e8f0; font-weight: 500;">${reasonText || 'Solicitud de devolución por el mecánico.'}</span>
+
+                  <!-- Botón Reintegrar / Estado 100% alineado con este ítem -->
+                  <div id="act-${itemTag}" style="width: 260px; padding-left: 20px; box-sizing: border-box; flex-shrink: 0; border-left: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center;">
+                    ${!isPending ? `
+                      <div style="width: 100%; text-align: center; padding: 7px 12px; font-size: 0.75rem; font-weight: 900; border-radius: 6px; background: rgba(35, 134, 54, 0.15); color: #3FB950; border: 1px solid #238636;">
+                        ✓ REINTEGRADO A STOCK
+                      </div>
+                    ` : `
+                      <button class="btn-ch ok" 
+                              onclick="confirmNewItemReturn('${o.reqId}', '${safeItemName}', ${i.qty}, '${itemTag}')"
+                              style="width: 100%; padding: 8px 12px; font-size: 0.75rem; font-weight: 900; background: rgba(35, 134, 54, 0.2); color: #3fb950; border: 1px solid #238636; border-radius: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.3px; transition: 0.2s;">
+                          ✓ REINTEGRAR A STOCK
+                      </button>
+                    `}
                   </div>
                 </div>`;
             }).join('');
@@ -1405,51 +1386,32 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
             const savedOpId = pendingSelections[`newret_${o.reqId}`] || o.panolOpId || '';
             const staffOptions = panolStaffList.map(s => `<option value="${s.id}" ${savedOpId === String(s.id) ? 'selected' : ''}>${s.name}</option>`).join('');
 
-            const pendingItems = eligibleItems.filter(i => i.status === 'DEVOLUCION PENDIENTE');
-            const actionButtons = pendingItems.map((i, idx) => {
-              const safeItemName = i.name.replace(/'/g, "\\'");
-              const itemTag = `newret-${o.reqId}-${idx}`;
-              return `
-                <button class="btn-ch ok" 
-                        onclick="confirmNewItemReturn('${o.reqId}', '${safeItemName}', ${i.qty}, '${itemTag}')"
-                        style="width: 100%; padding: 8px 14px; font-size: 0.75rem; font-weight: 900; background: rgba(35, 134, 54, 0.2); color: #22c55e; border: 1px solid #166534; border-radius: 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.3px; transition: 0.2s;">
-                    ✓ REINTEGRAR A STOCK
-                </button>`;
-            }).join('');
-
             const firstItemLoc = eligibleItems[0] ? eligibleItems[0].loc : '';
             const locObj = formatLocationBox(o.unitInfo, firstItemLoc, o.opInfo);
             const cleanMechName = String(o.opInfo || 'MECÁNICO').replace(/\[.*?\]/g, '').trim();
 
             html += `
-              <div class="card-horizontal" style="margin-bottom: 16px; border-radius: 10px; background: #0f172a; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center;">
-                <div class="ch-left" style="padding: 16px 20px; display: flex; align-items: center; border-right: 1px dashed rgba(255,255,255,0.15); min-width: 250px;">
-                  <div style="display: flex; gap: 14px; align-items: center;">
-                    <div style="display: flex; flex-direction: column; align-items: flex-start; justify-content: center;">
-                      <span style="font-size: 1.5rem; font-weight: 900; line-height: 1; color: var(--text-white); text-transform: uppercase;">${locObj.label}</span>
-                      ${locObj.number ? `<span style="font-size: 2.2rem; font-weight: 900; line-height: 1; color: var(--text-white); margin-top: 2px;">${locObj.number}</span>` : ''}
-                    </div>
-                    <div style="display: flex; flex-direction: column; justify-content: center; gap: 4px;">
-                      <div style="font-size: 0.85rem; font-weight: 700; color: #94a3b8;">
-                        OT: ${o.otNumber || '--'}
-                      </div>
-                      <div style="font-size: 0.85rem; font-weight: 800; color: #e2e8f0; text-transform: uppercase;">
-                        ${cleanMechName}
-                      </div>
+              <div class="card-horizontal" id="newret-card-${o.reqId}" style="margin-bottom: 16px; border-radius: 12px; background: #161b22; border: 1px solid #30363d; border-left: 6px solid #3b82f6; display: flex; align-items: stretch;">
+                <div class="ch-left" style="padding: 20px; display: flex; flex-direction: column; justify-content: center; border-right: 1px dashed rgba(255,255,255,0.15); min-width: 200px; max-width: 220px; flex-shrink: 0;">
+                  <span style="font-size: 0.8rem; font-weight: 800; color: #8B949E; letter-spacing: 0.05em; text-transform: uppercase;">${locObj.label}</span>
+                  <span style="font-size: 1.8rem; font-weight: 900; color: var(--text-white); margin: 2px 0 6px 0; line-height: 1.1;">${locObj.number || 'PRUEBA'}</span>
+                  <span style="font-size: 0.85rem; font-weight: 700; color: #58A6FF; font-family: monospace;">OT: ${o.otNumber || '--'}</span>
+                  <span style="font-size: 0.8rem; font-weight: 800; color: #8B949E; text-transform: uppercase; margin-top: 2px;">${cleanMechName}</span>
+                </div>
+                
+                <div style="flex: 1; display: flex; flex-direction: column;">
+                  <div style="display: flex; justify-content: flex-end; padding: 14px 20px 8px 20px;">
+                    <div style="width: 260px; padding-left: 20px; box-sizing: border-box; flex-shrink: 0;">
+                      <select id="newret-op-${o.reqId}" class="panol-select" onchange="pendingSelections['newret_${o.reqId}'] = this.value" onfocus="pausePolling()" onblur="resumePolling()" style="width:100%; background:#090d16; border:1px solid #30363d; border-radius:6px; padding:7px 12px; color:white; font-weight:700; font-size:0.85rem;">
+                        <option value="" disabled ${!savedOpId ? 'selected' : ''}>👤 Revisa Pañolero...</option>
+                        ${staffOptions}
+                      </select>
                     </div>
                   </div>
-                </div>
-                
-                <div class="ch-middle" style="padding: 16px 24px; flex: 1; display: flex; align-items: center;">
-                  ${itemsHtml}
-                </div>
-                
-                <div class="ch-right" style="padding: 12px 16px; margin: 12px; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; background: rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; gap: 10px; min-width: 190px; justify-content: center;">
-                  <select id="newret-op-${o.reqId}" class="panol-select" onchange="pendingSelections['newret_${o.reqId}'] = this.value" onfocus="pausePolling()" onblur="resumePolling()" style="width:100%; background:#090d16; border:1px solid rgba(255,255,255,0.2); border-radius:6px; padding:6px 10px; color:white; font-weight:700; font-size:0.85rem;">
-                    <option value="" disabled ${!savedOpId ? 'selected' : ''}>👤 Revisa Pañolero...</option>
-                    ${staffOptions}
-                  </select>
-                  ${actionButtons}
+                  
+                  <div style="display: flex; flex-direction: column; flex: 1; justify-content: center; padding-bottom: 8px;">
+                    ${rowsHtml}
+                  </div>
                 </div>
               </div>`;
           }
@@ -1773,9 +1735,14 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
         }
 
         const itemEl = document.getElementById(itemTag);
+        const actEl = document.getElementById(`act-${itemTag}`);
         if (itemEl) {
           itemEl.style.opacity = '0.4';
           itemEl.style.pointerEvents = 'none';
+        }
+        if (actEl) {
+          actEl.style.opacity = '0.4';
+          actEl.style.pointerEvents = 'none';
         }
 
         google.script.run
@@ -1787,6 +1754,10 @@ document.getElementById('tab-returns-new').classList.toggle('active', isReturnsN
             if (itemEl) {
               itemEl.style.opacity = '1';
               itemEl.style.pointerEvents = 'auto';
+            }
+            if (actEl) {
+              actEl.style.opacity = '1';
+              actEl.style.pointerEvents = 'auto';
             }
           })
           .confirmNewReturn(reqId, itemName, returnQty, panolOpId);
