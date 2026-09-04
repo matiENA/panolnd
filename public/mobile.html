@@ -208,6 +208,22 @@
     .qty-selector { display: flex; align-items: center; background: #e2e5e9; border-radius: 20px; padding: 4px; gap: 8px; }
     .btn-qty { width: 28px; height: 28px; border-radius: 50%; border: none; background: var(--white); color: var(--blue); font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .qty-display { font-weight: 700; font-size: 0.9rem; color: var(--dark); min-width: 15px; text-align: center; }
+    .qty-input {
+      width: 44px; height: 28px; background: var(--white);
+      border: 1px solid #d1d5db; border-radius: 6px;
+      color: var(--dark); font-weight: 800; font-size: 0.95rem;
+      text-align: center; padding: 0; font-family: inherit;
+    }
+    .qty-input:focus {
+      outline: none; border-color: var(--blue);
+      box-shadow: 0 0 0 1px var(--blue);
+    }
+    .qty-input::-webkit-inner-spin-button, 
+    .qty-input::-webkit-outer-spin-button { 
+      -webkit-appearance: none; 
+      margin: 0; 
+    }
+    .qty-input { -moz-appearance: textfield; }
     .btn-remove { background: none; border: none; color: #e74c3c; font-size: 1.2rem; cursor: pointer; padding: 0 5px; }
 
     /* ORDERS LIST */
@@ -1120,14 +1136,31 @@
                 <div style="font-size:0.75rem; color:#888;">${obj.notes || ''}</div>
               </div>
               <div class="qty-selector">
-                <button class="btn-qty" type="button" onclick="updateCartQty(${index}, -1)">−</button>
-                <span class="qty-display">${obj.qty}</span>
-                <button class="btn-qty" type="button" onclick="updateCartQty(${index}, 1)">+</button>
+                <button class="btn-qty" type="button" onclick="updateCartQty(${index}, -1)" title="Restar 1">−</button>
+                <input type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="9999" class="qty-input" value="${obj.qty}" onfocus="this.select()" onchange="setCartQty(${index}, this.value)" oninput="handleCartQtyInput(${index}, this)" title="Ingresar cantidad numérica" />
+                <button class="btn-qty" type="button" onclick="updateCartQty(${index}, 1)" title="Sumar 1">+</button>
               </div>
-              <button class="btn-remove" onclick="removeFromCart(${index})">×</button>
+              <button class="btn-remove" onclick="removeFromCart(${index})" title="Eliminar">×</button>
             `;
             container.appendChild(div);
           });
+        }
+      }
+
+      function setCartQty(index, value) {
+        let val = parseInt(value, 10);
+        if (isNaN(val) || val < 1) val = 1;
+        cartItems[index].qty = val;
+        renderCart();
+      }
+
+      function handleCartQtyInput(index, inputEl) {
+        let val = parseInt(inputEl.value, 10);
+        if (!isNaN(val) && val >= 1) {
+          cartItems[index].qty = val;
+          const totalItems = cartItems.reduce((sum, i) => sum + parseInt(i.qty), 0);
+          const submitBtn = document.getElementById('submitBtn');
+          if (submitBtn) submitBtn.innerText = `CONFIRMAR (${totalItems}) ITEMS`;
         }
       }
 
@@ -1242,7 +1275,14 @@ function promptCanje(itemsCanje) {
 
             // 2. Procesamos el estado
             if (returnedCount === qty) {
-                item.canjeStatus = 'OK';
+                item.canjeStatus = JSON.stringify({
+                    canje: true,
+                    tipo: "ENTREGO_USADA",
+                    cant_pedida: qty,
+                    cant_entregada: qty,
+                    cant_faltante: 0,
+                    motivo: ""
+                });
             } else {
                 const inputEl = document.getElementById(`motivo_${safeId}`);
                 const reason = inputEl.value.trim();
@@ -1252,12 +1292,14 @@ function promptCanje(itemsCanje) {
                     allValid = false;
                     inputEl.style.borderColor = 'var(--danger)';
                 } else {
-                    // Formateamos el string mixto para no romper la columna Q ni el Dashboard
-                    if (returnedCount === 0) {
-                        item.canjeStatus = `FALTA: ${reason}`;
-                    } else {
-                        item.canjeStatus = `FALTA PARCIAL (${returnedCount} entregada/s): ${reason}`;
-                    }
+                    item.canjeStatus = JSON.stringify({
+                        canje: true,
+                        tipo: "FALTANTE",
+                        cant_pedida: qty,
+                        cant_entregada: returnedCount,
+                        cant_faltante: missingCount,
+                        motivo: reason
+                    });
                 }
             }
         });

@@ -503,19 +503,30 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      background: #0d1117;
-      padding: 3px 6px;
-      border-radius: 20px;
-      border: 1px solid var(--border);
     }
     .btn-step {
-      width: 22px; height: 22px; border-radius: 50%;
-      border: none; background: var(--border); color: white;
-      font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center;
-      font-size: 0.8rem;
+      width: 28px; height: 28px; border-radius: 6px;
+      border: 1px solid var(--border); background: #161b22; color: #9ca3af;
+      font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; transition: all 0.15s ease;
     }
-    .btn-step:hover { background: var(--blue-light); }
-    .step-val { font-weight: 800; font-size: 0.85rem; min-width: 18px; text-align: center; }
+    .btn-step:hover { background: #21262d; color: #ffffff; border-color: #3d4856; }
+    .step-input {
+      width: 44px; height: 28px; background: #0d1117;
+      border: 1px solid var(--border); border-radius: 4px;
+      color: #ffffff; font-weight: 800; font-size: 0.95rem;
+      text-align: center; padding: 0; font-family: inherit;
+    }
+    .step-input:focus {
+      outline: none; border-color: var(--blue-light);
+      box-shadow: 0 0 0 1px var(--blue-light);
+    }
+    .step-input::-webkit-inner-spin-button, 
+    .step-input::-webkit-outer-spin-button { 
+      -webkit-appearance: none; 
+      margin: 0; 
+    }
+    .step-input { -moz-appearance: textfield; }
 
     .btn-del-item {
       background: none; border: none; color: var(--danger);
@@ -1353,11 +1364,11 @@
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             <div class="stepper-control">
-              <button class="btn-step" onclick="updateCartQty(${index}, -1)">−</button>
-              <span class="step-val">${item.qty}</span>
-              <button class="btn-step" onclick="updateCartQty(${index}, 1)">+</button>
+              <button class="btn-step" type="button" onclick="updateCartQty(${index}, -1)" title="Restar 1">−</button>
+              <input type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="9999" class="step-input" value="${item.qty}" onfocus="this.select()" onchange="setCartQty(${index}, this.value)" oninput="handleCartQtyInput(${index}, this)" title="Ingresar cantidad numérica" />
+              <button class="btn-step" type="button" onclick="updateCartQty(${index}, 1)" title="Sumar 1">+</button>
             </div>
-            <button class="btn-del-item" onclick="removeCartItem(${index})">×</button>
+            <button class="btn-del-item" onclick="removeCartItem(${index})" title="Eliminar del carrito">×</button>
           </div>
         `;
         container.appendChild(div);
@@ -1370,6 +1381,25 @@
       if (newNote !== null) {
         cartItems[index].notes = newNote.trim();
         renderCart();
+      }
+    }
+
+    function setCartQty(index, value) {
+      let val = parseInt(value, 10);
+      if (isNaN(val) || val < 1) val = 1;
+      cartItems[index].qty = val;
+      renderCart();
+    }
+
+    function handleCartQtyInput(index, inputEl) {
+      let val = parseInt(inputEl.value, 10);
+      if (!isNaN(val) && val >= 1) {
+        cartItems[index].qty = val;
+        const totalQty = cartItems.reduce((sum, i) => sum + parseInt(i.qty), 0);
+        const badge = document.getElementById('cartCountBadge');
+        if (badge) badge.innerText = `${totalQty} ÍTEMS`;
+        const btn = document.getElementById('submitBtn');
+        if (btn) btn.innerText = `CONFIRMAR PEDIDO (${totalQty} ÍTEMS)`;
       }
     }
 
