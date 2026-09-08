@@ -290,10 +290,14 @@ async function syncDataFromSheets(force = false) {
           const boxRaw = String(row[2] || '').trim();
           const opInfo = String(row[3] || '').trim();
 
-          let boxNumber = boxRaw;
-          if (!boxNumber) {
-            const m = opInfo.match(/box\s*([0-9a-zA-Z]+)/i);
-            if (m) boxNumber = m[1];
+          let boxNumber = '';
+          const m = opInfo.match(/\[(.*?)\]/);
+          if (m && m[1]) {
+            boxNumber = m[1].trim();
+          } else {
+            const m2 = opInfo.match(/box\s*([0-9a-zA-Z]+)/i);
+            if (m2) boxNumber = m2[0].trim();
+            else if (boxRaw && !/^\d{4,}$/.test(boxRaw)) boxNumber = boxRaw;
           }
 
           const rawPlates = unitInfo.split(/[\/+]/).map(p => p.trim().toUpperCase().replace(/[\s\-_.]/g, '')).filter(Boolean);

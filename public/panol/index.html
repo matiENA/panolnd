@@ -202,11 +202,11 @@
 
       main { padding: 24px; }
       .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; align-items: start; }
-
       .card {
         background: #131923; border-radius: 12px; border: 1px solid #2a323d;
         border-left: 5px solid var(--blue); display: flex; flex-direction: column;
         box-shadow: 0 4px 16px rgba(0,0,0,0.4); transition: all 0.2s ease; overflow: hidden;
+        position: relative;
       }
       .card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.5); }
 
@@ -222,206 +222,447 @@
       .card.has-semi.status-LISTO { border-left-color: var(--green); }
 
       /* === FIGMA CARD (697:1035) STYLES === */
-      .card-figma-header {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 14px 18px 10px;
-      }
-      .header-box-group { display: flex; align-items: baseline; gap: 8px; }
-      .box-label {
-        font-family: 'Roboto Mono', monospace; font-size: 1.1rem;
-        font-weight: 400; color: #94a3b8; letter-spacing: 0.5px;
-      }
-      .box-number {
-        font-family: 'Inter', sans-serif; font-size: 2.2rem;
-        font-weight: 900; color: #ffffff; line-height: 1;
-      }
-      .header-meta-group { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-      .header-time-row { display: flex; align-items: center; gap: 6px; }
-      .time-display {
-        font-family: 'Roboto Mono', monospace; font-size: 0.85rem;
-        font-weight: 700; color: #cbd5e1;
-      }
-      .time-display.urgent { color: var(--red); }
-      .wait-display {
-        font-size: 0.7rem; color: #94a3b8; background: rgba(255,255,255,0.06);
-        padding: 2px 6px; border-radius: 4px; font-weight: 600;
-      }
-      .wait-display.urgent { background: rgba(218,54,51,0.2); color: var(--red); }
-      .header-mechanic {
-        display: flex; align-items: center; gap: 6px;
-        font-family: 'Roboto Mono', monospace; font-size: 0.8rem;
-        font-weight: 500; color: #e2e8f0;
-      }
-      .mechanic-name-text {
-        max-width: 170px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      /* 1. Barra Superior Encabezado (Flex 3 columnas: Box/Sector, Vehículos, Hora) */
+      .card-figma-top-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 12px 10px 14px;
+        gap: 6px;
       }
 
-      .card-figma-divider {
-        height: 1px; background: rgba(255, 255, 255, 0.12);
+      /* Columna 1: Box o Sector */
+      .card-figma-box-col {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: flex-start;
+        flex-shrink: 0;
+      }
+      .box-label {
+        font-family: 'Roboto Mono', monospace;
+        font-size: 1rem;
+        font-weight: 300;
+        color: #ffffff;
+        line-height: 1;
+        letter-spacing: 0.5px;
+      }
+      .box-number {
+        font-family: 'Inter', sans-serif;
+        font-size: 1.85rem;
+        font-weight: 800;
+        color: #ffffff;
+        line-height: 1;
+        margin-top: 2px;
+      }
+      .box-sector-label {
+        font-family: 'Inter', 'Roboto Mono', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 800;
+        color: #ffffff;
+        line-height: 1.1;
+        letter-spacing: 0.2px;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      /* Columna 2: Bloque Dual Tractor + Semi */
+      .card-figma-vehicles-center {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        flex: 1;
+      }
+      .figma-vehicle-subcard {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        width: 96px;
+        flex-shrink: 0;
+      }
+
+      /* Columna 3: Hora 24hs alineada arriba a la derecha (nunca colisiona) */
+      .card-figma-time-col {
+        display: flex;
+        justify-content: flex-end;
+        align-self: flex-start;
+        flex-shrink: 0;
+        min-width: 36px;
+        padding-top: 2px;
+      }
+      .card-figma-time {
+        font-family: 'Roboto Mono', monospace;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #ffffff;
+        line-height: 1;
+        white-space: nowrap;
+      }
+      .card-figma-time.urgent {
+        color: #ef4444;
+      }
+      .figma-vehicle-top-tags {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        width: 100%;
+      }
+      .figma-ot-pill {
+        background: #ffffff;
+        color: #000000;
+        font-family: 'Roboto Mono', monospace;
+        font-size: 0.65rem;
+        font-weight: 900;
+        padding: 1px 5px;
+        border-radius: 3px;
+        line-height: 1.2;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+      }
+      .figma-brand-pill {
+        font-family: 'Roboto Mono', sans-serif;
+        font-size: 0.65rem;
+        font-weight: 800;
+        padding: 1px 4px;
+        border-radius: 3px;
+        text-transform: uppercase;
+        color: #e2e8f0;
+        background: rgba(255,255,255,0.08);
+        line-height: 1.2;
+      }
+      .figma-brand-pill.brand-iveco { color: #60a5fa; background: rgba(29, 78, 216, 0.25); border: 1px solid rgba(29, 78, 216, 0.5); }
+      .figma-brand-pill.brand-scania { color: #f87171; background: rgba(185, 28, 28, 0.25); border: 1px solid rgba(185, 28, 28, 0.5); }
+      .figma-brand-pill.brand-volvo { color: #38bdf8; background: rgba(3, 105, 161, 0.25); border: 1px solid rgba(3, 105, 161, 0.5); }
+      .figma-brand-pill.brand-mercedes, .figma-brand-pill.brand-mercedes-benz { color: #e5e7eb; background: rgba(75, 85, 99, 0.3); border: 1px solid rgba(107, 114, 128, 0.5); }
+      .figma-brand-pill.brand-danes { color: #38bdf8; background: rgba(2, 132, 199, 0.25); border: 1px solid rgba(2, 132, 199, 0.5); }
+      .figma-brand-pill.brand-fangio { color: #34d399; background: rgba(5, 150, 105, 0.25); border: 1px solid rgba(5, 150, 105, 0.5); }
+      .figma-brand-pill.brand-heil { color: #fbbf24; background: rgba(217, 119, 6, 0.25); border: 1px solid rgba(217, 119, 6, 0.5); }
+      .figma-brand-pill.brand-randon { color: #c084fc; background: rgba(124, 58, 237, 0.25); border: 1px solid rgba(124, 58, 237, 0.5); }
+      .figma-brand-pill.brand-hermann { color: #fb923c; background: rgba(234, 88, 12, 0.25); border: 1px solid rgba(234, 88, 12, 0.5); }
+
+      /* Chapa patente Mercosur (sin texto "República Argentina") */
+      .plate-mercosur {
+        width: 100%;
+        max-width: 96px;
+        background: #ffffff;
+        border: 1.5px solid #000000;
+        border-radius: 5px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+      }
+      .plate-strip {
+        background: #0033a0;
+        height: 8px;
+        width: 100%;
+      }
+      .plate-code {
+        color: #000000;
+        font-family: 'Roboto Mono', 'Inter', monospace;
+        font-weight: 900;
+        font-size: 0.82rem;
+        letter-spacing: 0.3px;
+        text-align: center;
+        padding: 2px 2px 3px;
+        line-height: 1;
+      }
+
+      /* Separadores de Línea Figma */
+      .figma-divider-dashed {
+        height: 0;
+        border: none;
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.2);
+        margin: 0 16px;
+      }
+      .figma-divider-solid {
+        height: 0;
+        border: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
         margin: 0 16px;
       }
 
-      /* === BLOQUE DUAL TRACTOR / SEMI (SIN UTE / INTERNO) === */
-      .card-vehicles-block {
-        display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-        padding: 12px 16px;
+      /* Fila de Mecánico Solicitante */
+      .card-figma-mechanic-row {
+        padding: 8px 16px;
+        display: flex;
+        align-items: center;
       }
-      .vehicle-card {
-        background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 8px; padding: 10px; display: flex; flex-direction: column;
-        align-items: center; gap: 8px;
+      .figma-mechanic-name {
+        font-family: 'Roboto Mono', monospace;
+        font-size: 0.8rem;
+        font-weight: 400;
+        color: #ffffff;
+        letter-spacing: 0.2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
-      .vehicle-card.tractor-card { border-left: 3px solid #3b82f6; }
-      .vehicle-card.semi-card { border-left: 3px solid #38bdf8; }
-      .vehicle-card.empty-semi { border-left-color: rgba(255, 255, 255, 0.15); justify-content: center; }
-
-      .semi-placeholder {
-        display: flex; flex-direction: column; align-items: center;
-        justify-content: center; height: 100%; color: #64748b; padding: 10px 0;
-      }
-      .semi-none-label { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.5px; }
-      .semi-none-desc { font-size: 0.65rem; color: #475569; }
-
-      /* Chapa patente Mercosur Argentina */
-      .plate-mercosur {
-        width: 100%; max-width: 115px; background: #ffffff;
-        border: 1.5px solid #000000; border-radius: 5px; overflow: hidden;
-        display: flex; flex-direction: column; box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-      }
-      .plate-strip {
-        background: #0033a0; color: #ffffff; height: 9px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 5px; font-weight: 900; letter-spacing: 0.8px; text-transform: uppercase;
-      }
-      .plate-code {
-        color: #000000; font-family: 'Roboto Mono', 'Inter', monospace;
-        font-weight: 900; font-size: 0.95rem; letter-spacing: 0.5px;
-        text-align: center; padding: 3px 4px 4px; line-height: 1;
-      }
-
-      .vehicle-meta-tags {
-        display: flex; align-items: center; justify-content: center;
-        gap: 6px; flex-wrap: wrap; width: 100%;
-      }
-      .vehicle-ot-pill {
-        background: #ffffff; color: #000000; font-family: 'Roboto Mono', monospace;
-        font-size: 0.72rem; font-weight: 900; padding: 2px 6px; border-radius: 4px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-      }
-      .vehicle-brand-pill {
-        font-size: 0.7rem; font-weight: 800; padding: 2px 7px;
-        border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px;
-        background: rgba(255,255,255,0.1); color: #e2e8f0;
-      }
-      .vehicle-brand-pill.brand-iveco { background: rgba(29, 78, 216, 0.25); color: #60a5fa; border: 1px solid rgba(29, 78, 216, 0.5); }
-      .vehicle-brand-pill.brand-scania { background: rgba(185, 28, 28, 0.25); color: #f87171; border: 1px solid rgba(185, 28, 28, 0.5); }
-      .vehicle-brand-pill.brand-volvo { background: rgba(3, 105, 161, 0.25); color: #38bdf8; border: 1px solid rgba(3, 105, 161, 0.5); }
-      .vehicle-brand-pill.brand-mercedes, .vehicle-brand-pill.brand-mercedes-benz { background: rgba(75, 85, 99, 0.3); color: #e5e7eb; border: 1px solid rgba(107, 114, 128, 0.5); }
-      .vehicle-brand-pill.brand-danes { background: rgba(2, 132, 199, 0.25); color: #38bdf8; border: 1px solid rgba(2, 132, 199, 0.5); }
-      .vehicle-brand-pill.brand-fangio { background: rgba(5, 150, 105, 0.25); color: #34d399; border: 1px solid rgba(5, 150, 105, 0.5); }
-      .vehicle-brand-pill.brand-heil { background: rgba(217, 119, 6, 0.25); color: #fbbf24; border: 1px solid rgba(217, 119, 6, 0.5); }
-      .vehicle-brand-pill.brand-randon { background: rgba(124, 58, 237, 0.25); color: #c084fc; border: 1px solid rgba(124, 58, 237, 0.5); }
-      .vehicle-brand-pill.brand-hermann { background: rgba(234, 88, 12, 0.25); color: #fb923c; border: 1px solid rgba(234, 88, 12, 0.5); }
 
       /* === LISTA DE REPUESTOS FIGMA (697:1035) === */
       .card-items-container {
-        padding: 12px 16px; display: flex; flex-direction: column; gap: 8px;
+        padding: 12px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
       }
       .figma-item-card {
-        background: #080B0F; border: 1px solid #1e2633; border-radius: 6px;
-        padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+        background: #080B0F;
+        border: 1px solid #1e2633;
+        border-radius: 6px;
+        padding: 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
         transition: border-color 0.2s;
       }
       .figma-item-card:hover { border-color: #2e3a4e; }
       .figma-item-card.highlighted { border-color: #22c55e; background: rgba(34, 197, 94, 0.08); }
-      
-      .figma-item-top {
-        display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
+
+      /* Línea 1: Nombre de ítem */
+      .figma-item-title-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
       }
       .figma-item-name {
-        font-family: 'Roboto Mono', monospace; font-size: 0.85rem;
-        font-weight: 600; color: #ffffff; line-height: 1.35; word-break: break-word;
-      }
-      .figma-qty-stepper {
-        display: flex; align-items: center; gap: 3px; flex-shrink: 0;
-      }
-      .f-qty-btn {
-        width: 25px; height: 25px; background: #131923; border: 1px solid #384457;
-        color: #cbd5e1; border-radius: 5px; font-size: 1rem; font-weight: 900;
-        cursor: pointer; display: flex; align-items: center; justify-content: center;
-        line-height: 1; transition: all 0.15s;
-      }
-      .f-qty-btn:hover { background: var(--blue); border-color: var(--blue); color: #fff; }
-      .f-qty-btn:active { transform: scale(0.92); }
-      .f-qty-input {
-        width: 38px; height: 25px; text-align: center; background: #030508;
-        border: 1px solid #2d3748; border-radius: 5px; color: #ffffff;
-        font-size: 0.85rem; font-weight: 700; outline: none; -moz-appearance: textfield; appearance: textfield;
-      }
-      .f-qty-input::-webkit-inner-spin-button, .f-qty-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-      .f-qty-input.modified { border-color: var(--orange); background: rgba(245, 158, 11, 0.1); color: #fbbf24; }
-      .f-remove-btn {
-        width: 25px; height: 25px; border: 1px solid rgba(239, 68, 68, 0.4);
-        background: rgba(239, 68, 68, 0.15); color: #ef4444; border-radius: 5px;
-        font-size: 0.85rem; font-weight: 800; cursor: pointer; display: flex;
-        align-items: center; justify-content: center; transition: 0.15s;
-      }
-      .f-remove-btn:hover { background: #ef4444; color: #fff; }
-
-      .figma-item-bottom {
-        display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+        font-family: 'Roboto Mono', monospace;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #ffffff;
+        line-height: 1.3;
+        word-break: break-word;
       }
 
-      /* Badge de código de ítem (media_1788876493490.png) */
+      /* Línea 2: Badges (Código + Ubicación) */
+      .figma-item-meta-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
       .item-code-badge {
-        background: #bfdbfe; color: #ffffff;
-        font-family: 'Roboto Mono', 'JetBrains Mono', monospace;
-        font-size: 0.72rem; font-weight: 700; padding: 3px 9px;
-        border-radius: 8px; display: inline-flex; align-items: center;
-        letter-spacing: 0.4px; text-shadow: 0 1px 2px rgba(30, 58, 138, 0.45);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+        background: rgba(37, 99, 235, 0.25);
+        border: 1px solid #3b82f6;
+        color: #93c5fd;
+        font-family: 'Roboto Mono', 'Inter', monospace;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 0 8px;
+        height: 23px;
+        border-radius: 5.5px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        letter-spacing: 0.3px;
+        line-height: 1;
+        box-sizing: border-box;
       }
       .item-location-pill {
-        background: rgba(37, 99, 235, 0.15); border: 1px solid rgba(59, 130, 246, 0.4);
-        color: #60a5fa; font-family: 'Roboto Mono', monospace; font-size: 0.7rem;
-        font-weight: 600; padding: 3px 8px; border-radius: 6px; display: inline-flex;
-        align-items: center; gap: 4px; white-space: nowrap;
+        background: rgba(37, 99, 235, 0.15);
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        color: #60a5fa;
+        font-family: 'Roboto Mono', monospace;
+        font-size: 0.68rem;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        white-space: nowrap;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
-      .item-note-badge {
-        background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5);
-        color: #fbbf24; font-size: 0.7rem; font-weight: 700; padding: 3px 8px;
-        border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;
+
+      /* Línea 3: Banner de Nota (Ámbar, estrictamente condicional) */
+      .figma-item-note-banner {
+        background: rgba(245, 158, 11, 0.45);
+        border: 1px solid rgba(245, 158, 11, 0.8);
+        color: #ffffff;
+        font-family: 'Roboto Mono', sans-serif;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        word-break: break-word;
       }
+
+      /* Línea 4: Stepper abajo a la izquierda */
+      .figma-item-bottom-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .figma-stepper-row {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .f-step-btn {
+        width: 25px;
+        height: 25px;
+        background: #131923;
+        border: 1px solid #384457;
+        color: #cbd5e1;
+        border-radius: 5px;
+        font-size: 1rem;
+        font-weight: 800;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+        transition: all 0.15s;
+      }
+      .f-step-btn:hover { background: var(--blue); border-color: var(--blue); color: #fff; }
+      .f-step-btn:active { transform: scale(0.92); }
+      .f-step-input {
+        width: 32px;
+        height: 25px;
+        background: #030508;
+        border: 1px solid #2d3748;
+        border-radius: 5px;
+        color: #ffffff;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-align: center;
+        padding: 0;
+        margin: 0;
+        outline: none;
+        -moz-appearance: textfield;
+        appearance: textfield;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 23px;
+      }
+      .f-step-input::-webkit-inner-spin-button, .f-step-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+      .f-step-input.modified { border-color: var(--orange); background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+      .f-step-del {
+        width: 25px;
+        height: 25px;
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid #ef4444;
+        color: #ef4444;
+        border-radius: 5px;
+        font-size: 0.85rem;
+        font-weight: 800;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: 0.15s;
+      }
+      .f-step-del:hover { background: #ef4444; color: #fff; }
+      .f-step-stock {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: #8b949e;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-left: 4px;
+      }
+      .f-step-stock.low { color: var(--orange); background: rgba(245,158,11,0.1); }
+      .f-step-stock.out { color: var(--red); background: rgba(218,54,51,0.1); }
+
+      /* Botón Ver más */
+      .btn-figma-ver-mas {
+        width: 100%;
+        height: 25px;
+        background: rgba(59, 130, 246, 0.08);
+        border: 1px solid #3b82f6;
+        color: #60a5fa;
+        font-size: 0.75rem;
+        font-weight: 600;
+        border-radius: 4px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        margin-top: 4px;
+      }
+      .btn-figma-ver-mas:hover { background: rgba(59, 130, 246, 0.2); color: #ffffff; }
 
       /* === FOOTER ACCIONES FIGMA === */
       .card-figma-footer {
-        padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 8px;
+        padding: 10px 16px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
       }
-      .btn-figma-add {
-        width: 100%; padding: 9px; background: rgba(59, 130, 246, 0.08);
-        border: 1.5px solid #3b82f6; color: #60a5fa; border-radius: 6px;
-        font-weight: 700; font-size: 0.85rem; cursor: pointer; display: flex;
-        justify-content: center; align-items: center; gap: 6px; transition: all 0.2s;
+      .btn-figma-add-item {
+        width: 100%;
+        height: 38px;
+        background: rgba(59, 130, 246, 0.04);
+        border: 1.5px dashed #3b82f6;
+        color: #60a5fa;
+        font-size: 0.8rem;
+        font-weight: 700;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: all 0.2s;
       }
-      .btn-figma-add:hover { background: rgba(59, 130, 246, 0.2); color: #ffffff; }
-      .btn-figma-add .add-plus { font-weight: 900; font-size: 1.1rem; line-height: 1; }
+      .btn-figma-add-item:hover {
+        background: rgba(59, 130, 246, 0.15);
+        border-style: solid;
+        color: #ffffff;
+      }
+      .btn-figma-add-item .add-plus { font-weight: 900; font-size: 1.1rem; line-height: 1; }
 
-      .figma-actions-row { display: flex; gap: 8px; align-items: center; }
-      .figma-panol-select {
-        flex: 1; background: #080B0F; color: #60a5fa; border: 1.5px solid #3b82f6;
-        border-radius: 6px; padding: 9px 12px; font-size: 0.8rem; font-weight: 700;
-        outline: none; cursor: pointer; transition: all 0.2s; appearance: none;
+      .figma-footer-actions-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        align-items: center;
+      }
+      .figma-footer-select {
+        width: 100%;
+        height: 44px;
+        background: #080B0F;
+        color: #60a5fa;
+        border: 1.5px solid #3b82f6;
+        border-radius: 6px;
+        padding: 0 10px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        outline: none;
+        cursor: pointer;
+        appearance: none;
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2360a5fa' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
-        background-repeat: no-repeat; background-position: right 10px center;
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
-      .btn-figma-ready {
-        flex: 1; padding: 10px 14px; background: #3b82f6; border: none;
-        border-radius: 6px; color: #080B0F; font-weight: 900; font-size: 0.85rem;
-        letter-spacing: 0.5px; cursor: pointer; transition: all 0.2s; display: flex;
-        align-items: center; justify-content: center; gap: 6px;
+      .btn-figma-listo {
+        width: 100%;
+        height: 44px;
+        background: #3b82f6;
+        border: none;
+        border-radius: 6px;
+        color: #080B0F;
+        font-size: 0.85rem;
+        font-weight: 900;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
       }
-      .btn-figma-ready:hover { background: #60a5fa; }
-      .btn-ready:hover { background: #4169c5; }
+      .btn-figma-listo:hover { background: #60a5fa; }
       .status-complete { padding: 14px; background: rgba(35, 134, 54, 0.15); color: var(--green); font-weight: 800; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; }
 
       .empty-state { grid-column: 1 / -1; text-align: center; padding: 80px 20px; color: var(--text-muted); }
@@ -739,27 +980,57 @@
 
       function renderCard(o) {
         const isReady = o.status === 'LISTO';
-        const dateObj = new Date(o.timestamp);
-        const timeStr = !isNaN(dateObj.getTime())
-          ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          : (String(o.timestamp || '').split(' ')[1]?.substring(0, 5) || '--:--');
         
+        // 1. Hora en formato 24hs estricto (HH:mm) - Sin minutos transcurridos
+        let timeStr = '--:--';
+        if (o.timestamp) {
+          const d = new Date(o.timestamp);
+          if (!isNaN(d.getTime())) {
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mm = String(d.getMinutes()).padStart(2, '0');
+            timeStr = `${hh}:${mm}`;
+          } else {
+            const m = String(o.timestamp).match(/(\d{1,2}):(\d{2})/);
+            if (m) timeStr = `${m[1].padStart(2, '0')}:${m[2]}`;
+          }
+        }
+
         const now = Date.now();
+        const dateObj = new Date(o.timestamp);
         const waitMins = !isNaN(dateObj.getTime()) ? Math.floor((now - dateObj.getTime()) / 60000) : 0;
         const isUrgent = !isReady && waitMins >= 15;
         
-        // 1. Resolver Box y Mecánico
-        let boxDisplay = o.box || '';
-        if (!boxDisplay && o.opInfo) {
-          const m = o.opInfo.match(/box\s*([0-9a-zA-Z]+)/i);
-          if (m) boxDisplay = m[1];
+        // 2. Resolver Box / Sector (Regla: Sin prefijo BOX en MOTORES, LUBRICENTRO, LAVADERO, ENGRASE, GOMERIA, ENA)
+        const NON_BOX_SECTORS = ['MOTORES', 'LUBRICENTRO', 'LAVADERO', 'ENGRASE', 'GOMERIA', 'ENA'];
+        let rawLoc = (o.box || '').trim();
+        if (!rawLoc && o.opInfo) {
+          const m = o.opInfo.match(/\[(.*?)\]/);
+          if (m && m[1]) rawLoc = m[1].trim();
         }
-        if (!boxDisplay) boxDisplay = '--';
-        boxDisplay = boxDisplay.replace(/^box\s*/i, '').trim();
+        if (!rawLoc && o.opInfo) {
+          const m2 = o.opInfo.match(/box\s*([0-9a-zA-Z]+)/i);
+          if (m2) rawLoc = m2[0].trim();
+        }
+        if (!rawLoc) rawLoc = '--';
 
+        const cleanUpper = rawLoc.toUpperCase().replace(/^BOX\s*/i, '').trim();
+        const matchedSector = NON_BOX_SECTORS.find(s => cleanUpper === s || cleanUpper.startsWith(s) || rawLoc.toUpperCase().includes(s));
+
+        let boxHtml = '';
+        if (matchedSector) {
+          boxHtml = `<span class="box-sector-label">${matchedSector}</span>`;
+        } else {
+          let boxNum = rawLoc.replace(/^BOX\s*/i, '').trim();
+          if (!boxNum) boxNum = '--';
+          boxHtml = `
+            <span class="box-label">BOX</span>
+            <span class="box-number">${boxNum}</span>`;
+        }
+
+        // 3. Resolver Mecánico Solicitante
         let mechanicDisplay = (o.opInfo || 'Sin asignar').replace(/\[.*?\]/g, '').trim();
 
-        // 2. Resolver Tractor y Semi (con datos enriquecidos de RAM y DB_OT_LIST)
+        // 4. Resolver Tractor y Semi (con datos enriquecidos de RAM y DB_OT_LIST)
         const tractorPlate = o.tractorPlate || (o.unitInfo ? o.unitInfo.split(/[\/+]/)[0].trim() : '--');
         const tractorBrand = o.tractorBrand || o.brand || 'TRACTOR';
         const tractorOt = o.otNumber || '--';
@@ -807,15 +1078,15 @@
             const isModified = pendingQtyEdits[o.reqId] && pendingQtyEdits[o.reqId][item.name.toLowerCase()] !== undefined;
             const modifiedClass = isModified ? ' modified' : '';
             qtyHtml = `
-              <div class="figma-qty-stepper">
-                <button class="f-qty-btn minus" onclick="changeItemQty('${o.reqId}','${safeItemName}',${item.qty},-1)" title="Reducir">−</button>
-                <input type="number" class="f-qty-input${modifiedClass}" id="qi-${o.reqId}-${idx}" value="${item.qty}" min="1"
+              <div class="figma-stepper-row">
+                <button class="f-step-btn" onclick="changeItemQty('${o.reqId}','${safeItemName}',${item.qty},-1)" title="Reducir">−</button>
+                <input type="number" class="f-step-input${modifiedClass}" id="qi-${o.reqId}-${idx}" value="${item.qty}" min="1"
                        oninput="saveItemQtyDraft('${o.reqId}','${safeItemName}',this.value)"
                        onchange="updateItemQty('${o.reqId}','${safeItemName}',this.value,${item.qty})"
                        onfocus="pausePolling()" onblur="resumePolling()">
-                <button class="f-qty-btn plus" onclick="changeItemQty('${o.reqId}','${safeItemName}',${item.qty},1)" title="Aumentar">+</button>
-                <span class="stock-badge ${stockClass}" title="Stock actual en estantería">📦${currentStock}</span>
-                <button class="f-remove-btn" onclick="removeItem('${o.reqId}','${safeItemName}')" title="Eliminar ítem">✕</button>
+                <button class="f-step-btn" onclick="changeItemQty('${o.reqId}','${safeItemName}',${item.qty},1)" title="Aumentar">+</button>
+                <button class="f-step-del" onclick="removeItem('${o.reqId}','${safeItemName}')" title="Eliminar ítem">✕</button>
+                <span class="f-step-stock ${stockClass}" title="Stock en estantería">📦 ${currentStock}</span>
               </div>`;
           } else if (isItemDevuelto) {
             qtyHtml = `<span class="item-qty" style="background: rgba(239, 68, 68, 0.2); color: #f87171; text-decoration: line-through;">x${item.qty}</span>`;
@@ -823,16 +1094,23 @@
             qtyHtml = `<span class="item-qty">x${item.qty}</span>`;
           }
 
+          // Nota de ítem (barra ámbar, estrictamente condicional: sólo si existe nota)
+          const noteBannerHtml = (itemNote && itemNote.trim())
+            ? `<div class="figma-item-note-banner" title="Nota del ítem"><span>${itemNote.trim()}</span></div>`
+            : '';
+
           itemsHtml += `
             <div class="figma-item-card ${highlightClass}">
-              <div class="figma-item-top">
-                <div class="figma-item-name">${item.name}${itemDevueltoBadge}</div>
-                ${qtyHtml}
+              <div class="figma-item-title-row">
+                <span class="figma-item-name">${item.name}${itemDevueltoBadge}</span>
               </div>
-              <div class="figma-item-bottom">
+              <div class="figma-item-meta-row">
                 <span class="item-code-badge">${itemId}</span>
                 <span class="item-location-pill">📍 ${itemLoc}</span>
-                ${itemNote && itemNote.trim() ? `<span class="item-note-badge" title="Nota del ítem">📝 ${itemNote.trim()}</span>` : ''}
+              </div>
+              ${noteBannerHtml}
+              <div class="figma-item-bottom-row">
+                ${qtyHtml}
               </div>
             </div>`;
         });
@@ -841,7 +1119,7 @@
           if (!isExpanded) itemsHtml += '</div>';
           const remaining = o.items.length - MAX_VISIBLE;
           const btnText = isExpanded ? '▲ Ver menos' : `▼ Ver ${remaining} más`;
-          itemsHtml += `<button class="expand-btn" onclick="toggleExpand('${o.reqId}')">${btnText}</button>`;
+          itemsHtml += `<button class="btn-figma-ver-mas" onclick="toggleExpand('${o.reqId}')">${btnText}</button>`;
         }
         itemsHtml += '</div>';
 
@@ -873,16 +1151,16 @@
                </button>
              </div>`;
         } else if (isPendiente) {
-          footerHtml = `<div class="figma-actions-row">
+          footerHtml = `<div class="figma-footer-actions-row">
                <select id="panol-op-${o.reqId}" 
-                       class="figma-panol-select" 
+                       class="figma-footer-select" 
                        onchange="pendingSelections['${o.reqId}'] = this.value"
                        onfocus="pausePolling()" 
                        onblur="resumePolling()">
-                 <option value="" disabled ${defaultSelected}>ENTREGADO POR: 👤</option>
+                 <option value="" disabled ${defaultSelected}>ENTREGADO POR:</option>
                  ${staffOptions}
                </select>
-               <button class="btn-figma-ready" onclick="markReady('${o.reqId}')">✓ LISTO</button>
+               <button class="btn-figma-listo" onclick="markReady('${o.reqId}')">LISTO</button>
              </div>`;
         } else {
           footerHtml = `<div class="status-complete" style="background: rgba(139, 148, 158, 0.12); color: #8b949e;">${o.status}</div>`;
@@ -891,68 +1169,71 @@
         return `
           <div class="${cardClass}" id="card-${o.reqId}">
             <!-- 1. Encabezado de Tarjeta (Figma 697:1035) -->
-            <div class="card-figma-header">
-              <div class="header-box-group">
-                <span class="box-label">BOX</span>
-                <span class="box-number">${boxDisplay}</span>
+            <div class="card-figma-top-bar">
+              <div class="card-figma-box-col">
+                ${boxHtml}
               </div>
-              <div class="header-meta-group">
-                <div class="header-time-row">
-                  <span class="time-display ${isUrgent ? 'urgent' : ''}">${timeStr} ${isUrgent ? '⚠️' : ''}</span>
-                  <span class="wait-display ${isUrgent ? 'urgent' : ''}">${waitMins} min</span>
-                </div>
-                <div class="header-mechanic" title="Mecánico Solicitante">
-                  <span class="mechanic-name-text">${mechanicDisplay}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="card-figma-divider"></div>
-
-            <!-- 2. Bloque Dual Tractor + Semi -->
-            <div class="card-vehicles-block">
-              <!-- Tractor -->
-              <div class="vehicle-card tractor-card">
-                <div class="plate-mercosur">
-                  <div class="plate-strip"><span>REPÚBLICA ARGENTINA</span></div>
-                  <div class="plate-code">${tractorPlate}</div>
-                </div>
-                <div class="vehicle-meta-tags">
-                  <span class="vehicle-ot-pill">OT ${tractorOt}</span>
-                  <span class="vehicle-brand-pill brand-${tractorBrand.toLowerCase()}">${tractorBrand}</span>
-                </div>
-              </div>
-
-              <!-- Semi -->
-              <div class="vehicle-card semi-card ${!hasSemi ? 'empty-semi' : ''}">
-                ${hasSemi ? `
+              <div class="card-figma-vehicles-center">
+                <!-- Tractor -->
+                <div class="figma-vehicle-subcard">
+                  <div class="figma-vehicle-top-tags">
+                    <span class="figma-ot-pill">${tractorOt}</span>
+                    <span class="figma-brand-pill brand-${tractorBrand.toLowerCase()}">${tractorBrand}</span>
+                  </div>
                   <div class="plate-mercosur">
-                    <div class="plate-strip"><span>REPÚBLICA ARGENTINA</span></div>
-                    <div class="plate-code">${semiPlate}</div>
+                    <div class="plate-strip"></div>
+                    <div class="plate-code">${tractorPlate}</div>
                   </div>
-                  <div class="vehicle-meta-tags">
-                    <span class="vehicle-ot-pill">OT ${semiOt}</span>
-                    <span class="vehicle-brand-pill brand-${semiBrand.toLowerCase()}">${semiBrand}</span>
-                  </div>
-                ` : `
-                  <div class="semi-placeholder">
-                    <span class="semi-none-label">SIN SEMI</span>
-                    <span class="semi-none-desc">Solo Tractor</span>
-                  </div>
-                `}
+                </div>
+
+                <!-- Semi -->
+                <div class="figma-vehicle-subcard">
+                  ${hasSemi ? `
+                    <div class="figma-vehicle-top-tags">
+                      <span class="figma-ot-pill">${semiOt}</span>
+                      <span class="figma-brand-pill brand-${semiBrand.toLowerCase()}">${semiBrand}</span>
+                    </div>
+                    <div class="plate-mercosur">
+                      <div class="plate-strip"></div>
+                      <div class="plate-code">${semiPlate}</div>
+                    </div>
+                  ` : `
+                    <div class="figma-vehicle-top-tags">
+                      <span class="figma-brand-pill" style="opacity: 0.5;">SOLO TRACTOR</span>
+                    </div>
+                    <div class="plate-mercosur" style="opacity: 0.35; border-style: dashed;">
+                      <div class="plate-strip" style="background: #334155;"></div>
+                      <div class="plate-code" style="color: #64748b; font-size: 0.72rem; padding: 4px 2px;">SIN SEMI</div>
+                    </div>
+                  `}
+                </div>
+              </div>
+
+              <!-- Hora 24hs alineada arriba a la derecha (nunca colisiona) -->
+              <div class="card-figma-time-col">
+                <span class="card-figma-time ${isUrgent ? 'urgent' : ''}">${timeStr}${isUrgent ? ' ⚠️' : ''}</span>
               </div>
             </div>
 
-            <div class="card-figma-divider"></div>
+            <!-- Separador punteado -->
+            <div class="figma-divider-dashed"></div>
 
-            <!-- 3. Lista de Repuestos -->
+            <!-- Fila Mecánico Solicitante -->
+            <div class="card-figma-mechanic-row" title="Mecánico Solicitante">
+              <span class="figma-mechanic-name">${mechanicDisplay}</span>
+            </div>
+
+            <!-- Separador sólido -->
+            <div class="figma-divider-solid"></div>
+
+            <!-- 2. Lista de Repuestos -->
             ${itemsHtml}
             ${noteHtml}
 
-            <!-- 4. Pie de Tarjeta / Acciones -->
+            <!-- 3. Pie de Tarjeta / Acciones -->
             <div class="card-figma-footer">
               ${isPendiente ? `
-                <button class="btn-figma-add" onclick="openAddItemModal('${o.reqId}')">
+                <button class="btn-figma-add-item" onclick="openAddItemModal('${o.reqId}')">
                   <span>Agregar item</span>
                   <span class="add-plus">+</span>
                 </button>
