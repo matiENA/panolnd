@@ -127,6 +127,73 @@ let readyTimestamps = {}; // reqId -> timestamp when transitioned to LISTO
 let lastSyncTime = 0;
 const MIN_SYNC_INTERVAL_MS = 8000; // Evitar Quota Exceeded (max 1 lectura cada 8s)
 
+// === 2.1 CACHÉ EN RAM DE UNIDADES (diagramasnode) ===
+let ramFleetCache = new Map(); // normalizedPlate -> { tractorPlate, tractorBrand, semiPlate, semiBrand, service }
+let lastDiagramasSync = 0;
+
+async function syncFleetFromDiagramasNode() {
+  const DIAGRAMAS_URL = 'https://diagramasnode.onrender.com/api/datos';
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    const res = await fetch(DIAGRAMAS_URL, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const units = data.diagramas?.unidades || data.ut || [];
+    if (!Array.isArray(units) || units.length === 0) return;
+
+    const newMap = new Map();
+    units.forEach(u => {
+      const tractorP = u.tractor?.patente ? String(u.tractor.patente).trim().toUpperCase().replace(/[\s\-_.]/g, '') : '';
+      const tractorBrand = u.tractor?.marca ? String(u.tractor.marca).trim().toUpperCase() : '';
+      const semiP = u.semi?.patente ? String(u.semi.patente).trim().toUpperCase().replace(/[\s\-_.]/g, '') : '';
+      const semiBrand = u.semi?.marca ? String(u.semi.marca).trim().toUpperCase() : '';
+      const srv = u.srv_ut || '';
+
+      const entry = {
+        tractorPlate: u.tractor?.patente || '',
+        tractorBrand,
+        semiPlate: u.semi?.patente || '',
+        semiBrand,
+        service: srv
+      };
+
+      if (tractorP) newMap.set(tractorP, entry);
+      if (semiP) newMap.set(semiP, entry);
+    });
+
+    ramFleetCache = newMap;
+    lastDiagramasSync = Date.now();
+    console.log(`📡 [RAM] Sincronizadas ${units.length} unidades desde diagramasnode (${ramFleetCache.size} patentes indexadas).`);
+  } catch (err) {
+    console.warn(`⚠️ [RAM] Advertencia en syncFleetFromDiagramasNode (${err.message}). Se mantiene caché.`);
+  }
+}
+
+// === 2.2 CACHÉ DB_OT_LIST (Cols A:G) ===
+let dbOtListRowsCache = [];
+let lastDbOtListSync = 0;
+
+async function getDbOtListRows() {
+  const now = Date.now();
+  if (dbOtListRowsCache.length > 0 && (now - lastDbOtListSync < 60000)) {
+    return dbOtListRowsCache;
+  }
+  if (!sheets) return dbOtListRowsCache;
+  try {
+    const otRes = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: "'DB_OT_LIST'!A2:G"
+    });
+    dbOtListRowsCache = otRes.data.values || [];
+    lastDbOtListSync = now;
+  } catch (e) {
+    console.warn('⚠️ Advertencia al leer DB_OT_LIST para órdenes:', e.message);
+  }
+  return dbOtListRowsCache;
+}
+
 async function syncDataFromSheets(force = false) {
   if (!sheets) return ordersCache;
 
@@ -137,7 +204,7 @@ async function syncDataFromSheets(force = false) {
   lastSyncTime = now;
 
   try {
-    // A. Leer catálogo completo de ítems y stock desde DB_ITEMS (sin límite de 500 para cargar los 7600+ ítems)
+    // A. Leer catálogo completo de ítems y stock desde DB_ITEMS
     const itemRes = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: 'DB_ITEMS!A:H'
@@ -161,7 +228,37 @@ async function syncDataFromSheets(force = false) {
       }
     }
 
-    // B. Leer transacciones de pedidos desde DB_TRANSACTIONS
+    // B. Leer DB_OT_LIST (Cols A:G) para enlazar Tractor y Semi con OTs y marcas
+    const dbOtListRows = await getDbOtListRows();
+    const otListByTractor = new Map();
+    const otListBySemi = new Map();
+
+    dbOtListRows.forEach(r => {
+      const t = String(r[0] || '').trim();
+      const ot = String(r[1] || '').trim();
+      const s = String(r[2] || '').trim();
+      const semiOt = String(r[3] || '').trim() || (ot ? String(parseInt(ot, 10) + 1) : '');
+      const prod = String(r[4] || '').trim();
+      const marcaT = String(r[5] || '').trim();
+      const marcaS = String(r[6] || '').trim();
+
+      const item = {
+        tractor: t,
+        ot,
+        semi: s,
+        semiOt,
+        producto: prod,
+        marcaTractor: marcaT,
+        marcaSemi: marcaS
+      };
+
+      const normT = t.toUpperCase().replace(/[\s\-_.]/g, '');
+      const normS = s.toUpperCase().replace(/[\s\-_.]/g, '');
+      if (normT) otListByTractor.set(normT, item);
+      if (normS) otListBySemi.set(normS, item);
+    });
+
+    // C. Leer transacciones de pedidos desde DB_TRANSACTIONS
     const transRes = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: 'DB_TRANSACTIONS!A:R'
@@ -190,12 +287,51 @@ async function syncDataFromSheets(force = false) {
       if (status === "PENDIENTE" || status === "LISTO" || status === "ENTREGADO" || status === "DEVOLUCION PENDIENTE" || status === "DEVOLUCION") {
         if (!ordersMap[reqId]) {
           const unitInfo = String(row[5] || '');
+          const boxRaw = String(row[2] || '').trim();
+          const opInfo = String(row[3] || '').trim();
+
+          let boxNumber = boxRaw;
+          if (!boxNumber) {
+            const m = opInfo.match(/box\s*([0-9a-zA-Z]+)/i);
+            if (m) boxNumber = m[1];
+          }
+
+          const rawPlates = unitInfo.split(/[\/+]/).map(p => p.trim().toUpperCase().replace(/[\s\-_.]/g, '')).filter(Boolean);
+          const p1 = rawPlates[0] || '';
+          const p2 = rawPlates[1] || '';
+
+          const otMatch = (p1 && (otListByTractor.get(p1) || otListBySemi.get(p1))) ||
+                          (p2 && (otListByTractor.get(p2) || otListBySemi.get(p2))) || null;
+
+          let tractorPlate = otMatch ? otMatch.tractor : (unitInfo.includes('/') ? unitInfo.split('/')[0].trim() : unitInfo);
+          let semiPlate = otMatch ? otMatch.semi : (unitInfo.includes('/') ? unitInfo.split('/')[1].trim() : '');
+
+          const cleanTractor = tractorPlate.toUpperCase().replace(/[\s\-_.]/g, '');
+          const cleanSemi = semiPlate.toUpperCase().replace(/[\s\-_.]/g, '');
+
+          const ramTractor = cleanTractor ? ramFleetCache.get(cleanTractor) : null;
+          const ramSemi = cleanSemi ? ramFleetCache.get(cleanSemi) : null;
+
+          const tractorBrand = (ramTractor?.tractorBrand) || (otMatch?.marcaTractor) || String(row[13] || '').trim() || '';
+          const semiBrand = (ramSemi?.semiBrand) || (otMatch?.marcaSemi) || (semiPlate ? 'SEMI' : '');
+
+          const tractorOt = otMatch?.ot || String(row[4] || '').trim();
+          const semiOt = otMatch?.semiOt || (otMatch && otMatch.semi ? (tractorOt ? String(parseInt(tractorOt, 10) + 1) : '') : '');
+
           ordersMap[reqId] = {
             reqId: reqId,
             timestamp: row[0],
-            opInfo: row[3],
-            otNumber: row[4],
+            box: boxNumber,
+            opInfo: opInfo,
+            otNumber: tractorOt,
+            semiOt: semiOt,
             unitInfo: unitInfo,
+            tractorPlate: tractorPlate,
+            tractorBrand: tractorBrand,
+            semiPlate: semiPlate,
+            semiBrand: semiBrand,
+            product: String(row[12] || ramTractor?.service || '').trim(),
+            brand: tractorBrand,
             status: status,
             panolOpId: panolOpId,
             items: [],
@@ -207,12 +343,14 @@ async function syncDataFromSheets(force = false) {
 
         const itemName = String(row[6] || '');
         const itemDetails = itemMap[itemName.toUpperCase()] || { id: '---', loc: 'S/D', requiereCanje: false, stock: 0 };
+        const itemNote = notesColO || '';
 
         ordersMap[reqId].items.push({
           name: itemName,
           qty: row[7],
           id: itemDetails.id,
           loc: itemDetails.loc,
+          note: itemNote,
           requiereCanje: itemDetails.requiereCanje,
           estadoCanje: estadoCanje,
           panolConfirmacion: panolConfirmacion,
@@ -1282,6 +1420,17 @@ if (OT_SYNC_INTERVAL_MINUTES > 0) {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, async () => {
   console.log('🚀 Servidor Monolito Pañol activo en puerto ' + PORT);
+  
+  // Carga en memoria RAM de unidades desde diagramasnode
+  try {
+    await syncFleetFromDiagramasNode();
+  } catch (err) {
+    console.warn('⚠️ Carga inicial RAM diagramasnode:', err.message);
+  }
+  setInterval(() => {
+    syncFleetFromDiagramasNode().catch(err => console.warn('⚠️ Refresco RAM diagramasnode:', err.message));
+  }, 15 * 60 * 1000);
+
   await syncDataFromSheets();
 
   // Sincronización inicial de OTs al arrancar

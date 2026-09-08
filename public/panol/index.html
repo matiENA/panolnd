@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Monitor Pañol</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Roboto+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="/socket.io/socket.io.js"></script>
     <script src="/client-shim.js"></script>
     <style>
@@ -204,75 +204,223 @@
       .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; align-items: start; }
 
       .card {
-        background: var(--card-bg); border-radius: 12px; border: 1px solid var(--border);
+        background: #131923; border-radius: 12px; border: 1px solid #2a323d;
         border-left: 5px solid var(--blue); display: flex; flex-direction: column;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: all 0.2s ease; overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.4); transition: all 0.2s ease; overflow: hidden;
       }
-      .card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
+      .card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.5); }
 
       .card.status-PENDIENTE { border-left-color: var(--blue); }
-      .card.status-LISTO { border-left-color: var(--green); background: linear-gradient(90deg, rgba(35,134,54,0.08) 0%, var(--card-bg) 100%); }
+      .card.status-LISTO { border-left-color: var(--green); background: linear-gradient(90deg, rgba(35,134,54,0.1) 0%, #131923 100%); }
       .card.urgent { border-left-color: var(--red); animation: urgent-glow 2s infinite; }
       @keyframes urgent-glow {
         0%, 100% { box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-        50% { box-shadow: 0 2px 20px rgba(218, 54, 51, 0.3); }
+        50% { box-shadow: 0 2px 20px rgba(218, 54, 51, 0.4); }
       }
 
       .card.has-semi { border-left-color: var(--orange); }
       .card.has-semi.status-LISTO { border-left-color: var(--green); }
 
-      .card-header { padding: 16px 16px 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-start; }
-      .unit-info { display: flex; flex-direction: column; gap: 4px; }
-      .unit-plate { font-size: 1.3rem; font-weight: 900; color: var(--text-white); letter-spacing: 0.5px; line-height: 1.2; display: flex; align-items: center; gap: 8px; }
-      .semi-plate { font-size: 0.85rem; color: var(--orange); font-weight: 700; }
-      .ot-display { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; }
-      .ot-label { color: var(--text-muted); font-weight: 600; }
-      .ot-value { color: var(--blue); font-weight: 800; }
+      /* === FIGMA CARD (697:1035) STYLES === */
+      .card-figma-header {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 14px 18px 10px;
+      }
+      .header-box-group { display: flex; align-items: baseline; gap: 8px; }
+      .box-label {
+        font-family: 'Roboto Mono', monospace; font-size: 1.1rem;
+        font-weight: 400; color: #94a3b8; letter-spacing: 0.5px;
+      }
+      .box-number {
+        font-family: 'Inter', sans-serif; font-size: 2.2rem;
+        font-weight: 900; color: #ffffff; line-height: 1;
+      }
+      .header-meta-group { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+      .header-time-row { display: flex; align-items: center; gap: 6px; }
+      .time-display {
+        font-family: 'Roboto Mono', monospace; font-size: 0.85rem;
+        font-weight: 700; color: #cbd5e1;
+      }
+      .time-display.urgent { color: var(--red); }
+      .wait-display {
+        font-size: 0.7rem; color: #94a3b8; background: rgba(255,255,255,0.06);
+        padding: 2px 6px; border-radius: 4px; font-weight: 600;
+      }
+      .wait-display.urgent { background: rgba(218,54,51,0.2); color: var(--red); }
+      .header-mechanic {
+        display: flex; align-items: center; gap: 6px;
+        font-family: 'Roboto Mono', monospace; font-size: 0.8rem;
+        font-weight: 500; color: #e2e8f0;
+      }
+      .mechanic-name-text {
+        max-width: 170px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
 
-      .time-badge { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-      .time-value { font-size: 0.9rem; font-weight: 700; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
-      .time-value.urgent { color: var(--red); }
-      .wait-mins { font-size: 0.7rem; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; }
-      .wait-mins.urgent { background: rgba(218,54,51,0.2); color: var(--red); }
+      .card-figma-divider {
+        height: 1px; background: rgba(255, 255, 255, 0.12);
+        margin: 0 16px;
+      }
 
-      .badges-row { display: flex; gap: 6px; padding: 8px 16px; flex-wrap: wrap; background: rgba(0,0,0,0.2); }
-      .badge { font-size: 0.65rem; font-weight: 800; padding: 4px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
-      .badge-metanol { background: var(--color-metanol); color: var(--text-metanol); }
-      .badge-glp { background: var(--color-glp); color: var(--text-glp); }
-      .badge-campo { background: var(--color-campo); color: var(--text-campo); }
-      .badge-liviano { background: var(--color-liviano); color: var(--text-liviano); }
-      .badge-abastecedor { background: var(--color-abastecedor); color: var(--text-abastecedor); }
-      .badge-gral { background: var(--color-gral); color: var(--text-gral); }
-      .badge-brand { background: rgba(255,255,255,0.1); color: var(--text); border: 1px solid var(--border); }
-      .badge-brand.iveco { background: rgba(29,78,216,0.2); color: #60a5fa; border-color: rgba(29,78,216,0.4); }
-      .badge-brand.volvo { background: rgba(3,105,161,0.2); color: #38bdf8; border-color: rgba(3,105,161,0.4); }
-      .badge-brand.scania { background: rgba(185,28,28,0.2); color: #f87171; border-color: rgba(185,28,28,0.4); }
+      /* === BLOQUE DUAL TRACTOR / SEMI (SIN UTE / INTERNO) === */
+      .card-vehicles-block {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+        padding: 12px 16px;
+      }
+      .vehicle-card {
+        background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px; padding: 10px; display: flex; flex-direction: column;
+        align-items: center; gap: 8px;
+      }
+      .vehicle-card.tractor-card { border-left: 3px solid #3b82f6; }
+      .vehicle-card.semi-card { border-left: 3px solid #38bdf8; }
+      .vehicle-card.empty-semi { border-left-color: rgba(255, 255, 255, 0.15); justify-content: center; }
 
-      .card-body { padding: 12px 16px; flex-grow: 1; }
-      .mechanic-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed var(--border); }
-      .mechanic-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--blue); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 800; }
-      .mechanic-name { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+      .semi-placeholder {
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; height: 100%; color: #64748b; padding: 10px 0;
+      }
+      .semi-none-label { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.5px; }
+      .semi-none-desc { font-size: 0.65rem; color: #475569; }
 
-      .item-list { display: flex; flex-direction: column; gap: 0; background: rgba(0,0,0,0.2); border-radius: 8px; overflow: hidden; }
-      .item-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-      .item-row:last-child { border-bottom: none; }
-      .item-row.highlighted { background: rgba(35, 134, 54, 0.2); }
-      .item-primary { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-      .item-name { font-weight: 700; color: var(--text-white); font-size: 0.9rem; line-height: 1.3; }
-      .item-qty { background: var(--green); color: #fff; font-size: 0.75rem; font-weight: 800; padding: 3px 8px; border-radius: 4px; min-width: 32px; text-align: center; flex-shrink: 0; }
-      .item-secondary { display: flex; justify-content: space-between; align-items: center; }
-      .item-id { font-size: 0.85rem; color: #a5b4fc; font-family: monospace; font-weight: 700; background: rgba(165, 180, 252, 0.1); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px; }
-      .item-loc { font-size: 0.75rem; color: #58a6ff; background: rgba(56, 139, 253, 0.1); border: 1px solid rgba(56, 139, 253, 0.3); border-radius: 4px; padding: 4px 8px; text-align: center; font-weight: 800; white-space: nowrap; }
+      /* Chapa patente Mercosur Argentina */
+      .plate-mercosur {
+        width: 100%; max-width: 115px; background: #ffffff;
+        border: 1.5px solid #000000; border-radius: 5px; overflow: hidden;
+        display: flex; flex-direction: column; box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      }
+      .plate-strip {
+        background: #0033a0; color: #ffffff; height: 9px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 5px; font-weight: 900; letter-spacing: 0.8px; text-transform: uppercase;
+      }
+      .plate-code {
+        color: #000000; font-family: 'Roboto Mono', 'Inter', monospace;
+        font-weight: 900; font-size: 0.95rem; letter-spacing: 0.5px;
+        text-align: center; padding: 3px 4px 4px; line-height: 1;
+      }
 
-      .hidden-items { display: none; }
-      .hidden-items.show { display: block; }
-      .expand-btn { width: 100%; padding: 10px; background: rgba(56, 139, 253, 0.1); border: none; color: #58a6ff; font-size: 0.75rem; font-weight: 700; cursor: pointer; text-transform: uppercase; }
-      .expand-btn:hover { background: rgba(56, 139, 253, 0.2); }
-      .note-box { margin-top: 10px; background: var(--note-bg); color: var(--note-text); padding: 8px 10px; border-radius: 6px; font-size: 0.8rem; border-left: 3px solid var(--note-border); display: flex; align-items: flex-start; gap: 6px; }
+      .vehicle-meta-tags {
+        display: flex; align-items: center; justify-content: center;
+        gap: 6px; flex-wrap: wrap; width: 100%;
+      }
+      .vehicle-ot-pill {
+        background: #ffffff; color: #000000; font-family: 'Roboto Mono', monospace;
+        font-size: 0.72rem; font-weight: 900; padding: 2px 6px; border-radius: 4px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      }
+      .vehicle-brand-pill {
+        font-size: 0.7rem; font-weight: 800; padding: 2px 7px;
+        border-radius: 4px; text-transform: uppercase; letter-spacing: 0.3px;
+        background: rgba(255,255,255,0.1); color: #e2e8f0;
+      }
+      .vehicle-brand-pill.brand-iveco { background: rgba(29, 78, 216, 0.25); color: #60a5fa; border: 1px solid rgba(29, 78, 216, 0.5); }
+      .vehicle-brand-pill.brand-scania { background: rgba(185, 28, 28, 0.25); color: #f87171; border: 1px solid rgba(185, 28, 28, 0.5); }
+      .vehicle-brand-pill.brand-volvo { background: rgba(3, 105, 161, 0.25); color: #38bdf8; border: 1px solid rgba(3, 105, 161, 0.5); }
+      .vehicle-brand-pill.brand-mercedes, .vehicle-brand-pill.brand-mercedes-benz { background: rgba(75, 85, 99, 0.3); color: #e5e7eb; border: 1px solid rgba(107, 114, 128, 0.5); }
+      .vehicle-brand-pill.brand-danes { background: rgba(2, 132, 199, 0.25); color: #38bdf8; border: 1px solid rgba(2, 132, 199, 0.5); }
+      .vehicle-brand-pill.brand-fangio { background: rgba(5, 150, 105, 0.25); color: #34d399; border: 1px solid rgba(5, 150, 105, 0.5); }
+      .vehicle-brand-pill.brand-heil { background: rgba(217, 119, 6, 0.25); color: #fbbf24; border: 1px solid rgba(217, 119, 6, 0.5); }
+      .vehicle-brand-pill.brand-randon { background: rgba(124, 58, 237, 0.25); color: #c084fc; border: 1px solid rgba(124, 58, 237, 0.5); }
+      .vehicle-brand-pill.brand-hermann { background: rgba(234, 88, 12, 0.25); color: #fb923c; border: 1px solid rgba(234, 88, 12, 0.5); }
 
-      .card-footer { padding: 0; }
-      .btn-action { width: 100%; padding: 14px; border: none; font-weight: 800; font-size: 0.9rem; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
-      .btn-ready { background: var(--blue); color: white; }
+      /* === LISTA DE REPUESTOS FIGMA (697:1035) === */
+      .card-items-container {
+        padding: 12px 16px; display: flex; flex-direction: column; gap: 8px;
+      }
+      .figma-item-card {
+        background: #080B0F; border: 1px solid #1e2633; border-radius: 6px;
+        padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+        transition: border-color 0.2s;
+      }
+      .figma-item-card:hover { border-color: #2e3a4e; }
+      .figma-item-card.highlighted { border-color: #22c55e; background: rgba(34, 197, 94, 0.08); }
+      
+      .figma-item-top {
+        display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
+      }
+      .figma-item-name {
+        font-family: 'Roboto Mono', monospace; font-size: 0.85rem;
+        font-weight: 600; color: #ffffff; line-height: 1.35; word-break: break-word;
+      }
+      .figma-qty-stepper {
+        display: flex; align-items: center; gap: 3px; flex-shrink: 0;
+      }
+      .f-qty-btn {
+        width: 25px; height: 25px; background: #131923; border: 1px solid #384457;
+        color: #cbd5e1; border-radius: 5px; font-size: 1rem; font-weight: 900;
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+        line-height: 1; transition: all 0.15s;
+      }
+      .f-qty-btn:hover { background: var(--blue); border-color: var(--blue); color: #fff; }
+      .f-qty-btn:active { transform: scale(0.92); }
+      .f-qty-input {
+        width: 38px; height: 25px; text-align: center; background: #030508;
+        border: 1px solid #2d3748; border-radius: 5px; color: #ffffff;
+        font-size: 0.85rem; font-weight: 700; outline: none; -moz-appearance: textfield; appearance: textfield;
+      }
+      .f-qty-input::-webkit-inner-spin-button, .f-qty-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+      .f-qty-input.modified { border-color: var(--orange); background: rgba(245, 158, 11, 0.1); color: #fbbf24; }
+      .f-remove-btn {
+        width: 25px; height: 25px; border: 1px solid rgba(239, 68, 68, 0.4);
+        background: rgba(239, 68, 68, 0.15); color: #ef4444; border-radius: 5px;
+        font-size: 0.85rem; font-weight: 800; cursor: pointer; display: flex;
+        align-items: center; justify-content: center; transition: 0.15s;
+      }
+      .f-remove-btn:hover { background: #ef4444; color: #fff; }
+
+      .figma-item-bottom {
+        display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      }
+
+      /* Badge de código de ítem (media_1788876493490.png) */
+      .item-code-badge {
+        background: #bfdbfe; color: #ffffff;
+        font-family: 'Roboto Mono', 'JetBrains Mono', monospace;
+        font-size: 0.72rem; font-weight: 700; padding: 3px 9px;
+        border-radius: 8px; display: inline-flex; align-items: center;
+        letter-spacing: 0.4px; text-shadow: 0 1px 2px rgba(30, 58, 138, 0.45);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+      }
+      .item-location-pill {
+        background: rgba(37, 99, 235, 0.15); border: 1px solid rgba(59, 130, 246, 0.4);
+        color: #60a5fa; font-family: 'Roboto Mono', monospace; font-size: 0.7rem;
+        font-weight: 600; padding: 3px 8px; border-radius: 6px; display: inline-flex;
+        align-items: center; gap: 4px; white-space: nowrap;
+      }
+      .item-note-badge {
+        background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5);
+        color: #fbbf24; font-size: 0.7rem; font-weight: 700; padding: 3px 8px;
+        border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;
+      }
+
+      /* === FOOTER ACCIONES FIGMA === */
+      .card-figma-footer {
+        padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 8px;
+      }
+      .btn-figma-add {
+        width: 100%; padding: 9px; background: rgba(59, 130, 246, 0.08);
+        border: 1.5px solid #3b82f6; color: #60a5fa; border-radius: 6px;
+        font-weight: 700; font-size: 0.85rem; cursor: pointer; display: flex;
+        justify-content: center; align-items: center; gap: 6px; transition: all 0.2s;
+      }
+      .btn-figma-add:hover { background: rgba(59, 130, 246, 0.2); color: #ffffff; }
+      .btn-figma-add .add-plus { font-weight: 900; font-size: 1.1rem; line-height: 1; }
+
+      .figma-actions-row { display: flex; gap: 8px; align-items: center; }
+      .figma-panol-select {
+        flex: 1; background: #080B0F; color: #60a5fa; border: 1.5px solid #3b82f6;
+        border-radius: 6px; padding: 9px 12px; font-size: 0.8rem; font-weight: 700;
+        outline: none; cursor: pointer; transition: all 0.2s; appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2360a5fa' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 10px center;
+      }
+      .btn-figma-ready {
+        flex: 1; padding: 10px 14px; background: #3b82f6; border: none;
+        border-radius: 6px; color: #080B0F; font-weight: 900; font-size: 0.85rem;
+        letter-spacing: 0.5px; cursor: pointer; transition: all 0.2s; display: flex;
+        align-items: center; justify-content: center; gap: 6px;
+      }
+      .btn-figma-ready:hover { background: #60a5fa; }
       .btn-ready:hover { background: #4169c5; }
       .status-complete { padding: 14px; background: rgba(35, 134, 54, 0.15); color: var(--green); font-weight: 800; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; }
 
@@ -592,33 +740,46 @@
       function renderCard(o) {
         const isReady = o.status === 'LISTO';
         const dateObj = new Date(o.timestamp);
-        const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const timeStr = !isNaN(dateObj.getTime())
+          ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : (String(o.timestamp || '').split(' ')[1]?.substring(0, 5) || '--:--');
         
         const now = Date.now();
-        const waitMins = Math.floor((now - dateObj.getTime()) / 60000);
+        const waitMins = !isNaN(dateObj.getTime()) ? Math.floor((now - dateObj.getTime()) / 60000) : 0;
         const isUrgent = !isReady && waitMins >= 15;
         
-        const hasSemi = o.unitInfo && (o.unitInfo.includes('/') || o.unitInfo.includes('+'));
-        let mainPlate = o.unitInfo || '';
-        let semiPlate = '';
-        if (hasSemi) {
-          const parts = o.unitInfo.split(/[\/+]/);
-          mainPlate = parts[0].trim();
-          semiPlate = parts[1] ? parts[1].trim() : '';
+        // 1. Resolver Box y Mecánico
+        let boxDisplay = o.box || '';
+        if (!boxDisplay && o.opInfo) {
+          const m = o.opInfo.match(/box\s*([0-9a-zA-Z]+)/i);
+          if (m) boxDisplay = m[1];
         }
-        
+        if (!boxDisplay) boxDisplay = '--';
+        boxDisplay = boxDisplay.replace(/^box\s*/i, '').trim();
+
+        let mechanicDisplay = (o.opInfo || 'Sin asignar').replace(/\[.*?\]/g, '').trim();
+
+        // 2. Resolver Tractor y Semi (con datos enriquecidos de RAM y DB_OT_LIST)
+        const tractorPlate = o.tractorPlate || (o.unitInfo ? o.unitInfo.split(/[\/+]/)[0].trim() : '--');
+        const tractorBrand = o.tractorBrand || o.brand || 'TRACTOR';
+        const tractorOt = o.otNumber || '--';
+
+        let semiPlate = o.semiPlate || '';
+        if (!semiPlate && o.unitInfo && (o.unitInfo.includes('/') || o.unitInfo.includes('+'))) {
+          semiPlate = o.unitInfo.split(/[\/+]/)[1]?.trim() || '';
+        }
+        const hasSemi = Boolean(semiPlate && semiPlate !== '-' && semiPlate !== 'S/D');
+        const semiBrand = o.semiBrand || 'SEMI';
+        const semiOt = o.semiOt || (hasSemi && o.otNumber ? String(parseInt(o.otNumber, 10) + 1) : '--');
+
         let cardClass = `card status-${o.status}`;
         if (isUrgent) cardClass += ' urgent';
         if (hasSemi) cardClass += ' has-semi';
 
-        const productBadge = o.product ? `<span class="badge badge-${o.product.toLowerCase()}">${o.product}</span>` : '';
-        const brandBadge = o.brand ? `<span class="badge badge-brand ${o.brand.toLowerCase()}">${o.brand}</span>` : '';
-        const initials = (o.opInfo || 'NN').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-
         const MAX_VISIBLE = 3;
         const isExpanded = expandedCards.has(o.reqId);
         
-        let itemsHtml = '<div class="item-list">';
+        let itemsHtml = '<div class="card-items-container">';
         const isPendiente = o.status === 'PENDIENTE';
         o.items.forEach((item, idx) => {
           const isHighlighted = filters.search && item.name.toLowerCase().includes(filters.search);
@@ -631,6 +792,7 @@
           const itemId = item.id || 'S/D';
           const itemLoc = item.loc || 'S/D';
           const safeItemName = item.name.replace(/'/g, "\\'");
+          const itemNote = item.note || item.notesColO || '';
 
           const isItemDevuelto = item.status === 'DEVOLUCION';
           let itemDevueltoBadge = '';
@@ -645,15 +807,15 @@
             const isModified = pendingQtyEdits[o.reqId] && pendingQtyEdits[o.reqId][item.name.toLowerCase()] !== undefined;
             const modifiedClass = isModified ? ' modified' : '';
             qtyHtml = `
-              <div class="item-edit-controls">
-                <button class="qty-btn" onclick="changeItemQty('${o.reqId}','${safeItemName}',${item.qty},-1)" title="Reducir">−</button>
-                <input type="number" class="qty-input${modifiedClass}" id="qi-${o.reqId}-${idx}" value="${item.qty}" min="1"
+              <div class="figma-qty-stepper">
+                <button class="f-qty-btn minus" onclick="changeItemQty('${o.reqId}','${safeItemName}',${item.qty},-1)" title="Reducir">−</button>
+                <input type="number" class="f-qty-input${modifiedClass}" id="qi-${o.reqId}-${idx}" value="${item.qty}" min="1"
                        oninput="saveItemQtyDraft('${o.reqId}','${safeItemName}',this.value)"
                        onchange="updateItemQty('${o.reqId}','${safeItemName}',this.value,${item.qty})"
                        onfocus="pausePolling()" onblur="resumePolling()">
-                <button class="qty-btn" onclick="changeItemQty('${o.reqId}','${safeItemName}',${item.qty},1)" title="Aumentar">+</button>
+                <button class="f-qty-btn plus" onclick="changeItemQty('${o.reqId}','${safeItemName}',${item.qty},1)" title="Aumentar">+</button>
                 <span class="stock-badge ${stockClass}" title="Stock actual en estantería">📦${currentStock}</span>
-                <button class="btn-remove-item" onclick="removeItem('${o.reqId}','${safeItemName}')" title="Eliminar ítem">✕</button>
+                <button class="f-remove-btn" onclick="removeItem('${o.reqId}','${safeItemName}')" title="Eliminar ítem">✕</button>
               </div>`;
           } else if (isItemDevuelto) {
             qtyHtml = `<span class="item-qty" style="background: rgba(239, 68, 68, 0.2); color: #f87171; text-decoration: line-through;">x${item.qty}</span>`;
@@ -662,14 +824,15 @@
           }
 
           itemsHtml += `
-            <div class="item-row ${highlightClass}">
-              <div class="item-primary">
-                <span class="item-name">${item.name}${itemDevueltoBadge}</span>
+            <div class="figma-item-card ${highlightClass}">
+              <div class="figma-item-top">
+                <div class="figma-item-name">${item.name}${itemDevueltoBadge}</div>
                 ${qtyHtml}
               </div>
-              <div class="item-secondary">
-                <span class="item-id" title="ID de Artículo">#${itemId}</span>
-                <span class="item-loc" title="Ubicación física">📍 ${itemLoc}</span>
+              <div class="figma-item-bottom">
+                <span class="item-code-badge">${itemId}</span>
+                <span class="item-location-pill">📍 ${itemLoc}</span>
+                ${itemNote && itemNote.trim() ? `<span class="item-note-badge" title="Nota del ítem">📝 ${itemNote.trim()}</span>` : ''}
               </div>
             </div>`;
         });
@@ -680,13 +843,9 @@
           const btnText = isExpanded ? '▲ Ver menos' : `▼ Ver ${remaining} más`;
           itemsHtml += `<button class="expand-btn" onclick="toggleExpand('${o.reqId}')">${btnText}</button>`;
         }
-
-        if (isPendiente) {
-          itemsHtml += `<button class="btn-add-item" onclick="openAddItemModal('${o.reqId}')">＋ Agregar ítem</button>`;
-        }
         itemsHtml += '</div>';
 
-        const noteHtml = o.notes && o.notes.trim() ? `<div class="note-box">📝 ${o.notes}</div>` : '';
+        const noteHtml = o.notes && o.notes.trim() ? `<div class="note-box" style="margin: 0 16px 10px;">📝 ${o.notes}</div>` : '';
 
         const savedOpId = pendingSelections[o.reqId];
         const defaultSelected = !savedOpId ? 'selected' : '';
@@ -707,23 +866,23 @@
           footerHtml = `<div class="status-complete">⚡ LISTO PARA ENTREGAR</div>`;
         } else if (undoTimers[o.reqId]) {
           const secs = undoTimers[o.reqId].secondsLeft || 5;
-          footerHtml = `<div class="action-group" style="padding: 10px 16px;">
+          footerHtml = `<div class="action-group" style="padding: 0; background: transparent; border: none;">
                <button class="btn-undo-ready" onclick="cancelMarkReady('${o.reqId}')" title="Clic para cancelar y mantener en PENDIENTE">
                  <span>↩️ DESHACER</span>
                  <span style="background: rgba(0,0,0,0.3); padding: 2px 8px; border-radius: 10px; font-size: 0.8rem;">${secs}s</span>
                </button>
              </div>`;
         } else if (isPendiente) {
-          footerHtml = `<div class="action-group">
+          footerHtml = `<div class="figma-actions-row">
                <select id="panol-op-${o.reqId}" 
-                       class="panol-select" 
+                       class="figma-panol-select" 
                        onchange="pendingSelections['${o.reqId}'] = this.value"
                        onfocus="pausePolling()" 
                        onblur="resumePolling()">
-                 <option value="" disabled ${defaultSelected}>👤 Tu nombre...</option>
+                 <option value="" disabled ${defaultSelected}>ENTREGADO POR: 👤</option>
                  ${staffOptions}
                </select>
-               <button class="btn-action btn-ready" onclick="markReady('${o.reqId}')">✓ LISTO</button>
+               <button class="btn-figma-ready" onclick="markReady('${o.reqId}')">✓ LISTO</button>
              </div>`;
         } else {
           footerHtml = `<div class="status-complete" style="background: rgba(139, 148, 158, 0.12); color: #8b949e;">${o.status}</div>`;
@@ -731,40 +890,75 @@
 
         return `
           <div class="${cardClass}" id="card-${o.reqId}">
-            <div class="card-header">
-              <div class="unit-info">
-                <div class="unit-plate">
-                  ${mainPlate}
-                  ${semiPlate ? `<span class="semi-plate">/ ${semiPlate}</span>` : ''}
-                </div>
-                <div class="ot-display">
-                  <span class="ot-label">OT</span>
-                  <span class="ot-value">${o.otNumber || '--'}</span>
-                </div>
+            <!-- 1. Encabezado de Tarjeta (Figma 697:1035) -->
+            <div class="card-figma-header">
+              <div class="header-box-group">
+                <span class="box-label">BOX</span>
+                <span class="box-number">${boxDisplay}</span>
               </div>
-              <div class="time-badge">
-                <span class="time-value ${isUrgent ? 'urgent' : ''}">${timeStr} ${isUrgent ? '⚠️' : ''}</span>
-                <span class="wait-mins ${isUrgent ? 'urgent' : ''}">${waitMins} min</span>
+              <div class="header-meta-group">
+                <div class="header-time-row">
+                  <span class="time-display ${isUrgent ? 'urgent' : ''}">${timeStr} ${isUrgent ? '⚠️' : ''}</span>
+                  <span class="wait-display ${isUrgent ? 'urgent' : ''}">${waitMins} min</span>
+                </div>
+                <div class="header-mechanic" title="Mecánico Solicitante">
+                  <span class="mechanic-name-text">${mechanicDisplay}</span>
+                </div>
               </div>
             </div>
-            
-            ${productBadge || brandBadge ? `
-              <div class="badges-row">
-                ${productBadge}
-                ${brandBadge}
+
+            <div class="card-figma-divider"></div>
+
+            <!-- 2. Bloque Dual Tractor + Semi -->
+            <div class="card-vehicles-block">
+              <!-- Tractor -->
+              <div class="vehicle-card tractor-card">
+                <div class="plate-mercosur">
+                  <div class="plate-strip"><span>REPÚBLICA ARGENTINA</span></div>
+                  <div class="plate-code">${tractorPlate}</div>
+                </div>
+                <div class="vehicle-meta-tags">
+                  <span class="vehicle-ot-pill">OT ${tractorOt}</span>
+                  <span class="vehicle-brand-pill brand-${tractorBrand.toLowerCase()}">${tractorBrand}</span>
+                </div>
               </div>
-            ` : ''}
-            
-            <div class="card-body">
-              <div class="mechanic-row">
-                <div class="mechanic-avatar">${initials}</div>
-                <span class="mechanic-name">${o.opInfo || 'Sin asignar'}</span>
+
+              <!-- Semi -->
+              <div class="vehicle-card semi-card ${!hasSemi ? 'empty-semi' : ''}">
+                ${hasSemi ? `
+                  <div class="plate-mercosur">
+                    <div class="plate-strip"><span>REPÚBLICA ARGENTINA</span></div>
+                    <div class="plate-code">${semiPlate}</div>
+                  </div>
+                  <div class="vehicle-meta-tags">
+                    <span class="vehicle-ot-pill">OT ${semiOt}</span>
+                    <span class="vehicle-brand-pill brand-${semiBrand.toLowerCase()}">${semiBrand}</span>
+                  </div>
+                ` : `
+                  <div class="semi-placeholder">
+                    <span class="semi-none-label">SIN SEMI</span>
+                    <span class="semi-none-desc">Solo Tractor</span>
+                  </div>
+                `}
               </div>
-              ${itemsHtml}
-              ${noteHtml}
             </div>
-            
-            <div class="card-footer">${footerHtml}</div>
+
+            <div class="card-figma-divider"></div>
+
+            <!-- 3. Lista de Repuestos -->
+            ${itemsHtml}
+            ${noteHtml}
+
+            <!-- 4. Pie de Tarjeta / Acciones -->
+            <div class="card-figma-footer">
+              ${isPendiente ? `
+                <button class="btn-figma-add" onclick="openAddItemModal('${o.reqId}')">
+                  <span>Agregar item</span>
+                  <span class="add-plus">+</span>
+                </button>
+              ` : ''}
+              ${footerHtml}
+            </div>
           </div>`;
       }
 
