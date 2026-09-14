@@ -14,10 +14,15 @@
   window.google = window.google || {};
   window.google.script = window.google.script || {};
 
+  // Determinar base URL (en caso de abrir por file:// o directamente en localhost)
+  const API_BASE = (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') 
+    ? 'http://localhost:3000' 
+    : '';
+
   // Conexión WebSockets para actualización instantánea
   if (typeof io !== 'undefined') {
     try {
-      const socket = io();
+      const socket = API_BASE ? io(API_BASE) : io();
       socket.on('orders_sync', function(orders) {
         if (typeof window.onDataReceived === 'function') {
           window.onDataReceived(orders);
@@ -41,14 +46,14 @@
 
         return function(...args) {
           const makeRequest = (attempt = 1) => {
-            fetch('/api/rpc', {
+            fetch(API_BASE + '/api/rpc', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ action: prop, args: args })
             })
             .then(async res => {
               if (res.status === 401) {
-                window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+                window.location.href = (API_BASE || '') + '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
                 return;
               }
               // Si el servidor de Render está reiniciando (502, 503, 504, 520), reintentar automáticamente

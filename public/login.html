@@ -220,6 +220,12 @@
         <span class="spinner" id="btnSpinner"></span>
         <span id="btnText">INGRESAR AL SISTEMA</span>
       </button>
+
+      <div id="devLocalSection" style="margin-top: 14px; display: none;">
+        <button type="button" onclick="bypassLocalDev()" style="width: 100%; padding: 11px; background: #1e293b; border: 1.5px solid #388bfd; border-radius: 10px; color: #60a5fa; font-weight: 800; font-size: 0.84rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+          💻 Modo Pruebas Local (Entrar sin Render)
+        </button>
+      </div>
     </form>
 
     <div class="device-note">
@@ -245,6 +251,18 @@
 
     const urlParams = new URLSearchParams(window.location.search);
     const nextUrl = urlParams.get('next') || '/';
+
+    // Mostrar botón de acceso local si está en localhost o 127.0.0.1
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:') {
+      const devBox = document.getElementById('devLocalSection');
+      if (devBox) devBox.style.display = 'block';
+    }
+
+    function bypassLocalDev() {
+      document.getElementById('username').value = 'taller';
+      document.getElementById('password').value = 'taller2026';
+      form.dispatchEvent(new Event('submit'));
+    }
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
