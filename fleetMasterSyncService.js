@@ -183,6 +183,8 @@ async function syncCanonicalFleetToDbOtList({
   const existingRows = existingRes.data.values || [];
   const brandMap = new Map();
   const manualExceptions = new Map();
+  const existingOtMap = new Map();
+  const existingSemiOtMap = new Map();
 
   existingRows.forEach(r => {
     const rawT = String(r[0] || '').trim();
@@ -197,6 +199,10 @@ async function syncCanonicalFleetToDbOtList({
     const sClean = cleanPlate(rawS);
     if (tClean && marcaT) brandMap.set(tClean, marcaT);
     if (sClean && marcaS) brandMap.set(sClean, marcaS);
+
+    if (tClean && ot) existingOtMap.set(tClean, ot);
+    if (sClean && semiOt) existingSemiOtMap.set(sClean, semiOt);
+    else if (sClean && ot) existingOtMap.set(sClean, ot);
 
     // Detectar y preservar excepciones permanentes como INTERNO TALLER
     const upperT = rawT.toUpperCase();
@@ -234,11 +240,30 @@ async function syncCanonicalFleetToDbOtList({
     spreadsheetId: movimientosSpreadsheetId
   });
 
-  // 3. Extraer OTs LIFO
-  const latestOts = await extractLatestOts({
-    sheetsClient,
-    spreadsheetId: formSpreadsheetId
-  });
+  // 3. Extraer OTs vigentes desde la pestaña canónica 'ots'
+  let latestOts = new Map();
+  try {
+    const otsRes = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId: targetSpreadsheetId,
+      range: "'ots'!A2:D"
+    });
+    const otsRows = otsRes.data.values || [];
+    otsRows.forEach(r => {
+      const ot = String(r[2] || '').trim();
+      const rawDom = String(r[3] || '').trim();
+      const p = cleanPlate(rawDom);
+      if (p && ot) {
+        latestOts.set(p, ot);
+      }
+    });
+    console.log(`✅ OTs vigentes indexadas desde pestaña 'ots': ${latestOts.size} patentes.`);
+  } catch (errOts) {
+    console.warn('⚠️ Fallback a lectura de formulario histórico:', errOts.message);
+    latestOts = await extractLatestOts({
+      sheetsClient,
+      spreadsheetId: formSpreadsheetId
+    });
+  }
 
   // 4. Construir las filas blindadas de DB_OT_LIST (7 columnas)
   const canonicalRows = [];
@@ -249,13 +274,25 @@ async function syncCanonicalFleetToDbOtList({
     const semi = unit.semi;
 
     let otNumber = '';
-    if (tractor && latestOts.has(tractor)) {
+    // Principal: DB_OT_LIST, Fallback: ots vigente
+    if (tractor && existingOtMap.has(tractor)) {
+      otNumber = existingOtMap.get(tractor);
+    } else if (semi && existingOtMap.has(semi)) {
+      otNumber = existingOtMap.get(semi);
+    } else if (tractor && latestOts.has(tractor)) {
       otNumber = latestOts.get(tractor);
     } else if (semi && latestOts.has(semi)) {
       otNumber = latestOts.get(semi);
     }
 
-    if (otNumber) matchedCount++;
+    let semiOtNumber = '';
+    if (semi && existingSemiOtMap.has(semi)) {
+      semiOtNumber = existingSemiOtMap.get(semi);
+    } else if (semi && latestOts.has(semi)) {
+      semiOtNumber = latestOts.get(semi);
+    }
+
+    if (otNumber || semiOtNumber) matchedCount++;
 
     const marcaT = brandMap.get(tractor) || '';
     const marcaS = brandMap.get(semi) || '';
@@ -264,7 +301,7 @@ async function syncCanonicalFleetToDbOtList({
       tractor,            // Col A: UNIT_ID (Tractor)
       otNumber,           // Col B: OT_NUMBER
       semi,               // Col C: SEMI
-      '',                 // Col D: OT_NUMBER (Alt / Semi)
+      semiOtNumber,       // Col D: OT_NUMBER (Alt / Semi)
       unit.category,      // Col E: PRODUCTO
       marcaT,             // Col F: MARCA
       marcaS              // Col G: MARCA_SEMI

@@ -7,13 +7,27 @@ const { Server } = require('socket.io');
 const { google } = require('googleapis');
 const { extractCleanPlate } = require('./plateNormalizer');
 const { extractPlates, processSingleOtUpdate, syncFullOtDatabase, syncCanonicalFleetToDbOtList } = require('./otSyncService');
+const otsManager = require('./otsManagerService');
 const {
   syncOtsToTasksDatabase,
   startAutomaticTaskSync,
   getActiveTasksBoard,
   updateTaskExecution,
-  getHistoricalTasks
+  getHistoricalTasks,
+  getOperarioHoldOts,
+  saveOperarioHoldOts,
+  getOtLifecyclePayload,
+  updateOtTaskTerminado,
+  getUnitTimelineTasks
 } = require('./taskSyncService');
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.warn('⚠️ [Process] Unhandled Rejection:', (reason && reason.stack) ? reason.stack : (reason?.message || reason));
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('❌ [Process] Uncaught Exception:', (err && err.stack) ? err.stack : (err?.message || err));
+});
 
 const app = express();
 app.use(cors());
@@ -85,7 +99,7 @@ io.use((socket, next) => {
 // === 1. CREDENCIALES CENTRALIZADAS CON GOOGLE SHEETS ===
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc';
 const SOURCE_SPREADSHEET_ID = process.env.SOURCE_SPREADSHEET_ID || '1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk';
-const OT_SYNC_INTERVAL_MINUTES = parseInt(process.env.OT_SYNC_INTERVAL_MINUTES || '2', 10);
+const OT_SYNC_INTERVAL_MINUTES = parseInt(process.env.OT_SYNC_INTERVAL_MINUTES || '0', 10);
 
 const DEFAULT_SERVICE_ACCOUNT = {
   type: "service_account",
@@ -204,12 +218,20 @@ async function syncDataFromSheets(force = false) {
   lastSyncTime = now;
 
   try {
-    // A. Leer catálogo completo de ítems y stock desde DB_ITEMS
-    const itemRes = await sheets.spreadsheets.values.get({
+    // A, B, C. Leer DB_ITEMS, DB_OT_LIST y DB_TRANSACTIONS en 1 sola llamada HTTP batchGet
+    const batchRes = await sheets.spreadsheets.values.batchGet({
       spreadsheetId: SPREADSHEET_ID,
-      range: 'DB_ITEMS!A:H'
+      ranges: ['DB_ITEMS!A:H', "'DB_OT_LIST'!A2:G", 'DB_TRANSACTIONS!A:R']
     });
-    const itemRows = itemRes.data.values || [];
+
+    const valRanges = batchRes.data.valueRanges || [];
+    const itemRows = (valRanges[0] && valRanges[0].values) || [];
+    const dbOtListRows = (valRanges[1] && valRanges[1].values) || [];
+    const rows = (valRanges[2] && valRanges[2].values) || [];
+
+    dbOtListRowsCache = dbOtListRows;
+    lastDbOtListSync = now;
+
     const itemMap = {};
     itemsCatalogCache = [];
 
@@ -228,43 +250,45 @@ async function syncDataFromSheets(force = false) {
       }
     }
 
-    // B. Leer DB_OT_LIST (Cols A:G) para enlazar Tractor y Semi con OTs y marcas
-    const dbOtListRows = await getDbOtListRows();
+    const otsData = await otsManager.getCurrentOtsMap(sheets, SPREADSHEET_ID);
     const otListByTractor = new Map();
     const otListBySemi = new Map();
 
     dbOtListRows.forEach(r => {
       const t = String(r[0] || '').trim();
-      const ot = String(r[1] || '').trim();
+      const otDb = otsManager.normalizeOt(r[1]);
       const s = String(r[2] || '').trim();
-      const semiOt = String(r[3] || '').trim() || (ot ? String(parseInt(ot, 10) + 1) : '');
+      const semiOtDb = otsManager.normalizeOt(r[3]);
       const prod = String(r[4] || '').trim();
       const marcaT = String(r[5] || '').trim();
       const marcaS = String(r[6] || '').trim();
 
+      const normT = otsManager.normalizePlate(t);
+      const normS = otsManager.normalizePlate(s);
+
+      // DB_OT_LIST como principal, ots como fallback vigente
+      const tOtObj = otsData.byPlate.get(normT);
+      const sOtObj = otsData.byPlate.get(normS);
+
+      const activeTractorOt = otDb || (tOtObj && tOtObj.ot) || '';
+      const activeSemiOt = semiOtDb || (sOtObj && sOtObj.ot) || (activeTractorOt ? String(parseInt(activeTractorOt, 10) + 1) : '');
+
       const item = {
         tractor: t,
-        ot,
+        ot: activeTractorOt,
         semi: s,
-        semiOt,
+        semiOt: activeSemiOt,
         producto: prod,
         marcaTractor: marcaT,
         marcaSemi: marcaS
       };
 
-      const normT = t.toUpperCase().replace(/[\s\-_.]/g, '');
-      const normS = s.toUpperCase().replace(/[\s\-_.]/g, '');
-      if (normT) otListByTractor.set(normT, item);
-      if (normS) otListBySemi.set(normS, item);
+      const keyT = t.toUpperCase().replace(/[\s\-_.]/g, '');
+      const keyS = s.toUpperCase().replace(/[\s\-_.]/g, '');
+      if (keyT) otListByTractor.set(keyT, item);
+      if (keyS) otListBySemi.set(keyS, item);
     });
 
-    // C. Leer transacciones de pedidos desde DB_TRANSACTIONS
-    const transRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: 'DB_TRANSACTIONS!A:R'
-    });
-
-    const rows = transRes.data.values || [];
     if (rows.length < 2) {
       ordersCache = [];
       return ordersCache;
@@ -282,7 +306,7 @@ async function syncDataFromSheets(force = false) {
       const panolConfirmacion = String(row[17] || '').trim();
       const notesColO = String(row[14] || '').trim();
 
-      const isPendingReturn = estadoCanje !== "" && !panolConfirmacion.includes("OK") && !panolConfirmacion.includes("INCOMPLETO");
+      const isPendingReturn = estadoCanje !== "" && !panolConfirmacion.includes("OK") && !panolConfirmacion.includes("INCOMPLETO") && status !== "DEVOLUCION PENDIENTE" && status !== "DEVOLUCION";
 
       if (status === "PENDIENTE" || status === "LISTO" || status === "ENTREGADO" || status === "DEVOLUCION PENDIENTE" || status === "DEVOLUCION") {
         if (!ordersMap[reqId]) {
@@ -324,6 +348,7 @@ async function syncDataFromSheets(force = false) {
 
           ordersMap[reqId] = {
             reqId: reqId,
+            opId: String(row[2] || '').trim(),
             timestamp: row[0],
             box: boxNumber,
             opInfo: opInfo,
@@ -347,14 +372,16 @@ async function syncDataFromSheets(force = false) {
 
         const itemName = String(row[6] || '');
         const itemDetails = itemMap[itemName.toUpperCase()] || { id: '---', loc: 'S/D', requiereCanje: false, stock: 0 };
-        const itemNote = notesColO || '';
+        const itemNote = String(row[11] || '').trim();
+        const devolucionNote = String(row[14] || '').trim();
+        const finalItemNote = itemNote || devolucionNote;
 
         ordersMap[reqId].items.push({
           name: itemName,
           qty: row[7],
           id: itemDetails.id,
           loc: itemDetails.loc,
-          note: itemNote,
+          note: finalItemNote,
           requiereCanje: itemDetails.requiereCanje,
           estadoCanje: estadoCanje,
           panolConfirmacion: panolConfirmacion,
@@ -480,12 +507,37 @@ app.use((req, res, next) => {
   next();
 });
 
-// Middleware de verificación de autenticación de dispositivo
+// Función de detección de entorno local de desarrollo
+function isLocalRequest(req) {
+  if (!req) return false;
+  const host = String(req.hostname || req.headers?.host || '').toLowerCase();
+  const ip = String(req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || '');
+  return (
+    host.includes('localhost') ||
+    host.includes('127.0.0.1') ||
+    ip.includes('127.0.0.1') ||
+    ip === '::1' ||
+    ip === '::ffff:127.0.0.1' ||
+    process.env.NODE_ENV === 'development' ||
+    !process.env.RENDER
+  );
+}
+
+// Middleware de verificación de autenticación de dispositivo (Con bypass automático para localhost / desarrollo)
 function requireAuth(req, res, next) {
+  const isLocal = isLocalRequest(req);
   const cookies = parseCookies(req.headers.cookie);
   const token = cookies.sys_auth || req.headers['x-auth-token'];
 
-  if (verifyAuthToken(token)) {
+  if (isLocal || verifyAuthToken(token)) {
+    // Si es local y no tiene token de sesión, generamos uno automáticamente
+    if (isLocal && !verifyAuthToken(token)) {
+      const devToken = createAuthToken('local-dev');
+      res.setHeader(
+        'Set-Cookie',
+        `sys_auth=${encodeURIComponent(devToken)}; Path=/; Max-Age=${SESSION_MAX_AGE_MS / 1000}; SameSite=Lax`
+      );
+    }
     return next();
   }
 
@@ -504,9 +556,11 @@ function requireAuth(req, res, next) {
 
 // --- ENDPOINTS PÚBLICOS DE AUTH ---
 app.get('/login', (req, res) => {
+  const isLocal = isLocalRequest(req);
   const cookies = parseCookies(req.headers.cookie);
   const token = cookies.sys_auth;
-  if (verifyAuthToken(token)) {
+  // En localhost o con sesión válida redirigir directo salvo que pase ?force=1
+  if ((isLocal || verifyAuthToken(token)) && !req.query.force) {
     const nextUrl = req.query.next || '/';
     return res.redirect(nextUrl);
   }
@@ -517,13 +571,15 @@ app.post('/api/auth/login', (req, res) => {
   const { username, password, next = '/' } = req.body || {};
   const u = String(username || '').trim().toLowerCase();
   const p = String(password || '').trim();
+  const isLocal = isLocalRequest(req);
 
-  if (u === SYSTEM_USER && p === SYSTEM_PASSWORD) {
-    const token = createAuthToken(u);
+  // En entorno local permite cualquier contraseña para pruebas ágiles
+  if (isLocal || (u === SYSTEM_USER && p === SYSTEM_PASSWORD)) {
+    const token = createAuthToken(u || 'local-dev');
     const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
     res.setHeader(
       'Set-Cookie', 
-      `sys_auth=${encodeURIComponent(token)}; Path=/; Max-Age=${SESSION_MAX_AGE_MS / 1000}; SameSite=Lax; HttpOnly${isHttps ? '; Secure' : ''}`
+      `sys_auth=${encodeURIComponent(token)}; Path=/; Max-Age=${SESSION_MAX_AGE_MS / 1000}; SameSite=Lax${isHttps ? '; Secure' : ''}`
     );
     return res.json({ success: true, redirect: next || '/' });
   }
@@ -615,6 +671,7 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
 
     if (action === 'getMechanicConfig') {
       const opId = String(args[0] || '').trim();
+      const isLocal = isLocalRequest(req);
       let staffRow = null;
       if (sheets) {
         try {
@@ -625,12 +682,15 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
       }
       if (staffRow) {
         const hasAppAccess = staffRow[11] === true || String(staffRow[11] || '').toUpperCase() === 'TRUE';
-        if (!hasAppAccess && staffRow[11] !== undefined) {
+        if (!hasAppAccess && staffRow[11] !== undefined && !isLocal) {
           result = { success: false, error: "Usuario no encontrado o sin acceso activo" };
         } else {
           const boxes = staffRow.slice(6, 11).map(c => String(c || '').trim()).filter(c => c !== '');
-          result = { success: true, name: staffRow[1] || ('Operario ' + opId), role: staffRow[2] || 'MECANICO', boxes: boxes };
+          result = { success: true, name: staffRow[1] || ('Operario ' + opId), role: staffRow[2] || 'MECANICO', boxes: boxes.length > 0 ? boxes : ['01', '02', '03'] };
         }
+      } else if (isLocal) {
+        // En entorno local de pruebas: permitir cualquier número de operario
+        result = { success: true, name: 'Operario Local ' + (opId || 'Test'), role: 'MECANICO', boxes: ['01', '02', '03'] };
       } else {
         result = { success: false, error: "Usuario no encontrado o sin acceso activo" };
       }
@@ -666,59 +726,54 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
       result = itemsCatalogCache.map(i => ({ category: i.category || 'GENERAL', name: i.name, requiereCanje: !!i.requiereCanje }));
     }
     else if (action === 'getUnitCatalog') {
-      let units = new Set();
       if (sheets) {
         try {
-          const otRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_OT_LIST!A1:D500' });
-          (otRes.data.values || []).slice(1).forEach(r => {
-            if (r[0]) units.add(String(r[0]).trim().toUpperCase());
-            if (r[2]) units.add(String(r[2]).trim().toUpperCase());
-          });
-        } catch(e) {}
+          const cat = await otsManager.getFleetSearchCatalog(sheets, SPREADSHEET_ID);
+          result = cat.unitList;
+        } catch(e) {
+          result = [];
+        }
+      } else {
+        result = [];
       }
-      result = Array.from(units).sort();
+    }
+    else if (action === 'getFleetSearchCatalog') {
+      result = await otsManager.getFleetSearchCatalog(sheets, SPREADSHEET_ID);
     }
     else if (action === 'findUnitOrOt') {
-      const query = String(args[0] || '').trim().toUpperCase();
+      const query = args[0];
       const type = args[1];
-      let match = null;
-      if (sheets && query.length >= 2) {
-        try {
-          const otRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_OT_LIST!A1:G500' });
-          const data = otRes.data.values || [];
-          for (let i = 1; i < data.length; i++) {
-            const unit = String(data[i][0] || '').toUpperCase().trim();
-            const ot = String(data[i][1] || '').toUpperCase().trim();
-            const semi = String(data[i][2] || '').toUpperCase().trim();
-            const semiOt = String(data[i][3] || '').toUpperCase().trim();
-            let isMatch = false;
-            if (type === 'OT') isMatch = (ot === query);
-            else if (type === 'UNIT') isMatch = (unit === query || unit.includes(query));
-            else if (type === 'SEMI_OT') isMatch = (semiOt === query || ot === query);
-            else if (type === 'SEMI') isMatch = (semi === query || semi.includes(query));
-            else isMatch = (unit.includes(query) || semi.includes(query) || ot === query || semiOt === query);
-
-            if (isMatch) {
-              match = { success: true, unit: unit, ot: ot, semi: semi, semiOt: semiOt || ot };
-              break;
-            }
-          }
-        } catch(e) {}
-      }
-      result = match || { success: false };
+      result = await otsManager.findUnitOrOt({
+        sheetsClient: sheets,
+        spreadsheetId: SPREADSHEET_ID,
+        query,
+        type
+      });
+    }
+    else if (action === 'getOtsAnteriores') {
+      const plate = args[0];
+      result = await otsManager.getOtsAnterioresForPlate(sheets, SPREADSHEET_ID, plate);
+    }
+    else if (action === 'wipeColdOts') {
+      result = await otsManager.wipeAndArchiveOlderThan6Months(sheets, SPREADSHEET_ID);
     }
     else if (action === 'submitBatchRequest' || action === 'createOrder') {
       const payload = args[0] || {};
-      const { opId, mechanicName, otNumber, unitId, items } = payload;
+      const opId = payload.opId || '';
+      const mechanicName = payload.mechanicName || payload.mechName || '';
+      const otNumber = payload.otNumber || payload.ot || '';
+      const unitId = payload.unitId || payload.unit || '';
+      const items = payload.items || [];
       const now = new Date();
       const timestamp = now.toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
       const reqId = 'REQ-' + Math.floor(Math.random() * 10000000).toString(16).toUpperCase();
       const rowsToAppend = [];
 
       (items || []).forEach(itemObj => {
+        const itemName = itemObj.item || itemObj.name || '';
         rowsToAppend.push([
           timestamp, reqId, opId, mechanicName, otNumber, unitId,
-          itemObj.item, itemObj.qty, 'PENDIENTE', '', '', itemObj.notes || '', '', '', '', '', itemObj.canjeStatus || '', ''
+          itemName, itemObj.qty, 'PENDIENTE', '', '', itemObj.notes || '', '', '', '', '', itemObj.canjeStatus || '', ''
         ]);
       });
 
@@ -1092,6 +1147,8 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
                 newRow[7] = actualReturnQty; // Col H
                 newRow[8] = 'DEVOLUCION PENDIENTE'; // Col I
                 newRow[14] = `SOLICITUD DEVOLUCIÓN NUEVA PARCIAL: ${fallbackReason}`; // Col O (Índice 14)
+                newRow[16] = ''; // Col Q: Limpiar ESTADO_CANJE para devolución de repuesto nuevo
+                newRow[17] = ''; // Col R: Limpiar PANOL_CONFIRMACION
 
                 const colARes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_TRANSACTIONS!A:A' });
                 const colAVals = colARes.data.values || [];
@@ -1154,6 +1211,9 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
           delete readyTimestamps[reqId];
         }
 
+        const batchData = [];
+        const stockUpdates = [];
+
         for (let i = 1; i < rows.length; i++) {
           if (String(rows[i][1] || '').trim() === String(reqId).trim()) {
             const rowNum = i + 1;
@@ -1168,38 +1228,42 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
                 const delta = confirmedQty - oldQty;
 
                 if (delta !== 0) {
-                  await sheets.spreadsheets.values.update({
-                    spreadsheetId: SPREADSHEET_ID,
+                  batchData.push({
                     range: `DB_TRANSACTIONS!H${rowNum}`,
-                    valueInputOption: 'USER_ENTERED',
-                    requestBody: { values: [[confirmedQty]] }
+                    values: [[confirmedQty]]
                   });
-                  // Ajustar stock en DB_ITEMS permitiendo saldos negativos para fidelidad real
-                  await updateStockByName(rItemName, -delta);
+                  stockUpdates.push({ name: rItemName, delta: -delta });
                 }
               }
             }
 
-            await sheets.spreadsheets.values.update({
-              spreadsheetId: SPREADSHEET_ID,
+            batchData.push({
               range: `DB_TRANSACTIONS!I${rowNum}`,
-              valueInputOption: 'USER_ENTERED',
-              requestBody: { values: [[newStatus]] }
+              values: [[newStatus]]
             });
-            await sheets.spreadsheets.values.update({
-              spreadsheetId: SPREADSHEET_ID,
+            batchData.push({
               range: `DB_TRANSACTIONS!${colIdx}${rowNum}`,
-              valueInputOption: 'USER_ENTERED',
-              requestBody: { values: [[`${dateStr} ${timeStr}`]] }
+              values: [[`${dateStr} ${timeStr}`]]
             });
             if (panolOpId) {
-              await sheets.spreadsheets.values.update({
-                spreadsheetId: SPREADSHEET_ID,
+              batchData.push({
                 range: `DB_TRANSACTIONS!P${rowNum}`,
-                valueInputOption: 'USER_ENTERED',
-                requestBody: { values: [[panolOpId]] }
+                values: [[panolOpId]]
               });
             }
+          }
+        }
+
+        if (batchData.length > 0) {
+          await sheets.spreadsheets.values.batchUpdate({
+            spreadsheetId: SPREADSHEET_ID,
+            requestBody: {
+              valueInputOption: 'USER_ENTERED',
+              data: batchData
+            }
+          });
+          for (const su of stockUpdates) {
+            await updateStockByName(su.name, su.delta);
           }
         }
       }
@@ -1242,11 +1306,45 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
       });
     }
     else if (action === 'syncOtsToTasks') {
-      result = await syncOtsToTasksDatabase({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
-      io.emit('tasks_synced', result);
+      result = { success: true, suspended: true, message: 'DB_OT_TASKS suspendido' };
     }
     else if (action === 'getHistoricalTasks') {
       result = await getHistoricalTasks({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
+    }
+    // === TALLER WORKSTATION: UNIDADES EN HOLD (DB_STAFF Col M) & TIMELINE OTS (Col G) ===
+    else if (action === 'getOperarioHoldUnits') {
+      const opId = args[0];
+      result = await getOperarioHoldOts({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID, opId });
+    }
+    else if (action === 'saveOperarioHoldUnits') {
+      const opId = args[0];
+      const units = args[1] || [];
+      result = await saveOperarioHoldOts({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID, opId, units, io });
+    }
+    else if (action === 'getUnitTimelineTasks') {
+      const params = args[0] || {};
+      result = await getUnitTimelineTasks({
+        sheetsClient: sheets,
+        spreadsheetId: SPREADSHEET_ID,
+        tractorOt: params.tractorOt,
+        semiOt: params.semiOt,
+        tractorPlate: params.tractorPlate,
+        semiPlate: params.semiPlate
+      });
+    }
+    else if (action === 'toggleTaskTerminado') {
+      const params = args[0] || {};
+      result = await updateOtTaskTerminado({
+        sheetsClient: sheets,
+        spreadsheetId: SPREADSHEET_ID,
+        otNumber: params.otNumber,
+        taskId: params.taskId,
+        rubro: params.rubro,
+        desc: params.desc,
+        opId: params.opId,
+        isCompleted: params.isCompleted,
+        io
+      });
     }
     else {
       // Fallback genérico
@@ -1301,13 +1399,7 @@ app.post('/api/tasks/update', async (req, res) => {
 });
 
 app.post('/api/tasks/sync', async (req, res) => {
-  try {
-    const result = await syncOtsToTasksDatabase({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
-    io.emit('tasks_synced', result);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+  res.json({ success: true, suspended: true, message: 'DB_OT_TASKS suspendido temporalmente' });
 });
 
 app.get('/api/tasks/history', async (req, res) => {
@@ -1325,50 +1417,110 @@ app.get('/api/orders', async (req, res) => {
   res.json(orders);
 });
 
+// REST GET /api/fleet/search-catalog
+app.get('/api/fleet/search-catalog', async (req, res) => {
+  try {
+    const data = await otsManager.getFleetSearchCatalog(sheets, SPREADSHEET_ID);
+    res.json({ success: true, ...data });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// REST GET /api/ots-anteriores/:plate
+app.get('/api/ots-anteriores/:plate', async (req, res) => {
+  try {
+    const { plate } = req.params;
+    const data = await otsManager.getOtsAnterioresForPlate(sheets, SPREADSHEET_ID, plate);
+    res.json({ success: true, plate, anteriores: data });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// REST POST /api/ots/wipe-cold
+app.post('/api/ots/wipe-cold', async (req, res) => {
+  try {
+    const result = await otsManager.wipeAndArchiveOlderThan6Months(sheets, SPREADSHEET_ID);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // === 4.1 WEBHOOK NUEVA OT (APPS SCRIPT INTEGRATION) ===
 app.post('/webhook/nueva-ot', async (req, res) => {
   try {
-    const dirtyPlate = req.body.dirtyPlate || req.body.rawPlate || req.body.plate || '';
+    const dirtyPlate = req.body.dirtyPlate || req.body.rawPlate || req.body.plate || req.body.dominio || '';
     const otNumber = req.body.otNumber || req.body.newOt || req.body.ot || '';
+    const sectorTareas = req.body.sectorTareas || req.body.tareas || '';
+    const cierreRespaldo = req.body.cierreRespaldo || req.body.respaldo || '';
+    const fecha = req.body.fecha || '';
 
     console.log(`📥 Webhook /webhook/nueva-ot recibido: dirtyPlate="${dirtyPlate}", otNumber="${otNumber}"`);
 
-    const result = await processSingleOtUpdate({
-      sheetsClient: sheets,
-      targetSpreadsheetId: SPREADSHEET_ID,
-      dirtyPlate: dirtyPlate,
-      otNumber: otNumber
+    // 1. Gestionar 'ots' y 'ots_anteriores': preserva solo la más actual por fecha de ingreso y traslada anteriores
+    let otsManagerResult = null;
+    if (sheets && dirtyPlate && otNumber) {
+      try {
+        otsManagerResult = await otsManager.processNewOtRecord(sheets, SPREADSHEET_ID, {
+          dominio: dirtyPlate,
+          otNumber,
+          sectorTareas,
+          cierreRespaldo,
+          fecha
+        });
+      } catch (errOts) {
+        console.warn('⚠️ Advertencia en otsManager.processNewOtRecord:', errOts.message);
+      }
+    }
+
+    // 2. Emparejamiento en índice DB_OT_LIST
+    let result = null;
+    try {
+      result = await processSingleOtUpdate({
+        sheetsClient: sheets,
+        targetSpreadsheetId: SPREADSHEET_ID,
+        dirtyPlate: dirtyPlate,
+        otNumber: otNumber
+      });
+    } catch(errSingle) {
+      console.warn('⚠️ Advertencia en processSingleOtUpdate:', errSingle.message);
+    }
+
+    const effectivePlate = (otsManagerResult && otsManagerResult.dominio) || (result && result.matchedPlate) || dirtyPlate;
+    const effectiveOt = otNumber;
+
+    // Notificar a todos los navegadores/dashboards conectados en tiempo real vía WebSocket
+    io.emit('ot_updated', {
+      action: (otsManagerResult && otsManagerResult.action) || (result && result.action) || 'UPDATED',
+      matchedPlate: effectivePlate,
+      otNumber: effectiveOt,
+      otsDetails: otsManagerResult,
+      timestamp: new Date().toISOString()
     });
 
-    if (result.success) {
-      // Notificar a todos los navegadores/dashboards conectados en tiempo real vía WebSocket
-      io.emit('ot_updated', {
-        action: result.action,
-        matchedPlate: result.matchedPlate,
-        matchedType: result.matchedType,
-        otNumber: result.otNumber,
-        detectedPlates: result.detectedPlates,
-        timestamp: result.timestamp
-      });
+    console.log(`✅ Webhook /webhook/nueva-ot procesado: ${effectivePlate} (OT ${effectiveOt})`);
 
-      console.log(`✅ Webhook /webhook/nueva-ot completado: ${result.action} para ${result.matchedPlate} (OT ${result.otNumber})`);
-      
-      // Auto-sincronizar nuevas tareas en DB_OT_TASKS de forma no bloqueante
-      syncOtsToTasksDatabase({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID })
-        .then(taskRes => {
-          if (taskRes && taskRes.newTasksAppended > 0) {
-            io.emit('tasks_synced', taskRes);
-          }
-        })
-        .catch(e => console.error('Error en sync de tareas tras webhook:', e.message));
-
-      res.status(200).json(result);
-    } else {
-      console.warn(`⚠️ Webhook /webhook/nueva-ot no aplicado: ${result.error}`);
-      res.status(400).json(result);
-    }
+    res.status(200).json({
+      success: true,
+      otsManager: otsManagerResult,
+      dbOtList: result
+    });
   } catch (err) {
     console.error('❌ Error procesando /webhook/nueva-ot:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Endpoint manual / bajo demanda para distribuir OTs ante cargas externas
+app.all('/api/distribuir-ots', async (req, res) => {
+  try {
+    console.log('⚡ Disparando distribución de OTs bajo demanda (/api/distribuir-ots)...');
+    const result = await otsManager.distribuirOtsEnCarga(sheets, SPREADSHEET_ID, io);
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error('❌ Error en /api/distribuir-ots:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -1384,6 +1536,8 @@ app.all('/api/sync-ots', async (req, res) => {
       movimientosSpreadsheetId: process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8',
       formSpreadsheetId: SOURCE_SPREADSHEET_ID
     });
+    // Distribuir en la carga
+    await otsManager.distribuirOtsEnCarga(sheets, SPREADSHEET_ID, io);
     io.emit('ot_sync_completed', result);
     res.json(result);
   } catch (err) {
@@ -1401,7 +1555,7 @@ io.on('connection', (socket) => {
 });
 
 // === 6. PROGRAMACIÓN DE TAREAS Y ARRANQUE DEL SERVIDOR ===
-// Sincronización periódica de OTs como salvaguarda / backup (por defecto cada 2 min)
+// Sincronización periódica de OTs como salvaguarda / backup (por defecto 0 = desactivado para cuidar cuota)
 if (OT_SYNC_INTERVAL_MINUTES > 0) {
   const syncIntervalMs = OT_SYNC_INTERVAL_MINUTES * 60 * 1000;
   setInterval(async () => {
@@ -1414,6 +1568,7 @@ if (OT_SYNC_INTERVAL_MINUTES > 0) {
         movimientosSpreadsheetId: process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8',
         formSpreadsheetId: SOURCE_SPREADSHEET_ID
       });
+      await otsManager.distribuirOtsEnCarga(sheets, SPREADSHEET_ID, io);
       io.emit('ot_sync_completed', result);
     } catch (e) {
       console.error('❌ Error en sincronización programada de OTs:', e.message);
@@ -1421,46 +1576,70 @@ if (OT_SYNC_INTERVAL_MINUTES > 0) {
   }, syncIntervalMs);
 }
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, async () => {
-  console.log('🚀 Servidor Monolito Pañol activo en puerto ' + PORT);
-  
-  // Carga en memoria RAM de unidades desde diagramasnode
-  try {
-    await syncFleetFromDiagramasNode();
-  } catch (err) {
-    console.warn('⚠️ Carga inicial RAM diagramasnode:', err.message);
-  }
-  setInterval(() => {
-    syncFleetFromDiagramasNode().catch(err => console.warn('⚠️ Refresco RAM diagramasnode:', err.message));
-  }, 15 * 60 * 1000);
+const DEFAULT_PORT = parseInt(process.env.PORT || '3000', 10);
 
-  await syncDataFromSheets();
+function startServer(port) {
+  server.removeAllListeners('error');
+  server.removeAllListeners('listening');
 
-  // Sincronización inicial de OTs al arrancar
-  try {
-    console.log('🚀 Ejecutando sincronización inicial canónica de OTs al arrancar servidor...');
-    const otSyncRes = await syncCanonicalFleetToDbOtList({
-      sheetsClient: sheets,
-      sourceSpreadsheetId: SOURCE_SPREADSHEET_ID,
-      targetSpreadsheetId: SPREADSHEET_ID,
-      movimientosSpreadsheetId: process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8',
-      formSpreadsheetId: SOURCE_SPREADSHEET_ID
-    });
-    console.log('✅ Sincronización inicial de OTs finalizada:', otSyncRes);
-  } catch (e) {
-    console.error('⚠️ Advertencia: No se pudo completar sincronización inicial de OTs:', e.message);
-  }
+  server.once('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`⚠️ Puerto ${port} en uso. Reintentando automáticamente en puerto ${port + 1}...`);
+      setTimeout(() => startServer(port + 1), 500);
+    } else {
+      console.error('❌ Error en servidor HTTP:', err.message);
+    }
+  });
 
-  // Iniciar sincronización automatizada de DB_OT_TASKS (Cero sobreescritura, solo append de nuevos)
-  try {
-    startAutomaticTaskSync({
-      sheetsClient: sheets,
-      spreadsheetId: SPREADSHEET_ID,
-      io,
-      intervalMinutes: OT_SYNC_INTERVAL_MINUTES
-    });
-  } catch (e) {
-    console.error('⚠️ Error al iniciar automatización de DB_OT_TASKS:', e.message);
-  }
-});
+  server.once('listening', async () => {
+    console.log('🚀 Servidor Monolito Pañol activo en puerto ' + port);
+    
+    // 1. Carga en memoria RAM de unidades desde diagramasnode (HTTP externo, no gasta cuota de Sheets)
+    try {
+      await syncFleetFromDiagramasNode();
+    } catch (err) {
+      console.warn('⚠️ Carga inicial RAM diagramasnode:', err.message);
+    }
+    setInterval(() => {
+      syncFleetFromDiagramasNode().catch(err => console.warn('⚠️ Refresco RAM diagramasnode:', err.message));
+    }, 15 * 60 * 1000);
+
+    // 2. Asegurar estructura de ots y ots_anteriores y depurar en la carga inicial (sin timers periódicos)
+    try {
+      await otsManager.ensureOtsStructure(sheets, SPREADSHEET_ID);
+      await otsManager.migrateAndDeduplicateOts(sheets, SPREADSHEET_ID);
+    } catch (errOtsInit) {
+      console.warn('⚠️ Error al inicializar ots y ots_anteriores:', errOtsInit.message);
+    }
+
+    // Pequeña pausa de 1 segundo para escalonar peticiones y proteger la cuota de Google Sheets
+    await new Promise(r => setTimeout(r, 1000));
+
+    // 3. Sincronizar catálogo y transacciones en 1 sola petición HTTP batchGet
+    await syncDataFromSheets();
+
+    // Pequeña pausa de 1 segundo
+    await new Promise(r => setTimeout(r, 1000));
+
+    // 4. Sincronización inicial de flota canónica a DB_OT_LIST
+    try {
+      console.log('🚀 Ejecutando sincronización inicial canónica de OTs al arrancar servidor...');
+      const otSyncRes = await syncCanonicalFleetToDbOtList({
+        sheetsClient: sheets,
+        sourceSpreadsheetId: SOURCE_SPREADSHEET_ID,
+        targetSpreadsheetId: SPREADSHEET_ID,
+        movimientosSpreadsheetId: process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8',
+        formSpreadsheetId: SOURCE_SPREADSHEET_ID
+      });
+      console.log('✅ Sincronización inicial de OTs finalizada:', otSyncRes);
+    } catch (e) {
+      console.error('⚠️ Advertencia: No se pudo completar sincronización inicial de OTs:', e.message);
+    }
+
+    // Nota: DB_OT_TASKS suspendido temporalmente a solicitud.
+  });
+
+  server.listen(port);
+}
+
+startServer(DEFAULT_PORT);
