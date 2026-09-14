@@ -1339,9 +1339,23 @@
       font-size: 0.82rem;
       font-weight: 900;
       color: white;
-      min-width: 22px;
+      width: 32px;
       text-align: center;
       font-family: 'JetBrains Mono', monospace;
+      background: transparent;
+      border: none;
+      outline: none;
+      padding: 0;
+      cursor: text;
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+    .qty-display::-webkit-inner-spin-button,
+    .qty-display::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    .qty-display:focus {
+      color: #f0a500;
+      background: rgba(240,165,0,0.08);
+      border-radius: 3px;
     }
 
     .btn-del-cart-item {
@@ -2827,6 +2841,31 @@
       renderCart();
     }
 
+    function setCartQty(index, value) {
+      if (index < 0 || index >= cartItems.length) return;
+      let val = parseInt(value, 10);
+      if (isNaN(val) || val < 1) val = 1;
+      cartItems[index].qty = val;
+      renderCart();
+    }
+
+    function handleCartQtyInput(index, inputEl) {
+      if (index < 0 || index >= cartItems.length) return;
+      let val = parseInt(inputEl.value, 10);
+      if (!isNaN(val) && val >= 1) {
+        cartItems[index].qty = val;
+        const totalQty = cartItems.reduce((sum, i) => sum + parseInt(i.qty), 0);
+        const badge = document.getElementById('cartCountBadge');
+        if (badge) badge.innerText = `${totalQty} ÍTEMS`;
+        const subnavBadge = document.getElementById('subnavCartBadge');
+        if (subnavBadge) subnavBadge.innerText = totalQty;
+        const btn = document.getElementById('confirmOrderBtn');
+        if (btn) btn.innerText = `CONFIRMAR PEDIDO (${totalQty} ÍTEMS)`;
+        const floatCount = document.getElementById('mobileCartFloatCount');
+        if (floatCount) floatCount.innerText = totalQty;
+      }
+    }
+
     function updateCartQty(index, delta) {
       if (index < 0 || index >= cartItems.length) return;
       cartItems[index].qty += delta;
@@ -2947,9 +2986,15 @@
 
           <div class="cart-item-actions">
             <div class="qty-stepper">
-              <button class="btn-qty" onclick="updateCartQty(${idx}, -1)">-</button>
-              <span class="qty-display">${item.qty}</span>
-              <button class="btn-qty" onclick="updateCartQty(${idx}, 1)">+</button>
+              <button class="btn-qty" onclick="updateCartQty(${idx}, -1)" title="Restar 1">-</button>
+              <input type="number" inputmode="decimal" min="1" max="9999"
+                     class="qty-display"
+                     value="${item.qty}"
+                     onfocus="this.select()"
+                     onchange="setCartQty(${idx}, this.value)"
+                     oninput="handleCartQtyInput(${idx}, this)"
+                     title="Editar cantidad" />
+              <button class="btn-qty" onclick="updateCartQty(${idx}, 1)" title="Sumar 1">+</button>
             </div>
 
             <button class="btn-del-cart-item" onclick="removeCartItem(${idx})" title="Eliminar ítem">
