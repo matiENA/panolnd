@@ -1,8 +1,27 @@
+const fs = require('fs');
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
+
+// Cargar variables de entorno desde .env local si existe (para localhost)
+const envFilePath = path.resolve(__dirname, '.env');
+if (fs.existsSync(envFilePath)) {
+  const envContent = fs.readFileSync(envFilePath, 'utf8');
+  envContent.split(/\r?\n/).forEach(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx !== -1) {
+      const key = trimmed.slice(0, eqIdx).trim();
+      const val = trimmed.slice(eqIdx + 1).trim().replace(/(^['"]|['"]$)/g, '');
+      if (key && !process.env[key]) {
+        process.env[key] = val;
+      }
+    }
+  });
+}
 const { Server } = require('socket.io');
 const { google } = require('googleapis');
 const { extractCleanPlate } = require('./plateNormalizer');
@@ -18,7 +37,11 @@ const {
   saveOperarioHoldOts,
   getOtLifecyclePayload,
   updateOtTaskTerminado,
-  getUnitTimelineTasks
+  getUnitTimelineTasks,
+  getStaffAndLocations,
+  getCoordinacionBoard,
+  saveOtCoordinacionJson,
+  saveAllCoordinacionBatch
 } = require('./taskSyncService');
 
 process.on('unhandledRejection', (reason, promise) => {
@@ -97,8 +120,8 @@ io.use((socket, next) => {
 });
 
 // === 1. CREDENCIALES CENTRALIZADAS CON GOOGLE SHEETS ===
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc';
-const SOURCE_SPREADSHEET_ID = process.env.SOURCE_SPREADSHEET_ID || '1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk';
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ';
+const MES_MOVIMIENTOS_ID = process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8';
 const OT_SYNC_INTERVAL_MINUTES = parseInt(process.env.OT_SYNC_INTERVAL_MINUTES || '0', 10);
 
 const DEFAULT_SERVICE_ACCOUNT = {
@@ -271,7 +294,7 @@ async function syncDataFromSheets(force = false) {
       const sOtObj = otsData.byPlate.get(normS);
 
       const activeTractorOt = otDb || (tOtObj && tOtObj.ot) || '';
-      const activeSemiOt = semiOtDb || (sOtObj && sOtObj.ot) || (activeTractorOt ? String(parseInt(activeTractorOt, 10) + 1) : '');
+      const activeSemiOt = semiOtDb || (sOtObj && sOtObj.ot) || '';
 
       const item = {
         tractor: t,
@@ -616,6 +639,7 @@ app.get('/', requireAuth, (req, res) => {
   if (v === 'dashboard' || v === 'dash') return res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
   if (v === 'inv' || v === 'inventory' || v === 'stock') return res.sendFile(path.join(__dirname, 'public', 'inv.html'));
   if (v === 'mobile' || v === 'm' || v === 'app-mecanico') return res.sendFile(path.join(__dirname, 'public', 'mobile.html'));
+  if (v === 'coordinacion' || v === 'coord' || v === 'wireframe') return res.sendFile(path.join(__dirname, 'public', 'coordinacion.html'));
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -626,7 +650,10 @@ app.get(['/panol', '/panol/'], requireAuth, (req, res) => res.sendFile(path.join
 app.get('/panol.html', (req, res) => res.redirect(301, '/panol'));
 app.get('/dashboard', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 app.get('/inv', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'inv.html')));
-app.get('/wireframe', (req, res) => res.sendFile(path.join(__dirname, 'public', 'wireframe.html')));
+app.get(['/coordinacion', '/coordinacion/'], (req, res) => res.sendFile(path.join(__dirname, 'public', 'coordinacion.html')));
+app.get('/coordinacion.html', (req, res) => res.redirect(301, '/coordinacion'));
+app.get('/wireframe', (req, res) => res.redirect(301, '/coordinacion'));
+app.get('/wireframe.html', (req, res) => res.redirect(301, '/coordinacion'));
 
 // Proteger cualquier acceso directo a archivos .html estáticos en /public
 app.use((req, res, next) => {
@@ -1282,8 +1309,7 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
       result = await syncCanonicalFleetToDbOtList({
         sheetsClient: sheets,
         targetSpreadsheetId: SPREADSHEET_ID,
-        movimientosSpreadsheetId: process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8',
-        formSpreadsheetId: SOURCE_SPREADSHEET_ID
+        movimientosSpreadsheetId: MES_MOVIMIENTOS_ID
       });
       io.emit('ot_sync_completed', result);
     }
@@ -1365,11 +1391,96 @@ app.post('/api/fleet/sync', async (req, res) => {
     const result = await syncCanonicalFleetToDbOtList({
       sheetsClient: sheets,
       targetSpreadsheetId: SPREADSHEET_ID,
-      movimientosSpreadsheetId: process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8',
-      formSpreadsheetId: SOURCE_SPREADSHEET_ID
+      movimientosSpreadsheetId: MES_MOVIMIENTOS_ID
     });
     io.emit('ot_sync_completed', result);
     res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// === ENDPOINTS REST: COORDINACIÓN TALLER ===
+app.get('/api/coordinacion/data', async (req, res) => {
+  try {
+    const data = await getCoordinacionBoard({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/coordinacion/save', async (req, res) => {
+  try {
+    const { otNumber, plate, data } = req.body;
+    const result = await saveOtCoordinacionJson({
+      sheetsClient: sheets,
+      spreadsheetId: SPREADSHEET_ID,
+      otNumber,
+      plate,
+      data,
+      io
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/coordinacion/save-all', async (req, res) => {
+  try {
+    const { units } = req.body;
+    const result = await saveAllCoordinacionBatch({
+      sheetsClient: sheets,
+      spreadsheetId: SPREADSHEET_ID,
+      units,
+      io
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/coordinacion/assign', async (req, res) => {
+  try {
+    const { taskId, otNumber, plate, ubicacion, operario, asignado, empezo, termino, estado, tasksPayload } = req.body;
+    
+    // 1. Actualizar DB_OT_TASKS si taskId está disponible
+    if (taskId) {
+      await updateTaskExecution({
+        sheetsClient: sheets,
+        spreadsheetId: SPREADSHEET_ID,
+        taskId,
+        ubicacion,
+        operario,
+        asignado,
+        empezo,
+        termino,
+        estado,
+        io
+      });
+    }
+
+    // 2. Persistir en Columna I de 'ots'
+    if (otNumber || plate) {
+      await saveOtCoordinacionJson({
+        sheetsClient: sheets,
+        spreadsheetId: SPREADSHEET_ID,
+        otNumber,
+        plate,
+        data: tasksPayload || {
+          ot: otNumber,
+          plate,
+          ubicacion,
+          operarios: operario,
+          lastUpdated: new Date().toISOString()
+        },
+        io
+      });
+    }
+
+    res.json({ success: true, message: 'Asignación guardada en DB y escrita en Columna I de tab ots' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1449,6 +1560,28 @@ app.post('/api/ots/wipe-cold', async (req, res) => {
   }
 });
 
+// REST GET /api/ots/cold-storage/download
+app.get('/api/ots/cold-storage/download', async (req, res) => {
+  try {
+    const { csvContent, totalRows } = await otsManager.downloadColdStorageOts(sheets, SPREADSHEET_ID);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="ots_historico_cold.csv"');
+    res.send(csvContent);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// REST POST /api/ots/cold-storage/clear
+app.post('/api/ots/cold-storage/clear', async (req, res) => {
+  try {
+    const result = await otsManager.clearColdStorageTab(sheets, SPREADSHEET_ID);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // === 4.1 WEBHOOK NUEVA OT (APPS SCRIPT INTEGRATION) ===
 app.post('/webhook/nueva-ot', async (req, res) => {
   try {
@@ -1457,6 +1590,7 @@ app.post('/webhook/nueva-ot', async (req, res) => {
     const sectorTareas = req.body.sectorTareas || req.body.tareas || '';
     const cierreRespaldo = req.body.cierreRespaldo || req.body.respaldo || '';
     const fecha = req.body.fecha || '';
+    const confirmacion = req.body.confirmacion || req.body.confirmacionTareas || '';
 
     console.log(`📥 Webhook /webhook/nueva-ot recibido: dirtyPlate="${dirtyPlate}", otNumber="${otNumber}"`);
 
@@ -1469,7 +1603,8 @@ app.post('/webhook/nueva-ot', async (req, res) => {
           otNumber,
           sectorTareas,
           cierreRespaldo,
-          fecha
+          fecha,
+          confirmacion
         });
       } catch (errOts) {
         console.warn('⚠️ Advertencia en otsManager.processNewOtRecord:', errOts.message);
@@ -1532,10 +1667,8 @@ app.all('/api/sync-ots', async (req, res) => {
     console.log('🛡️ Disparando sincronización canónica de OTs desde /api/sync-ots...');
     const result = await syncCanonicalFleetToDbOtList({
       sheetsClient: sheets,
-      sourceSpreadsheetId: SOURCE_SPREADSHEET_ID,
       targetSpreadsheetId: SPREADSHEET_ID,
-      movimientosSpreadsheetId: process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8',
-      formSpreadsheetId: SOURCE_SPREADSHEET_ID
+      movimientosSpreadsheetId: MES_MOVIMIENTOS_ID
     });
     // Distribuir en la carga
     await otsManager.distribuirOtsEnCarga(sheets, SPREADSHEET_ID, io);
@@ -1564,10 +1697,8 @@ if (OT_SYNC_INTERVAL_MINUTES > 0) {
       console.log(`⏰ Ejecución programada de sincronización canónica de OTs (cada ${OT_SYNC_INTERVAL_MINUTES} min)...`);
       const result = await syncCanonicalFleetToDbOtList({
         sheetsClient: sheets,
-        sourceSpreadsheetId: SOURCE_SPREADSHEET_ID,
         targetSpreadsheetId: SPREADSHEET_ID,
-        movimientosSpreadsheetId: process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8',
-        formSpreadsheetId: SOURCE_SPREADSHEET_ID
+        movimientosSpreadsheetId: MES_MOVIMIENTOS_ID
       });
       await otsManager.distribuirOtsEnCarga(sheets, SPREADSHEET_ID, io);
       io.emit('ot_sync_completed', result);
@@ -1627,10 +1758,8 @@ function startServer(port) {
       console.log('🚀 Ejecutando sincronización inicial canónica de OTs al arrancar servidor...');
       const otSyncRes = await syncCanonicalFleetToDbOtList({
         sheetsClient: sheets,
-        sourceSpreadsheetId: SOURCE_SPREADSHEET_ID,
         targetSpreadsheetId: SPREADSHEET_ID,
-        movimientosSpreadsheetId: process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8',
-        formSpreadsheetId: SOURCE_SPREADSHEET_ID
+        movimientosSpreadsheetId: MES_MOVIMIENTOS_ID
       });
       console.log('✅ Sincronización inicial de OTs finalizada:', otSyncRes);
     } catch (e) {

@@ -5,8 +5,8 @@
  * Reglas de Negocio (Prägnanz y Poka-Yoke):
  * 1. Extrae y normaliza patentes Mercosur (AA123BB) y tradicionales (AAA123) tolerando texto sucio o compuestos.
  * 2. Realiza matching unificado: compara contra Tractor (Col A) y Semi (Col C).
- * 3. Actualiza exclusivamente la Columna B (OT Tractor) y no toca la Columna D.
- * 4. Si la unidad no existe en la base de datos, crea una nueva fila [patente, ot, "", ""].
+ * 3. Actualiza Col B (OT Tractor) si coincide con Tractor, o Col D (OT Semi) si coincide con Semi.
+ * 4. Si la unidad no pertenece a la flota canónica activa de DB_OT_LIST, omite la inserción para blindar la base.
  * 5. Soporta tanto webhook en tiempo real (/webhook/nueva-ot) como sincronización masiva en bloque (batch).
  */
 
@@ -58,7 +58,7 @@ function extractPlates(rawString) {
  * Procesa la notificación en tiempo real de una nueva OT recibida (Webhook).
  * @param {object} params
  * @param {object} params.sheetsClient - Cliente autenticado de Google Sheets
- * @param {string} params.targetSpreadsheetId - ID de la base de datos destino (1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc)
+ * @param {string} params.targetSpreadsheetId - ID de la base de datos destino (17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ)
  * @param {string} params.dirtyPlate - Cadena de patente recibida (ej: "AD355XY / AD413LI" o "TRACTOR AG674AQ")
  * @param {string|number} params.otNumber - Número de OT recibido
  * @returns {Promise<object>} Resultado de la operación
@@ -97,27 +97,36 @@ async function processSingleOtUpdate({ sheetsClient, targetSpreadsheetId, dirtyP
     const dbTractor = String(dbData[i][0] || '').toUpperCase().replace(/[\s\-_.]/g, ''); // Col A
     const dbSemi = String(dbData[i][2] || '').toUpperCase().replace(/[\s\-_.]/g, '');    // Col C
 
-    const found = matches.find(p => (dbTractor && p === dbTractor) || (dbSemi && p === dbSemi));
-    if (found) {
+    const isTractorMatch = matches.some(p => dbTractor && p === dbTractor);
+    const isSemiMatch = matches.some(p => dbSemi && p === dbSemi);
+
+    if (isTractorMatch || isSemiMatch) {
       targetRow = i + 1; // Fila exacta en Google Sheets (1-indexed)
-      matchedPlate = found;
-      matchedType = (dbTractor && found === dbTractor) ? "TRACTOR" : "SEMI";
 
-      // 1. Sobreescribimos la Columna B (Índice 2)
-      await sheetsClient.spreadsheets.values.update({
-        spreadsheetId: targetSpreadsheetId,
-        range: `'DB_OT_LIST'!B${targetRow}`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: [[cleanOt]] }
-      });
+      const updates = [];
+      if (isTractorMatch) {
+        matchedType = 'TRACTOR';
+        matchedPlate = dbTractor;
+        updates.push({
+          range: `'DB_OT_LIST'!B${targetRow}`,
+          values: [[cleanOt]]
+        });
+      }
+      if (isSemiMatch) {
+        matchedType = matchedType ? 'BOTH' : 'SEMI';
+        matchedPlate = matchedPlate ? `${matchedPlate} / ${dbSemi}` : dbSemi;
+        updates.push({
+          range: `'DB_OT_LIST'!D${targetRow}`,
+          values: [[cleanOt]]
+        });
+      }
 
-      // Si la fila tenía el Tractor vacío y ahora vino emparejado con un Semi conocido, completamos Col A
-      if (!dbTractor && tractorPlate && tractorPlate !== dbSemi) {
+      for (const u of updates) {
         await sheetsClient.spreadsheets.values.update({
           spreadsheetId: targetSpreadsheetId,
-          range: `'DB_OT_LIST'!A${targetRow}`,
+          range: u.range,
           valueInputOption: 'USER_ENTERED',
-          requestBody: { values: [[tractorPlate]] }
+          requestBody: { values: u.values }
         });
       }
 
@@ -151,21 +160,19 @@ async function processSingleOtUpdate({ sheetsClient, targetSpreadsheetId, dirtyP
 }
 
 /**
- * Sincronización de OTs delimitada estrictamente por la planilla mensual de Movimientos.
+ * Sincronización de OTs delimitada estrictamente por la planilla mensual de Movimientos y tab 'ots'.
  * Regla de Oro: DB_OT_LIST está 100% delimitada por la flota activa de 1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8.
  * No se permite la inyección sistemática de patentes viejas o dadas de baja.
  */
 async function syncFullOtDatabase({
   sheetsClient,
-  sourceSpreadsheetId,
   targetSpreadsheetId,
   movimientosSpreadsheetId
 }) {
   return syncCanonicalFleetToDbOtList({
     sheetsClient,
     targetSpreadsheetId,
-    movimientosSpreadsheetId: movimientosSpreadsheetId || process.env.MES_MOVIMIENTOS_ID,
-    formSpreadsheetId: sourceSpreadsheetId
+    movimientosSpreadsheetId: movimientosSpreadsheetId || process.env.MES_MOVIMIENTOS_ID
   });
 }
 

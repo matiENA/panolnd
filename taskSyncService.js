@@ -10,8 +10,10 @@
  * 5. Cold Storage & Hot Purge: Al completarse el 100% de las tareas de una OT, se archiva en 'HISTORICO_COLD' y se purga de la tabla activa.
  */
 
+const { extractPlates } = require('./plateNormalizer');
+
 const DB_TASKS_TAB = 'DB_OT_TASKS';
-const COLD_STORAGE_TAB = 'HISTORICO_COLD';
+const COLD_STORAGE_TAB = 'HISTORICO_TAREAS_COLD';
 const OTS_SOURCE_TAB = 'ots';
 
 const DB_TASKS_HEADERS = [
@@ -163,10 +165,12 @@ function parseTasksFromString(rawTasksString) {
 }
 
 /**
- * Parsea el dominio desde cadenas como "AG147LK | 727 (T)" o "AG172II | 732 (A)".
+ * Parsea el dominio desde cadenas como "AG147LK | 727 (T)", "AG147LK - 00011110" o "AG172II".
  */
 function parseDominio(rawDominioString) {
   if (!rawDominioString) return '';
+  const extracted = extractPlates(rawDominioString);
+  if (extracted.length > 0) return extracted[0];
   const parts = String(rawDominioString).split('|').map(s => s.trim());
   return parts[0] ? parts[0].toUpperCase().replace(/[\s\-_.]/g, '') : '';
 }
@@ -1145,6 +1149,410 @@ async function getUnitTimelineTasks({ sheetsClient, spreadsheetId, tractorOt, se
   }
 }
 
+/**
+ * DB_STAFF: Obtiene la lista de operarios (Col B) y ubicaciones/boxes (Cols G:K).
+ */
+async function getStaffAndLocations({ sheetsClient, spreadsheetId }) {
+  const defaultStaff = [
+    { opId: '1', name: 'Carlos Gómez', role: 'MECANICO' },
+    { opId: '2', name: 'Mario Benítez', role: 'MECANICO' },
+    { opId: '3', name: 'Juan Pérez', role: 'ENGRASE' },
+    { opId: '4', name: 'Lucas Silva', role: 'GOMERIA' },
+    { opId: '5', name: 'Roberto Díaz', role: 'LAVADERO' },
+    { opId: '6', name: 'Martín Alvarez', role: 'ELECTRICIDAD' },
+    { opId: '7', name: 'Alejandro Ruiz', role: 'TALLER' }
+  ];
+
+  const defaultLocations = [
+    'Fosa 1', 'Fosa 2', 'Fosa 3', 'Box Mecánica', 'Box Electricidad',
+    'Lavadero 1', 'Lavadero 2', 'Gomería', 'Lubricentro', 'Patio / Tránsito'
+  ];
+
+  if (!sheetsClient || !spreadsheetId) {
+    return { staff: defaultStaff, locations: defaultLocations };
+  }
+
+  try {
+    const res = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'DB_STAFF!A1:K100'
+    });
+    const rows = res.data.values || [];
+    if (rows.length <= 1) {
+      return { staff: defaultStaff, locations: defaultLocations };
+    }
+
+    const staffMap = new Map();
+    const locSet = new Set();
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const opId = String(row[0] || '').trim();
+      const name = String(row[1] || '').trim();
+      const role = String(row[2] || 'TALLER').trim();
+
+      if (name) {
+        staffMap.set(name, { opId: opId || String(i), name, role });
+      }
+
+      // Cols G a K (índices 6 a 10)
+      for (let colIdx = 6; colIdx <= 10; colIdx++) {
+        const loc = String(row[colIdx] || '').trim();
+        if (loc && loc !== '' && loc !== '0' && loc !== '-') {
+          locSet.add(loc.startsWith('Box') || loc.startsWith('Fosa') || loc.startsWith('Lav') || loc.startsWith('Gom') ? loc : `Box ${loc}`);
+        }
+      }
+    }
+
+    const staffList = staffMap.size > 0 ? Array.from(staffMap.values()) : defaultStaff;
+    const locList = locSet.size > 0 ? Array.from(locSet) : defaultLocations;
+
+    return { staff: staffList, locations: locList };
+  } catch (err) {
+    console.warn('⚠️ [getStaffAndLocations] Error al leer DB_STAFF:', err.message);
+    return { staff: defaultStaff, locations: defaultLocations };
+  }
+}
+
+/**
+ * COORDINACIÓN: Lee y renderiza las OTs de la pestaña 'ots' vinculadas con 'DB_OT_LIST',
+ * e integra las asignaciones y JSON guardado en la Columna I de cada fila.
+ */
+async function getCoordinacionBoard({ sheetsClient, spreadsheetId }) {
+  if (!sheetsClient || !spreadsheetId) {
+    return { success: false, units: [], staff: [], locations: [], message: 'No hay conexión con Google Sheets' };
+  }
+
+  try {
+    // 1. Obtener operarios y ubicaciones
+    const { staff, locations } = await getStaffAndLocations({ sheetsClient, spreadsheetId });
+
+    // 2. Mapeo de pares Tractor / Semi desde DB_OT_LIST
+    const plateToType = new Map();
+    const pairByPlate = new Map();
+    const pairByOt = new Map();
+
+    try {
+      const otListRes = await sheetsClient.spreadsheets.values.get({
+        spreadsheetId,
+        range: "'DB_OT_LIST'!A2:G500"
+      });
+      const otListRows = otListRes.data.values || [];
+
+      otListRows.forEach(r => {
+        const tractor = String(r[0] || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+        const otTractor = String(r[1] || '').trim();
+        const semi = String(r[2] || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+        const otSemi = String(r[3] || '').trim();
+
+        const pair = { tractor, semi, otTractor, otSemi };
+
+        if (tractor) {
+          plateToType.set(tractor, 'TRACTOR');
+          pairByPlate.set(tractor, pair);
+        }
+        if (semi) {
+          plateToType.set(semi, 'SEMI');
+          pairByPlate.set(semi, pair);
+        }
+        if (otTractor) pairByOt.set(otTractor, pair);
+        if (otSemi) pairByOt.set(otSemi, pair);
+      });
+    } catch (eList) {
+      console.warn('⚠️ Error al leer DB_OT_LIST para Coordinación:', eList.message);
+    }
+
+    // 3. Leer pestaña 'ots' (Cols A a I)
+    const otsRes = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${OTS_SOURCE_TAB}'!A2:I500`
+    });
+    const otsRows = otsRes.data.values || [];
+
+    // 4. Leer tareas activas desde DB_OT_TASKS como capa de estado en caliente
+    let dbTasksMap = new Map();
+    try {
+      const tasksRes = await sheetsClient.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${DB_TASKS_TAB}'!A2:K1500`
+      });
+      const tRows = tasksRes.data.values || [];
+      tRows.forEach(r => {
+        const tId = String(r[0] || '').trim();
+        if (tId) {
+          dbTasksMap.set(tId, {
+            ubicacion: String(r[5] || '').trim(),
+            operarios: String(r[6] || '').trim(),
+            asignado: String(r[7] || '').trim(),
+            empezo: String(r[8] || '').trim(),
+            termino: String(r[9] || '').trim(),
+            estado: String(r[10] || 'PENDIENTE').trim()
+          });
+        }
+      });
+    } catch (eTasks) {}
+
+    const unitsMap = new Map();
+
+    otsRows.forEach((row, rowIdx) => {
+      const rowNumber = rowIdx + 2;
+      const rawOt = String(row[2] || '').trim(); // Col C: ORDEN Nº
+      const rawDominio = String(row[3] || '').trim(); // Col D: DOMINIO
+      const rawTasks = String(row[4] || '').trim(); // Col E: Sector / Tareas
+      const rawColIJson = String(row[8] || '').trim(); // Col I: JSON COORDINACIÓN
+
+      if (!rawOt && !rawDominio) return;
+
+      const cleanOt = rawOt.replace(/^0+/, '') || rawOt;
+      const plate = parseDominio(rawDominio);
+      const parsedTaskList = parseTasksFromString(rawTasks);
+
+      // Parsear JSON existente en Col I si lo hay
+      let savedColI = null;
+      if (rawColIJson) {
+        try {
+          savedColI = JSON.parse(rawColIJson);
+        } catch (eJson) {}
+      }
+
+      // Determinar si es tractor o semi
+      let type = plateToType.get(plate);
+      const pair = pairByPlate.get(plate) || pairByOt.get(cleanOt) || {};
+      if (!type) {
+        if (pair.semi === plate) type = 'SEMI';
+        else if (pair.tractor === plate) type = 'TRACTOR';
+        else type = 'TRACTOR';
+      }
+
+      const isSemi = (type === 'SEMI');
+      // Identificador de par o grupo
+      const groupKey = pair.tractor && pair.semi ? `${pair.tractor}_${pair.semi}` : (pair.tractor || pair.semi || plate || cleanOt);
+
+      if (!unitsMap.has(groupKey)) {
+        unitsMap.set(groupKey, {
+          id: `unit_${groupKey.replace(/[^a-zA-Z0-9]/g, '_')}`,
+          ot: cleanOt,
+          status: 'progreso',
+          isExpanded: true,
+          tractor: {
+            plate: pair.tractor || (!isSemi ? plate : ''),
+            ot: pair.otTractor || (!isSemi ? cleanOt : ''),
+            rowNumber: !isSemi ? rowNumber : null,
+            jsonColI: !isSemi ? savedColI : null,
+            tasks: []
+          },
+          semi: {
+            plate: pair.semi || (isSemi ? plate : ''),
+            ot: pair.otSemi || (isSemi ? cleanOt : ''),
+            rowNumber: isSemi ? rowNumber : null,
+            jsonColI: isSemi ? savedColI : null,
+            tasks: []
+          }
+        });
+      }
+
+      const unit = unitsMap.get(groupKey);
+      const targetSub = isSemi ? unit.semi : unit.tractor;
+      targetSub.plate = plate || targetSub.plate;
+      targetSub.ot = cleanOt || targetSub.ot;
+      targetSub.rowNumber = rowNumber;
+      if (savedColI) targetSub.jsonColI = savedColI;
+
+      parsedTaskList.forEach((item, idx) => {
+        const taskId = `${cleanOt}-${plate}-${idx + 1}`;
+        const dbState = dbTasksMap.get(taskId) || {};
+        
+        // Buscar si existe en el JSON guardado en Col I
+        let colITaskState = null;
+        if (savedColI && Array.isArray(savedColI.tasks)) {
+          colITaskState = savedColI.tasks.find(t => t.id === taskId || t.desc === item.descripcion);
+        }
+
+        const ubicacion = (colITaskState && colITaskState.ubicacion) || dbState.ubicacion || (savedColI && savedColI.ubicacion) || '';
+        const operarios = (colITaskState && (colITaskState.operarios || colITaskState.operario)) || dbState.operarios || '';
+        const asignado = (colITaskState && colITaskState.asignado) || dbState.asignado || '';
+        const empezo = (colITaskState && colITaskState.empezo) || dbState.empezo || '';
+        const termino = (colITaskState && colITaskState.termino) || dbState.termino || '';
+        const estado = (colITaskState && colITaskState.estado) || dbState.estado || (termino ? 'TERMINADO' : (empezo ? 'EN_CURSO' : 'PENDIENTE'));
+
+        targetSub.tasks.push({
+          id: taskId,
+          ot: cleanOt,
+          dominio: plate,
+          sector: item.rubro,
+          desc: item.descripcion,
+          ubicacion,
+          operarios,
+          asignado,
+          empezo,
+          termino,
+          estado
+        });
+      });
+    });
+
+    const unitsList = Array.from(unitsMap.values());
+
+    // Calcular estado general por unidad
+    unitsList.forEach(u => {
+      const allTasks = [...u.tractor.tasks, ...u.semi.tasks];
+      const allDone = allTasks.length > 0 && allTasks.every(t => t.termino && t.termino.trim() !== '');
+      if (allDone) {
+        u.status = 'terminado';
+      }
+    });
+
+    return {
+      success: true,
+      units: unitsList,
+      staff,
+      locations,
+      totalUnits: unitsList.length,
+      timestamp: new Date().toISOString()
+    };
+  } catch (err) {
+    console.error('❌ Error en getCoordinacionBoard:', err.message);
+    return { success: false, error: err.message, units: [], staff: [], locations: [] };
+  }
+}
+
+/**
+ * COORDINACIÓN: Guarda el JSON de coordinación en la Columna I de la pestaña 'ots'.
+ */
+async function saveOtCoordinacionJson({ sheetsClient, spreadsheetId, otNumber, plate, data, io }) {
+  if (!sheetsClient || !spreadsheetId || (!otNumber && !plate)) {
+    return { success: false, error: 'Parámetros inválidos' };
+  }
+
+  const cleanOt = String(otNumber || '').trim().replace(/^0+/, '');
+  const cleanPlateStr = String(plate || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+
+  try {
+    const res = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${OTS_SOURCE_TAB}'!A2:I500`
+    });
+    const rows = res.data.values || [];
+    let targetRow = -1;
+
+    for (let i = 0; i < rows.length; i++) {
+      const rowOt = String(rows[i][2] || '').trim().replace(/^0+/, '');
+      const rowPlate = String(rows[i][3] || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+
+      if ((cleanOt && rowOt === cleanOt) || (cleanPlateStr && rowPlate === cleanPlateStr)) {
+        targetRow = i + 2;
+        break;
+      }
+    }
+
+    if (targetRow === -1) {
+      return { success: false, error: `No se encontró la OT ${cleanOt || cleanPlateStr} en la pestaña '${OTS_SOURCE_TAB}'` };
+    }
+
+    const jsonString = typeof data === 'string' ? data : JSON.stringify(data);
+
+    await sheetsClient.spreadsheets.values.update({
+      spreadsheetId,
+      range: `'${OTS_SOURCE_TAB}'!I${targetRow}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: {
+        values: [[jsonString]]
+      }
+    });
+
+    console.log(`✅ [Coordinación] JSON guardado exitosamente en '${OTS_SOURCE_TAB}'!I${targetRow} para OT ${cleanOt || cleanPlateStr}`);
+
+    if (io) {
+      io.emit('coordinacion_ot_updated', {
+        otNumber: cleanOt,
+        plate: cleanPlateStr,
+        rowNumber: targetRow,
+        data
+      });
+    }
+
+    return {
+      success: true,
+      rowNumber: targetRow,
+      otNumber: cleanOt,
+      plate: cleanPlateStr
+    };
+  } catch (err) {
+    console.error('❌ Error en saveOtCoordinacionJson:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * COORDINACIÓN: Guarda en bloque el estado de todas las unidades en la Columna I de 'ots'.
+ */
+async function saveAllCoordinacionBatch({ sheetsClient, spreadsheetId, units, io }) {
+  if (!sheetsClient || !spreadsheetId || !Array.isArray(units)) {
+    return { success: false, error: 'Parámetros inválidos' };
+  }
+
+  try {
+    const res = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${OTS_SOURCE_TAB}'!A2:D500`
+    });
+    const rows = res.data.values || [];
+    const updateData = [];
+
+    units.forEach(unit => {
+      ['tractor', 'semi'].forEach(subKey => {
+        const sub = unit[subKey];
+        if (!sub || (!sub.ot && !sub.plate)) return;
+
+        const cleanOt = String(sub.ot || '').trim().replace(/^0+/, '');
+        const cleanPlateStr = String(sub.plate || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+
+        for (let i = 0; i < rows.length; i++) {
+          const rowOt = String(rows[i][2] || '').trim().replace(/^0+/, '');
+          const rowPlate = String(rows[i][3] || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+
+          if ((cleanOt && rowOt === cleanOt) || (cleanPlateStr && rowPlate === cleanPlateStr)) {
+            const rowNumber = i + 2;
+            const payload = {
+              ot: cleanOt || rowOt,
+              plate: cleanPlateStr || rowPlate,
+              type: subKey.toUpperCase(),
+              tasks: sub.tasks || [],
+              updatedAt: new Date().toISOString()
+            };
+
+            updateData.push({
+              range: `'${OTS_SOURCE_TAB}'!I${rowNumber}`,
+              values: [[JSON.stringify(payload)]]
+            });
+            break;
+          }
+        }
+      });
+    });
+
+    if (updateData.length > 0) {
+      await sheetsClient.spreadsheets.values.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data: updateData
+        }
+      });
+      console.log(`✅ [Coordinación] Guardado en lote exitoso: ${updateData.length} filas actualizadas en Col I.`);
+    }
+
+    if (io) {
+      io.emit('coordinacion_board_synced', { totalUpdated: updateData.length, timestamp: new Date().toISOString() });
+    }
+
+    return { success: true, updatedCount: updateData.length };
+  } catch (err) {
+    console.error('❌ Error en saveAllCoordinacionBatch:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
 module.exports = {
   DB_TASKS_TAB,
   COLD_STORAGE_TAB,
@@ -1163,5 +1571,10 @@ module.exports = {
   saveOperarioHoldOts,
   getOtLifecyclePayload,
   updateOtTaskTerminado,
-  getUnitTimelineTasks
+  getUnitTimelineTasks,
+  getStaffAndLocations,
+  getCoordinacionBoard,
+  saveOtCoordinacionJson,
+  saveAllCoordinacionBatch
 };
+

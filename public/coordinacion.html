@@ -1,0 +1,1787 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coordinación de OTs - Taller (Tractor + Semi)</title>
+  
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- WebSockets Client (Socket.io) -->
+  <script src="/socket.io/socket.io.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #ffffff;
+      --card-bg: #ffffff;
+      --text: #000000;
+      --text-muted: #666666;
+      --border: #000000;
+      --border-light: #e5e5e5;
+      --pill-border: #000000;
+      --pill-bg: #ffffff;
+      --pill-hover: #f3f3f3;
+      --highlight: #f8f9fa;
+      --success: #16a34a;
+      --warning: #d97706;
+      --info: #2563eb;
+      --danger: #dc2626;
+      --radius-card: 26px;
+      --radius-pill: 9999px;
+      --shadow-modal: 0 20px 40px rgba(0,0,0,0.2);
+    }
+
+    [data-theme="dark"] {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --text: #f0f6fc;
+      --text-muted: #8b949e;
+      --border: #484f58;
+      --border-light: #30363d;
+      --pill-border: #6e7681;
+      --pill-bg: #21262d;
+      --pill-hover: #30363d;
+      --highlight: #1c2128;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 28px 80px;
+      transition: background-color 0.2s, color 0.2s;
+    }
+
+    /* TOP COORDINATION TOOLBAR */
+    .prototype-bar {
+      width: 100%;
+      max-width: 1240px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card-bg);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 20px;
+      margin-bottom: 24px;
+      gap: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    }
+
+    .proto-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 0.9rem;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .proto-badge .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+    .proto-badge .dot.offline {
+      background: var(--warning);
+      box-shadow: 0 0 8px var(--warning);
+    }
+
+    .proto-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .proto-btn {
+      background: transparent;
+      color: var(--text);
+      border: 1.5px solid var(--border);
+      padding: 7px 14px;
+      border-radius: 9px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .proto-btn:hover {
+      background: var(--text);
+      color: var(--bg);
+    }
+    .proto-btn.primary {
+      background: var(--text);
+      color: var(--bg);
+    }
+    .proto-btn.primary:hover {
+      opacity: 0.88;
+    }
+    .proto-btn.json-btn {
+      background: #2563eb;
+      color: #ffffff;
+      border-color: #2563eb;
+    }
+    .proto-btn.json-btn:hover {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+      color: #ffffff;
+    }
+
+    /* MAIN CONTAINER */
+    .mockup-canvas {
+      width: 100%;
+      max-width: 1240px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* NAVIGATION TABS */
+    .main-tabs {
+      display: flex;
+      gap: 36px;
+      align-items: baseline;
+      border-bottom: 2px solid var(--border-light);
+      padding-bottom: 8px;
+      margin-bottom: 6px;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      font-size: 1.75rem;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      color: var(--text-muted);
+      cursor: pointer;
+      text-transform: lowercase;
+      position: relative;
+      padding-bottom: 6px;
+      transition: color 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tab-btn:hover {
+      color: var(--text);
+    }
+    .tab-btn.active {
+      color: var(--text);
+    }
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -10px;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: var(--text);
+      border-radius: 4px;
+    }
+
+    .tab-count {
+      font-size: 1.1rem;
+      font-weight: 700;
+      opacity: 0.7;
+    }
+
+    /* SECTION TITLE: TRANSITO / ESTADO */
+    .section-title-wrapper {
+      margin: 4px 0 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .section-title {
+      font-size: 1.35rem;
+      font-weight: 800;
+      text-transform: lowercase;
+      color: var(--text);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title:hover {
+      text-decoration: underline;
+    }
+
+    /* SECTOR FILTER BAR */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: var(--highlight);
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      padding: 10px 14px;
+    }
+    .filter-label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-right: 4px;
+    }
+    .filter-chip {
+      background: var(--pill-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-pill);
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .filter-chip:hover, .filter-chip.active {
+      background: var(--text);
+      color: var(--bg);
+    }
+
+    /* UNIT CONTAINER CARD */
+    .unit-container-card {
+      background: var(--card-bg);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-card);
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+      transition: box-shadow 0.2s, border-color 0.2s;
+      margin-bottom: 18px;
+    }
+    .unit-container-card:hover {
+      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    }
+    .unit-container-card.is-expanded {
+      border-width: 2.5px;
+    }
+
+    /* COLLAPSED HEADER */
+    .unit-collapsed-header {
+      padding: 18px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      gap: 20px;
+    }
+
+    .plates-pair-group {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    .plate-block {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.15;
+    }
+    .plate-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.35rem;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+    }
+    .plate-ot {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+    .plate-tag {
+      font-size: 0.68rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+    }
+
+    /* SECTOR SUMMARY CHIPS ROW */
+    .sectors-summary-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    .sector-badge {
+      background: transparent;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-pill);
+      padding: 6px 14px;
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .sector-badge:hover {
+      background: var(--pill-hover);
+    }
+    .sector-badge.active-filter {
+      background: var(--text);
+      color: var(--bg);
+    }
+    .sector-badge.has-tasks {
+      background: var(--highlight);
+    }
+
+    /* PROGRESS NUMBER */
+    .progress-number {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 2.1rem;
+      font-weight: 900;
+      letter-spacing: -1px;
+      min-width: 80px;
+      text-align: right;
+    }
+
+    /* BOTTOM ARROW TRIGGER */
+    .arrow-trigger-bottom {
+      width: 100%;
+      height: 24px;
+      background: var(--highlight);
+      border-top: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .arrow-trigger-bottom:hover {
+      background: var(--pill-hover);
+    }
+    .triangle-down {
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 7px solid var(--border);
+    }
+    .triangle-up {
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-bottom: 7px solid var(--border);
+    }
+
+    /* EXPANDED DROPDOWN TABLE */
+    .unit-expanded-dropdown {
+      border-top: 2px solid var(--border);
+      background: var(--card-bg);
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .table-columns-header {
+      display: grid;
+      grid-template-columns: 140px 1.4fr 120px 160px 120px 120px 120px 90px;
+      gap: 10px;
+      padding: 12px 24px;
+      border-bottom: 1.5px solid var(--border);
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      align-items: center;
+      background: var(--highlight);
+    }
+
+    .sub-vehicle-section {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .sub-vehicle-section:last-of-type {
+      border-bottom: none;
+    }
+
+    .vehicle-info-col {
+      padding: 18px 24px;
+      border-right: 1.5px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      gap: 4px;
+      background: var(--highlight);
+    }
+    .v-plate {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.25rem;
+      font-weight: 900;
+    }
+    .v-ot {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+    .v-type {
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .vehicle-tasks-col {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .task-item-row {
+      display: grid;
+      grid-template-columns: 1.4fr 120px 160px 120px 120px 120px 90px;
+      gap: 10px;
+      padding: 14px 20px 14px 16px;
+      border-bottom: 1px solid var(--border-light);
+      align-items: center;
+      font-size: 0.85rem;
+      transition: background-color 0.15s;
+    }
+    .task-item-row:last-child {
+      border-bottom: none;
+    }
+    .task-item-row:hover {
+      background: var(--highlight);
+    }
+    .task-item-row.is-done {
+      opacity: 0.7;
+    }
+
+    .task-desc-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .task-rubro-badge {
+      display: inline-block;
+      align-self: flex-start;
+      font-size: 0.65rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-pill);
+      padding: 2px 8px;
+    }
+    .task-desc-text {
+      font-weight: 600;
+      font-size: 0.85rem;
+      color: var(--text);
+    }
+
+    /* INTERACTIVE VALUE PILLS */
+    .val-pill {
+      background: var(--pill-bg);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-pill);
+      padding: 6px 12px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-align: center;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .val-pill:hover {
+      background: var(--text);
+      color: var(--bg);
+      border-color: var(--text);
+    }
+    .val-pill.empty {
+      border-style: dashed;
+      color: var(--text-muted);
+    }
+    .val-pill.is-active {
+      background: var(--text);
+      color: var(--bg);
+    }
+
+    .time-cell {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      text-align: center;
+      cursor: pointer;
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      padding: 6px 4px;
+      transition: all 0.15s;
+    }
+    .time-cell:hover {
+      background: var(--text);
+      color: var(--bg);
+      border-style: solid;
+    }
+    .time-cell.filled {
+      border-style: solid;
+      font-weight: 700;
+    }
+
+    .status-badge {
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      text-align: center;
+      padding: 4px 8px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border);
+    }
+    .status-badge.done {
+      background: var(--success);
+      color: #fff;
+      border-color: var(--success);
+    }
+    .status-badge.running {
+      background: var(--warning);
+      color: #fff;
+      border-color: var(--warning);
+    }
+    .status-badge.pending {
+      background: transparent;
+      color: var(--text-muted);
+    }
+
+    /* CARD FOOTER ACTIONS */
+    .card-footer-actions {
+      padding: 12px 24px;
+      background: var(--highlight);
+      border-top: 1.5px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    /* MODAL STYLES */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal-card {
+      background: var(--card-bg);
+      border: 2px solid var(--border);
+      border-radius: 20px;
+      padding: 24px;
+      width: 100%;
+      max-width: 580px;
+      box-shadow: var(--shadow-modal);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes modalPop {
+      0% { transform: scale(0.95); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1.5px solid var(--border-light);
+      padding-bottom: 12px;
+    }
+    .modal-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+    }
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 1.4rem;
+      font-weight: 800;
+      cursor: pointer;
+      color: var(--text);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .form-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .form-input, .form-textarea {
+      background: var(--pill-bg);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.95rem;
+      color: var(--text);
+      outline: none;
+      font-family: inherit;
+    }
+    .form-input:focus, .form-textarea:focus {
+      border-color: var(--info);
+    }
+
+    .options-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+      padding: 4px;
+    }
+    .opt-chip {
+      background: var(--pill-bg);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-pill);
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .opt-chip:hover {
+      background: var(--pill-hover);
+    }
+    .opt-chip.selected {
+      background: var(--text);
+      color: var(--bg);
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      border-top: 1.5px solid var(--border-light);
+      padding-top: 14px;
+    }
+
+    /* JSON VIEWER MODAL */
+    .json-box {
+      background: #0d1117;
+      color: #79c0ff;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      padding: 16px;
+      border-radius: 12px;
+      max-height: 400px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      border: 1px solid #30363d;
+    }
+
+    /* TOAST NOTIFICATION */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--text);
+      color: var(--bg);
+      padding: 12px 22px;
+      border-radius: 12px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+      display: none;
+      z-index: 2000;
+      animation: toastSlide 0.25s ease;
+    }
+    .toast.active {
+      display: block;
+    }
+    @keyframes toastSlide {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .empty-state {
+      padding: 48px 20px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      font-weight: 600;
+      border: 2px dashed var(--border-light);
+      border-radius: var(--radius-card);
+    }
+
+    /* PRINT STYLES */
+    @media print {
+      body {
+        background: #fff !important;
+        color: #000 !important;
+        padding: 0 !important;
+      }
+      .prototype-bar, .filter-bar, .modal-overlay, .toast, .card-footer-actions, .arrow-trigger-bottom {
+        display: none !important;
+      }
+      .unit-container-card {
+        break-inside: avoid;
+        border: 1px solid #000 !important;
+        box-shadow: none !important;
+        margin-bottom: 20px !important;
+      }
+      .json-box {
+        background: #fff !important;
+        color: #000 !important;
+        border: 1px solid #000 !important;
+        max-height: none !important;
+      }
+    }
+
+    /* RESPONSIVENESS */
+    @media (max-width: 1024px) {
+      .table-columns-header { display: none; }
+      .sub-vehicle-section { grid-template-columns: 1fr; }
+      .vehicle-info-col { border-right: none; border-bottom: 1.5px solid var(--border); }
+      .task-item-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP COORDINATION TOOLBAR -->
+  <header class="prototype-bar">
+    <div class="proto-badge">
+      <span class="dot" id="serverConnDot"></span>
+      <span id="serverConnText">Conectando con Sheets (tab 'ots')...</span>
+    </div>
+    <div class="proto-actions">
+      <button class="proto-btn json-btn" onclick="openJsonModal()">📄 Ver / Imprimir JSON</button>
+      <button class="proto-btn primary" onclick="saveAllToColI()">💾 Guardar en Col I</button>
+      <button class="proto-btn" onclick="syncLiveFromGoogleSheets()">🔄 Sincronizar OTs</button>
+      <button class="proto-btn" onclick="toggleAllUnits()">⚡ Expandir / Colapsar</button>
+      <button class="proto-btn" onclick="toggleTheme()" id="themeBtn">🌓 Tema</button>
+    </div>
+  </header>
+
+  <!-- MAIN CANVAS -->
+  <main class="mockup-canvas">
+
+    <!-- NAVIGATION TABS -->
+    <nav class="main-tabs">
+      <button class="tab-btn active" id="tabProgreso" onclick="switchTab('progreso')">
+        progreso <span class="tab-count" id="countProgreso">(0)</span>
+      </button>
+      <button class="tab-btn" id="tabTerminado" onclick="switchTab('terminado')">
+        terminado <span class="tab-count" id="countTerminado">(0)</span>
+      </button>
+    </nav>
+
+    <!-- SECTION TITLE & FILTER -->
+    <div class="section-title-wrapper">
+      <h2 class="section-title" id="sectionTitleDisplay" onclick="editSectionTitle()" title="Clic para editar título">transito</h2>
+      <div class="filter-bar" id="sectorFilterBar">
+        <span class="filter-label">Filtrar Sector:</span>
+        <button class="filter-chip active" onclick="setSectorFilter(null)">TODOS</button>
+      </div>
+    </div>
+
+    <!-- UNITS ACCORDION CONTAINER -->
+    <div id="unitsCardsContainer">
+      <div class="empty-state">Cargando OTs activas desde Google Sheets...</div>
+    </div>
+
+  </main>
+
+  <!-- MODAL: ASIGNAR UBICACION (Cols G-K) -->
+  <div class="modal-overlay" id="modalUbicacion">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Asignar Ubicación Física (Box / Fosa)</h3>
+        <button class="close-btn" onclick="closeModal('modalUbicacion')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Seleccione box o puesto de trabajo (DB_STAFF):</label>
+        <div class="options-grid" id="ubicacionesList"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">O escriba una ubicación personalizada:</label>
+        <input type="text" class="form-input" id="customUbicacionInput" placeholder="Ej: Fosa 1, Box 15, Lavadero...">
+      </div>
+      <div class="modal-footer">
+        <button class="proto-btn" onclick="clearCurrentUbicacion()">Limpiar</button>
+        <button class="proto-btn primary" onclick="saveUbicacion()">Guardar y Escribir en Col I</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ASIGNAR OPERARIO/S (Col B) -->
+  <div class="modal-overlay" id="modalOperario">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Asignar Operario(s) / Mecánico</h3>
+        <button class="close-btn" onclick="closeModal('modalOperario')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Seleccione del personal de taller (DB_STAFF Col B):</label>
+        <div class="options-grid" id="operariosList"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">O escriba nombres personalizados (separados por coma):</label>
+        <input type="text" class="form-input" id="customOperarioInput" placeholder="Ej: Carlos Gómez, Mario Benítez...">
+      </div>
+      <div class="modal-footer">
+        <button class="proto-btn" onclick="clearCurrentOperario()">Limpiar</button>
+        <button class="proto-btn primary" onclick="saveOperario()">Guardar y Escribir en Col I</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDITAR TIMESTAMPS -->
+  <div class="modal-overlay" id="modalTime">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title" id="timeModalTitle">Registrar Tiempo</h3>
+        <button class="close-btn" onclick="closeModal('modalTime')">&times;</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fecha y Hora:</label>
+        <input type="datetime-local" class="form-input" id="timeInput">
+      </div>
+      <div class="modal-footer">
+        <button class="proto-btn" onclick="setCurrentTimeToInput()">⏱️ Poner Ahora</button>
+        <button class="proto-btn" onclick="clearTimeSlot()">Limpiar</button>
+        <button class="proto-btn primary" onclick="saveTimeSlot()">Guardar y Escribir en Col I</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: VER / EXPORTAR / IMPRIMIR JSON -->
+  <div class="modal-overlay" id="modalJson">
+    <div class="modal-card" style="max-width: 780px;">
+      <div class="modal-header">
+        <h3 class="modal-title">📄 Visor / Impresión de Formato JSON (Columna I)</h3>
+        <button class="close-btn" onclick="closeModal('modalJson')">&times;</button>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <span style="font-size:0.85rem; color:var(--text-muted);" id="jsonViewSubtitle">
+          Estructura JSON de Coordinación asignada:
+        </span>
+        <div style="display:flex; gap:6px;">
+          <button class="proto-btn" style="font-size:0.75rem;" onclick="renderGlobalJson()">Todas las OTs</button>
+          <button class="proto-btn" style="font-size:0.75rem;" onclick="renderActiveTabJson()">Pestaña Activa</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <div class="json-box" id="jsonArea"></div>
+      </div>
+      <div class="modal-footer" style="flex-wrap:wrap; justify-content:space-between;">
+        <div style="display:flex; gap:8px;">
+          <button class="proto-btn primary" onclick="saveAllToColI()">📤 Escribir en Col I (Sheets)</button>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="proto-btn" onclick="copyJsonArea()">📋 Copiar JSON</button>
+          <button class="proto-btn" onclick="downloadJsonFile()">💾 Descargar .json</button>
+          <button class="proto-btn json-btn" onclick="printJsonArea()">🖨️ Imprimir Formato JSON</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div class="toast" id="toastNotification">
+    <span id="toastMessage">Operación realizada con éxito</span>
+  </div>
+
+  <!-- APPLICATION LOGIC -->
+  <script>
+    const ALL_SECTORS = ["ENGRASE", "GOMERIA", "LAVADERO", "MOTORES", "ELECTRICIDAD", "MECANICA", "ENA", "LUBRICENTRO", "CARROCERIA"];
+    
+    let staffCatalog = [
+      { opId: '1', name: 'Carlos Gómez', role: 'MECANICO' },
+      { opId: '2', name: 'Mario Benítez', role: 'MECANICO' },
+      { opId: '3', name: 'Juan Pérez', role: 'ENGRASE' },
+      { opId: '4', name: 'Lucas Silva', role: 'GOMERIA' },
+      { opId: '5', name: 'Roberto Díaz', role: 'LAVADERO' },
+      { opId: '6', name: 'Martín Alvarez', role: 'ELECTRICIDAD' },
+      { opId: '7', name: 'Alejandro Ruiz', role: 'TALLER' }
+    ];
+
+    let availableLocations = [
+      'Fosa 1', 'Fosa 2', 'Fosa 3', 'Box Mecánica', 'Box Electricidad',
+      'Lavadero 1', 'Lavadero 2', 'Gomería', 'Lubricentro', 'Patio / Tránsito'
+    ];
+
+    // INITIAL FALLBACK STATE
+    const INITIAL_STATE = {
+      sectionTitle: "transito",
+      activeTab: "progreso",
+      selectedSectorFilter: null,
+      units: [
+        {
+          id: "unit_AG147LK_AG172II",
+          ot: "11110",
+          status: "progreso",
+          isExpanded: true,
+          tractor: {
+            plate: "AG147LK",
+            ot: "11110",
+            rowNumber: 2,
+            tasks: [
+              { id: "11110-AG147LK-1", ot: "11110", dominio: "AG147LK", sector: "ENGRASE", desc: "Engrasar Tractor Completo", ubicacion: "Fosa 1", operarios: "Juan Pérez", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" },
+              { id: "11110-AG147LK-2", ot: "11110", dominio: "AG147LK", sector: "ENGRASE", desc: "Controlar Bulones Del Plato De Enganche", ubicacion: "Fosa 1", operarios: "Juan Pérez", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" },
+              { id: "11110-AG147LK-3", ot: "11110", dominio: "AG147LK", sector: "GOMERIA", desc: "Revision De Nuematicos", ubicacion: "Gomería", operarios: "Lucas Silva", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" },
+              { id: "11110-AG147LK-4", ot: "11110", dominio: "AG147LK", sector: "LAVADERO", desc: "Lavado Completo", ubicacion: "Lavadero 1", operarios: "Roberto Díaz", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" },
+              { id: "11110-AG147LK-5", ot: "11110", dominio: "AG147LK", sector: "MECANICA", desc: "Realizar Checklist Ingreso A Taller", ubicacion: "Box Mecánica", operarios: "Carlos Gómez", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" }
+            ]
+          },
+          semi: {
+            plate: "AG172II",
+            ot: "11111",
+            rowNumber: 3,
+            tasks: [
+              { id: "11111-AG172II-1", ot: "11111", dominio: "AG172II", sector: "ENGRASE", desc: "Engrasar Semi Completo", ubicacion: "Fosa 1", operarios: "Juan Pérez", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" },
+              { id: "11111-AG172II-2", ot: "11111", dominio: "AG172II", sector: "GOMERIA", desc: "Revision De Nuematicos", ubicacion: "Gomería", operarios: "Lucas Silva", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" },
+              { id: "11111-AG172II-3", ot: "11111", dominio: "AG172II", sector: "LAVADERO", desc: "Lavado Completo", ubicacion: "Lavadero 1", operarios: "Roberto Díaz", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" },
+              { id: "11111-AG172II-4", ot: "11111", dominio: "AG172II", sector: "MECANICA", desc: "Realizar Checklist Ingreso A Taller", ubicacion: "Box Mecánica", operarios: "Mario Benítez", asignado: "", empezo: "", termino: "", estado: "PENDIENTE" }
+            ]
+          }
+        }
+      ]
+    };
+
+    let appState = JSON.parse(localStorage.getItem('coordinacion_ots_state')) || JSON.parse(JSON.stringify(INITIAL_STATE));
+    let isServerLive = false;
+
+    // ACTIVE EDIT CONTEXT
+    let activeEditContext = {
+      unitId: null,
+      subType: null, // 'tractor' | 'semi'
+      taskId: null,
+      timeField: null // 'asignado' | 'empezo' | 'termino'
+    };
+
+    function saveState() {
+      localStorage.setItem('coordinacion_ots_state', JSON.stringify(appState));
+      renderApp();
+    }
+
+    // SERVER SYNC
+    async function fetchLiveCoordinacionData() {
+      try {
+        const res = await fetch('/api/coordinacion/data');
+        if (!res.ok) throw new Error('Status ' + res.status);
+        const data = await res.json();
+        
+        if (data && data.success) {
+          isServerLive = true;
+          document.getElementById('serverConnDot').className = 'dot';
+          document.getElementById('serverConnText').textContent = `Sheets tab 'ots' Conectada (${data.totalUnits || data.units.length} unidades)`;
+
+          if (data.staff && data.staff.length > 0) staffCatalog = data.staff;
+          if (data.locations && data.locations.length > 0) availableLocations = data.locations;
+
+          if (data.units && data.units.length > 0) {
+            appState.units = data.units.map(u => ({
+              ...u,
+              isExpanded: true
+            }));
+            saveState();
+          }
+        }
+      } catch (err) {
+        console.warn('Backend API no disponible (usando modo local):', err.message);
+        isServerLive = false;
+        document.getElementById('serverConnDot').className = 'dot offline';
+        document.getElementById('serverConnText').textContent = 'Modo Local / Simulado';
+        renderApp();
+      }
+    }
+
+    async function syncLiveFromGoogleSheets() {
+      showToast("🔄 Sincronizando con pestaña 'ots' en Google Sheets...");
+      await fetchLiveCoordinacionData();
+      showToast("✅ Sincronización completada.");
+    }
+
+    // ESCRITURA EN COLUMNA I DE 'ots'
+    async function persistTaskAssignmentToBackend(task, subVehicle, unit) {
+      if (!isServerLive) return;
+      try {
+        const payload = {
+          ot: subVehicle.ot || task.ot || unit.ot,
+          plate: subVehicle.plate || task.dominio,
+          type: activeEditContext.subType ? activeEditContext.subType.toUpperCase() : 'TRACTOR',
+          tasks: subVehicle.tasks || [],
+          lastUpdated: new Date().toISOString()
+        };
+
+        const res = await fetch('/api/coordinacion/assign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            taskId: task.id,
+            otNumber: subVehicle.ot || task.ot || unit.ot,
+            plate: subVehicle.plate || task.dominio,
+            ubicacion: task.ubicacion,
+            operario: task.operarios,
+            asignado: task.asignado,
+            empezo: task.empezo,
+            termino: task.termino,
+            estado: task.estado,
+            tasksPayload: payload
+          })
+        });
+        const result = await res.json();
+        if (result.success) {
+          showToast(`✅ Guardado y escrito en Col I de tab 'ots' (OT ${payload.ot})`);
+        }
+      } catch (e) {
+        console.warn('Error al guardar en backend:', e.message);
+      }
+    }
+
+    async function saveAllToColI() {
+      showToast("⏳ Guardando todas las OTs en Columna I de 'ots'...");
+      try {
+        const res = await fetch('/api/coordinacion/save-all', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ units: appState.units })
+        });
+        const result = await res.json();
+        if (result.success) {
+          showToast(`✅ ${result.updatedCount || 'Todas las'} OTs guardadas con éxito en Columna I.`);
+        } else {
+          showToast(`⚠️ ${result.error || 'Error al guardar'}`);
+        }
+      } catch (e) {
+        showToast("⚠️ Modo local: Estado guardado localmente.");
+      }
+    }
+
+    // PROGRESS COMPUTATION
+    function calculateSubProgress(tasks) {
+      if (!tasks || tasks.length === 0) return 0;
+      const completed = tasks.filter(t => t.termino && t.termino.trim() !== "").length;
+      return Math.round((completed / tasks.length) * 100);
+    }
+
+    function calculateUnitTotalProgress(unit) {
+      const allTasks = [...(unit.tractor?.tasks || []), ...(unit.semi?.tasks || [])];
+      if (allTasks.length === 0) return 0;
+      const completed = allTasks.filter(t => t.termino && t.termino.trim() !== "").length;
+      return Math.round((completed / allTasks.length) * 100);
+    }
+
+    function formatTimeDisplay(isoOrStr) {
+      if (!isoOrStr) return "dd/mm 00:00";
+      try {
+        const d = new Date(isoOrStr);
+        if (isNaN(d.getTime())) return isoOrStr;
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        return `${dd}/${mm} ${hh}:${min}`;
+      } catch (e) {
+        return isoOrStr;
+      }
+    }
+
+    // RENDER FUNCTIONS
+    function renderApp() {
+      renderTabs();
+      renderSectorFilterBar();
+      renderUnits();
+    }
+
+    function renderTabs() {
+      const progresoCount = appState.units.filter(u => u.status === 'progreso').length;
+      const terminadoCount = appState.units.filter(u => u.status === 'terminado').length;
+
+      document.getElementById('countProgreso').textContent = `(${progresoCount})`;
+      document.getElementById('countTerminado').textContent = `(${terminadoCount})`;
+
+      document.getElementById('tabProgreso').classList.toggle('active', appState.activeTab === 'progreso');
+      document.getElementById('tabTerminado').classList.toggle('active', appState.activeTab === 'terminado');
+
+      document.getElementById('sectionTitleDisplay').textContent = appState.sectionTitle || 'transito';
+    }
+
+    function renderSectorFilterBar() {
+      const bar = document.getElementById('sectorFilterBar');
+      bar.innerHTML = '<span class="filter-label">Filtrar Sector:</span>';
+      
+      const allBtn = document.createElement('button');
+      allBtn.className = `filter-chip ${appState.selectedSectorFilter === null ? 'active' : ''}`;
+      allBtn.textContent = 'TODOS';
+      allBtn.onclick = () => setSectorFilter(null);
+      bar.appendChild(allBtn);
+
+      ALL_SECTORS.forEach(sec => {
+        const btn = document.createElement('button');
+        btn.className = `filter-chip ${appState.selectedSectorFilter === sec ? 'active' : ''}`;
+        btn.textContent = sec;
+        btn.onclick = () => setSectorFilter(sec);
+        bar.appendChild(btn);
+      });
+    }
+
+    function setSectorFilter(sec) {
+      appState.selectedSectorFilter = sec;
+      renderApp();
+    }
+
+    function renderUnits() {
+      const container = document.getElementById('unitsCardsContainer');
+      container.innerHTML = '';
+
+      const filteredUnits = appState.units.filter(u => u.status === appState.activeTab);
+
+      if (filteredUnits.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            No hay unidades en estado "${appState.activeTab}".<br>
+            <button class="proto-btn primary" style="margin-top:16px;" onclick="syncLiveFromGoogleSheets()">🔄 Sincronizar desde Sheets</button>
+          </div>
+        `;
+        return;
+      }
+
+      filteredUnits.forEach(unit => {
+        const totalProgress = calculateUnitTotalProgress(unit);
+        const isExp = !!unit.isExpanded;
+
+        const unitTasks = [...(unit.tractor?.tasks || []), ...(unit.semi?.tasks || [])];
+        const activeSectorsInUnit = new Set(unitTasks.map(t => t.sector ? t.sector.toUpperCase() : 'GENERAL'));
+
+        const card = document.createElement('div');
+        card.className = `unit-container-card ${isExp ? 'is-expanded' : ''}`;
+        card.id = `unit_card_${unit.id}`;
+
+        // 1. COLLAPSED VIEW
+        const collapsedHeader = document.createElement('div');
+        collapsedHeader.className = 'unit-collapsed-header';
+        collapsedHeader.onclick = (e) => {
+          if (!e.target.classList.contains('sector-badge')) {
+            toggleUnitDropdown(unit.id);
+          }
+        };
+
+        const platesDiv = document.createElement('div');
+        platesDiv.className = 'plates-pair-group';
+        platesDiv.innerHTML = `
+          <div class="plate-block">
+            <span class="plate-title">${unit.tractor?.plate || '---'}</span>
+            <span class="plate-ot">OT: ${unit.tractor?.ot || unit.ot || '---'}</span>
+            <span class="plate-tag">Tractor</span>
+          </div>
+          <div class="plate-block">
+            <span class="plate-title">${unit.semi?.plate || '---'}</span>
+            <span class="plate-ot">OT: ${unit.semi?.ot || unit.ot || '---'}</span>
+            <span class="plate-tag">Semi Remolque</span>
+          </div>
+        `;
+
+        const sectorsDiv = document.createElement('div');
+        sectorsDiv.className = 'sectors-summary-row';
+        ALL_SECTORS.forEach(sec => {
+          const badge = document.createElement('span');
+          const isCurrentFilter = appState.selectedSectorFilter === sec;
+          const hasTasks = activeSectorsInUnit.has(sec);
+          badge.className = `sector-badge ${isCurrentFilter ? 'active-filter' : ''} ${hasTasks ? 'has-tasks' : ''}`;
+          badge.textContent = sec;
+          badge.title = hasTasks ? `Sector activo` : `Sin tareas`;
+          badge.onclick = (evt) => {
+            evt.stopPropagation();
+            setSectorFilter(appState.selectedSectorFilter === sec ? null : sec);
+          };
+          sectorsDiv.appendChild(badge);
+        });
+
+        const progDiv = document.createElement('div');
+        progDiv.className = 'progress-number';
+        progDiv.textContent = `${String(totalProgress).padStart(2, '0')}%`;
+
+        collapsedHeader.appendChild(platesDiv);
+        collapsedHeader.appendChild(sectorsDiv);
+        collapsedHeader.appendChild(progDiv);
+
+        const arrowBottom = document.createElement('div');
+        arrowBottom.className = 'arrow-trigger-bottom';
+        arrowBottom.onclick = (e) => {
+          e.stopPropagation();
+          toggleUnitDropdown(unit.id);
+        };
+        arrowBottom.innerHTML = `<div class="${isExp ? 'triangle-up' : 'triangle-down'}"></div>`;
+
+        // 2. EXPANDED DROPDOWN VIEW
+        const dropdownView = document.createElement('div');
+        dropdownView.className = 'unit-expanded-dropdown';
+
+        const colHeader = document.createElement('div');
+        colHeader.className = 'table-columns-header';
+        colHeader.innerHTML = `
+          <div class="th-unit">UNIDAD / OT</div>
+          <div class="th-task">TAREA / RUBRO</div>
+          <div class="th-ubicacion">UBICACION</div>
+          <div class="th-operarios">OPERARIO/S</div>
+          <div class="th-asignado">ASIGNADO</div>
+          <div class="th-empezo">EMPEZO</div>
+          <div class="th-termino">TERMINO</div>
+          <div class="th-progress">ESTADO</div>
+        `;
+        dropdownView.appendChild(colHeader);
+
+        if (unit.tractor && unit.tractor.tasks && unit.tractor.tasks.length > 0) {
+          dropdownView.appendChild(createSubVehicleSection(unit, 'tractor', unit.tractor));
+        }
+
+        if (unit.semi && unit.semi.tasks && unit.semi.tasks.length > 0) {
+          dropdownView.appendChild(createSubVehicleSection(unit, 'semi', unit.semi));
+        }
+
+        const footerActions = document.createElement('div');
+        footerActions.className = 'card-footer-actions';
+        footerActions.innerHTML = `
+          <div style="font-size:0.85rem; color:var(--text-muted);">
+            Tractor: <strong style="color:var(--text);">${unit.tractor?.plate || 'S/D'} (OT ${unit.tractor?.ot || '---'})</strong> • 
+            Semi: <strong style="color:var(--text);">${unit.semi?.plate || 'S/D'} (OT ${unit.semi?.ot || '---'})</strong>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="proto-btn json-btn" onclick="openUnitJsonModal('${unit.id}')">📄 JSON de esta Unidad</button>
+            <button class="proto-btn" onclick="toggleUnitDropdown('${unit.id}')">▲ Colapsar</button>
+          </div>
+        `;
+        dropdownView.appendChild(footerActions);
+
+        card.appendChild(collapsedHeader);
+        if (!isExp) {
+          card.appendChild(arrowBottom);
+        } else {
+          card.appendChild(dropdownView);
+        }
+
+        container.appendChild(card);
+      });
+    }
+
+    function createSubVehicleSection(unit, subType, subVehicle) {
+      const section = document.createElement('div');
+      section.className = 'sub-vehicle-section';
+
+      let tasksToDisplay = subVehicle.tasks || [];
+      if (appState.selectedSectorFilter) {
+        tasksToDisplay = tasksToDisplay.filter(t => (t.sector || '').toUpperCase() === appState.selectedSectorFilter.toUpperCase());
+      }
+
+      const infoCol = document.createElement('div');
+      infoCol.className = 'vehicle-info-col';
+      infoCol.innerHTML = `
+        <span class="v-plate">${subVehicle.plate || '---'}</span>
+        <span class="v-ot">OT: ${subVehicle.ot || unit.ot}</span>
+        <span class="v-type">${subType === 'tractor' ? 'Tractor' : 'Semi Remolque'}</span>
+        ${subVehicle.rowNumber ? `<span style="font-size:0.65rem; color:var(--text-muted);">Fila tab 'ots': ${subVehicle.rowNumber}</span>` : ''}
+      `;
+
+      const tasksCol = document.createElement('div');
+      tasksCol.className = 'vehicle-tasks-col';
+
+      if (tasksToDisplay.length === 0) {
+        tasksCol.innerHTML = `<div style="font-size:0.85rem; color:var(--text-muted); padding:12px 16px;">No hay tareas para el filtro ${appState.selectedSectorFilter}.</div>`;
+      }
+
+      tasksToDisplay.forEach(task => {
+        const row = document.createElement('div');
+        const isDone = task.termino && task.termino.trim() !== "";
+        const isRunning = task.empezo && !isDone;
+
+        row.className = `task-item-row ${isDone ? 'is-done' : ''}`;
+
+        // DESC
+        const descCell = document.createElement('div');
+        descCell.className = 'task-desc-cell';
+        descCell.innerHTML = `
+          <span class="task-rubro-badge">${task.sector || 'GENERAL'}</span>
+          <span class="task-desc-text">${task.desc || 'Sin descripción'}</span>
+        `;
+
+        // UBICACION
+        const ubicacionCell = document.createElement('div');
+        const ubVal = task.ubicacion || '';
+        ubicacionCell.className = `val-pill ${ubVal ? 'is-active' : 'empty'}`;
+        ubicacionCell.textContent = ubVal || '+ Box';
+        ubicacionCell.title = "Clic para asignar Box / Fosa (DB_STAFF)";
+        ubicacionCell.onclick = () => openUbicacionModal(unit.id, subType, task.id);
+
+        // OPERARIOS
+        const operariosCell = document.createElement('div');
+        const opVal = task.operarios || '';
+        operariosCell.className = `val-pill ${opVal ? 'is-active' : 'empty'}`;
+        operariosCell.textContent = opVal || '+ Operario';
+        operariosCell.title = "Clic para asignar Mecánico (DB_STAFF Col B)";
+        operariosCell.onclick = () => openOperarioModal(unit.id, subType, task.id);
+
+        // ASIGNADO
+        const asignadoCell = document.createElement('div');
+        asignadoCell.className = `time-cell ${task.asignado ? 'filled' : ''}`;
+        asignadoCell.textContent = formatTimeDisplay(task.asignado);
+        asignadoCell.title = "Clic para editar Asignado";
+        asignadoCell.onclick = () => openTimeModal(unit.id, subType, task.id, 'asignado');
+
+        // EMPEZO
+        const empezoCell = document.createElement('div');
+        empezoCell.className = `time-cell ${task.empezo ? 'filled' : ''}`;
+        empezoCell.textContent = formatTimeDisplay(task.empezo);
+        empezoCell.title = "Clic para registrar Inicio";
+        empezoCell.onclick = () => openTimeModal(unit.id, subType, task.id, 'empezo');
+
+        // TERMINO
+        const terminoCell = document.createElement('div');
+        terminoCell.className = `time-cell ${task.termino ? 'filled' : ''}`;
+        terminoCell.textContent = formatTimeDisplay(task.termino);
+        terminoCell.title = "Clic para registrar Finalización";
+        terminoCell.onclick = () => openTimeModal(unit.id, subType, task.id, 'termino');
+
+        // ESTADO
+        const statusCell = document.createElement('div');
+        let stClass = 'pending';
+        let stText = 'PENDIENTE';
+        if (isDone) {
+          stClass = 'done';
+          stText = 'TERMINADO';
+        } else if (isRunning) {
+          stClass = 'running';
+          stText = 'EN CURSO';
+        }
+        statusCell.className = `status-badge ${stClass}`;
+        statusCell.textContent = stText;
+
+        row.appendChild(descCell);
+        row.appendChild(ubicacionCell);
+        row.appendChild(operariosCell);
+        row.appendChild(asignadoCell);
+        row.appendChild(empezoCell);
+        row.appendChild(terminoCell);
+        row.appendChild(statusCell);
+
+        tasksCol.appendChild(row);
+      });
+
+      section.appendChild(infoCol);
+      section.appendChild(tasksCol);
+      return section;
+    }
+
+    function toggleUnitDropdown(unitId) {
+      const unit = appState.units.find(u => u.id === unitId);
+      if (unit) {
+        unit.isExpanded = !unit.isExpanded;
+        saveState();
+      }
+    }
+
+    function toggleAllUnits() {
+      const anyExpanded = appState.units.some(u => u.isExpanded);
+      appState.units.forEach(u => u.isExpanded = !anyExpanded);
+      saveState();
+    }
+
+    function switchTab(tab) {
+      appState.activeTab = tab;
+      saveState();
+    }
+
+    function editSectionTitle() {
+      const current = appState.sectionTitle || 'transito';
+      const neu = prompt("Nuevo nombre para la sección / estado:", current);
+      if (neu !== null && neu.trim() !== "") {
+        appState.sectionTitle = neu.trim();
+        saveState();
+      }
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const neu = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', neu);
+      localStorage.setItem('coordinacion_theme', neu);
+    }
+
+    // MODAL HELPERS
+    function openModal(id) {
+      document.getElementById(id).classList.add('active');
+    }
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+
+    // MODALS: UBICACION (Cols G-K)
+    function openUbicacionModal(unitId, subType, taskId) {
+      activeEditContext = { unitId, subType, taskId };
+      const unit = appState.units.find(u => u.id === unitId);
+      const sub = unit ? unit[subType] : null;
+      const task = sub?.tasks.find(t => t.id === taskId);
+      
+      const listContainer = document.getElementById('ubicacionesList');
+      listContainer.innerHTML = '';
+
+      availableLocations.forEach(loc => {
+        const chip = document.createElement('div');
+        chip.className = `opt-chip ${task?.ubicacion === loc ? 'selected' : ''}`;
+        chip.textContent = loc;
+        chip.onclick = () => selectUbicacionOpt(loc);
+        listContainer.appendChild(chip);
+      });
+
+      document.getElementById('customUbicacionInput').value = task?.ubicacion || '';
+      openModal('modalUbicacion');
+    }
+
+    function selectUbicacionOpt(val) {
+      document.getElementById('customUbicacionInput').value = val;
+      const chips = document.querySelectorAll('#ubicacionesList .opt-chip');
+      chips.forEach(c => c.classList.toggle('selected', c.textContent.trim() === val));
+    }
+
+    async function saveUbicacion() {
+      const val = document.getElementById('customUbicacionInput').value.trim();
+      const unit = appState.units.find(u => u.id === activeEditContext.unitId);
+      const sub = unit ? unit[activeEditContext.subType] : null;
+      const task = sub?.tasks.find(t => t.id === activeEditContext.taskId);
+      if (task && sub && unit) {
+        task.ubicacion = val;
+        if (val && !task.asignado) {
+          task.asignado = new Date().toISOString();
+        }
+        saveState();
+        closeModal('modalUbicacion');
+        await persistTaskAssignmentToBackend(task, sub, unit);
+      } else {
+        closeModal('modalUbicacion');
+      }
+    }
+
+    function clearCurrentUbicacion() {
+      document.getElementById('customUbicacionInput').value = '';
+      saveUbicacion();
+    }
+
+    // MODALS: OPERARIO (Col B)
+    function openOperarioModal(unitId, subType, taskId) {
+      activeEditContext = { unitId, subType, taskId };
+      const unit = appState.units.find(u => u.id === unitId);
+      const sub = unit ? unit[subType] : null;
+      const task = sub?.tasks.find(t => t.id === taskId);
+      
+      const grid = document.getElementById('operariosList');
+      grid.innerHTML = '';
+      const currentOps = (task?.operarios || '').split(',').map(s => s.trim().toUpperCase());
+
+      staffCatalog.forEach(staff => {
+        const chip = document.createElement('div');
+        const isSelected = currentOps.includes(staff.name.toUpperCase());
+        chip.className = `opt-chip ${isSelected ? 'selected' : ''}`;
+        chip.textContent = staff.name;
+        chip.onclick = () => toggleOperarioSelection(staff.name, chip);
+        grid.appendChild(chip);
+      });
+
+      document.getElementById('customOperarioInput').value = task?.operarios || '';
+      openModal('modalOperario');
+    }
+
+    function toggleOperarioSelection(name, el) {
+      let currentVal = document.getElementById('customOperarioInput').value.trim();
+      let list = currentVal ? currentVal.split(',').map(s => s.trim()).filter(Boolean) : [];
+      const index = list.findIndex(n => n.toUpperCase() === name.toUpperCase());
+      if (index !== -1) {
+        list.splice(index, 1);
+        el.classList.remove('selected');
+      } else {
+        list.push(name);
+        el.classList.add('selected');
+      }
+      document.getElementById('customOperarioInput').value = list.join(', ');
+    }
+
+    async function saveOperario() {
+      const val = document.getElementById('customOperarioInput').value.trim();
+      const unit = appState.units.find(u => u.id === activeEditContext.unitId);
+      const sub = unit ? unit[activeEditContext.subType] : null;
+      const task = sub?.tasks.find(t => t.id === activeEditContext.taskId);
+      if (task && sub && unit) {
+        task.operarios = val;
+        if (val && !task.asignado) {
+          task.asignado = new Date().toISOString();
+        }
+        saveState();
+        closeModal('modalOperario');
+        await persistTaskAssignmentToBackend(task, sub, unit);
+      } else {
+        closeModal('modalOperario');
+      }
+    }
+
+    function clearCurrentOperario() {
+      document.getElementById('customOperarioInput').value = '';
+      saveOperario();
+    }
+
+    // MODALS: TIMESTAMPS
+    function openTimeModal(unitId, subType, taskId, timeField) {
+      activeEditContext = { unitId, subType, taskId, timeField };
+      const unit = appState.units.find(u => u.id === unitId);
+      const sub = unit ? unit[subType] : null;
+      const task = sub?.tasks.find(t => t.id === taskId);
+      
+      const fieldLabels = { asignado: 'ASIGNADO', empezo: 'EMPEZÓ', termino: 'TERMINÓ' };
+      document.getElementById('timeModalTitle').textContent = `Registrar ${fieldLabels[timeField]}`;
+      
+      const currentVal = task ? task[timeField] : "";
+      if (currentVal) {
+        const d = new Date(currentVal);
+        if (!isNaN(d.getTime())) {
+          const localIso = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+          document.getElementById('timeInput').value = localIso;
+        } else {
+          document.getElementById('timeInput').value = '';
+        }
+      } else {
+        const now = new Date();
+        const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        document.getElementById('timeInput').value = localIso;
+      }
+      openModal('modalTime');
+    }
+
+    function setCurrentTimeToInput() {
+      const now = new Date();
+      const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      document.getElementById('timeInput').value = localIso;
+    }
+
+    async function saveTimeSlot() {
+      const val = document.getElementById('timeInput').value;
+      const unit = appState.units.find(u => u.id === activeEditContext.unitId);
+      const sub = unit ? unit[activeEditContext.subType] : null;
+      const task = sub?.tasks.find(t => t.id === activeEditContext.taskId);
+      if (task && sub && unit) {
+        task[activeEditContext.timeField] = val ? new Date(val).toISOString() : "";
+        if (task.termino) {
+          task.estado = "TERMINADO";
+        } else if (task.empezo) {
+          task.estado = "EN_CURSO";
+        } else {
+          task.estado = "PENDIENTE";
+        }
+        saveState();
+        closeModal('modalTime');
+        await persistTaskAssignmentToBackend(task, sub, unit);
+      } else {
+        closeModal('modalTime');
+      }
+    }
+
+    function clearTimeSlot() {
+      document.getElementById('timeInput').value = '';
+      saveTimeSlot();
+    }
+
+    // JSON VIEWER & PRINTING
+    let currentViewingJsonObj = null;
+
+    function openJsonModal() {
+      renderGlobalJson();
+      openModal('modalJson');
+    }
+
+    function openUnitJsonModal(unitId) {
+      const unit = appState.units.find(u => u.id === unitId);
+      if (unit) {
+        currentViewingJsonObj = {
+          unitId: unit.id,
+          ot: unit.ot,
+          tractor: {
+            plate: unit.tractor?.plate,
+            ot: unit.tractor?.ot,
+            rowNumber: unit.tractor?.rowNumber,
+            tasks: unit.tractor?.tasks || []
+          },
+          semi: {
+            plate: unit.semi?.plate,
+            ot: unit.semi?.ot,
+            rowNumber: unit.semi?.rowNumber,
+            tasks: unit.semi?.tasks || []
+          },
+          exportedAt: new Date().toISOString()
+        };
+        document.getElementById('jsonViewSubtitle').textContent = `JSON de Unidad ${unit.tractor?.plate || ''} / ${unit.semi?.plate || ''} (OT ${unit.ot}):`;
+        document.getElementById('jsonArea').textContent = JSON.stringify(currentViewingJsonObj, null, 2);
+        openModal('modalJson');
+      }
+    }
+
+    function renderGlobalJson() {
+      currentViewingJsonObj = {
+        coordinacion: {
+          sectionTitle: appState.sectionTitle,
+          totalUnits: appState.units.length,
+          activeTab: appState.activeTab,
+          units: appState.units.map(u => ({
+            ot: u.ot,
+            status: u.status,
+            tractor: {
+              plate: u.tractor?.plate,
+              ot: u.tractor?.ot,
+              rowNumber: u.tractor?.rowNumber,
+              tasks: u.tractor?.tasks || []
+            },
+            semi: {
+              plate: u.semi?.plate,
+              ot: u.semi?.ot,
+              rowNumber: u.semi?.rowNumber,
+              tasks: u.semi?.tasks || []
+            }
+          })),
+          exportedAt: new Date().toISOString()
+        }
+      };
+      document.getElementById('jsonViewSubtitle').textContent = 'JSON Global de Coordinación (Todas las OTs):';
+      document.getElementById('jsonArea').textContent = JSON.stringify(currentViewingJsonObj, null, 2);
+    }
+
+    function renderActiveTabJson() {
+      const filtered = appState.units.filter(u => u.status === appState.activeTab);
+      currentViewingJsonObj = {
+        coordinacionTab: appState.activeTab,
+        total: filtered.length,
+        units: filtered,
+        exportedAt: new Date().toISOString()
+      };
+      document.getElementById('jsonViewSubtitle').textContent = `JSON de Pestaña "${appState.activeTab}" (${filtered.length} OTs):`;
+      document.getElementById('jsonArea').textContent = JSON.stringify(currentViewingJsonObj, null, 2);
+    }
+
+    function copyJsonArea() {
+      const text = document.getElementById('jsonArea').textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        showToast("📋 JSON copiado al portapapeles");
+      });
+    }
+
+    function downloadJsonFile() {
+      const text = document.getElementById('jsonArea').textContent;
+      const blob = new Blob([text], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `coordinacion_ots_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("💾 Archivo .json descargado");
+    }
+
+    function printJsonArea() {
+      const jsonText = document.getElementById('jsonArea').textContent;
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Impresión de Coordinación JSON - OTs Taller</title>
+          <style>
+            body { font-family: monospace; padding: 20px; font-size: 12px; }
+            h2 { font-family: sans-serif; font-size: 16px; margin-bottom: 12px; }
+            pre { white-space: pre-wrap; word-break: break-all; background: #f4f4f4; padding: 15px; border-radius: 8px; }
+          </style>
+        </head>
+        <body>
+          <h2>Coordinación de OTs Taller - Reporte JSON</h2>
+          <p><strong>Fecha de impresión:</strong> ${new Date().toLocaleString()}</p>
+          <pre>${jsonText}</pre>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 300);
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toastNotification');
+      document.getElementById('toastMessage').textContent = msg;
+      t.classList.add('active');
+      setTimeout(() => t.classList.remove('active'), 3200);
+    }
+
+    // WEBSOCKET REALTIME SYNC
+    try {
+      const socket = io();
+      socket.on('connect', () => {
+        console.log('⚡ Conectado a WebSockets para Coordinación en vivo');
+      });
+      socket.on('coordinacion_ot_updated', (payload) => {
+        console.log('📡 Actualización de OT recibida:', payload);
+        fetchLiveCoordinacionData();
+      });
+      socket.on('coordinacion_board_synced', () => {
+        fetchLiveCoordinacionData();
+      });
+    } catch(e) {}
+
+    // INITIALIZATION
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedTheme = localStorage.getItem('coordinacion_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+      
+      renderApp();
+      fetchLiveCoordinacionData();
+    });
+  </script>
+</body>
+</html>

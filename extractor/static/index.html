@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Extractor OT a Google Sheets</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: #fcfcfc;
+      color: #111;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 860px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Header Bar */
+    .top-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #666;
+      border-bottom: 1px solid #eaeaea;
+      padding-bottom: 12px;
+    }
+
+    .sheet-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      background: #f0fdf4;
+      color: #166534;
+      border: 1px solid #bbf7d0;
+      padding: 5px 12px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .sheet-badge:hover {
+      background: #dcfce7;
+    }
+
+    /* Local Folder Dashboard Card */
+    .folder-card {
+      background: #ffffff;
+      border: 1px solid #e4e4e7;
+      border-radius: 12px;
+      padding: 20px 24px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .folder-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #f4f4f5;
+      padding-bottom: 12px;
+    }
+
+    .folder-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #09090b;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .folder-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+
+    .stat-pill {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      color: #0f172a;
+    }
+
+    .folder-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .btn-folder-sync {
+      background-color: #0284c7;
+      color: #fff;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-folder-sync:hover {
+      background-color: #0369a1;
+      transform: translateY(-1px);
+    }
+
+    .btn-folder-sync:disabled {
+      background-color: #94a3b8;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-folder-preview {
+      background-color: #f1f5f9;
+      color: #1e293b;
+      border: 1px solid #cbd5e1;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-folder-preview:hover {
+      background-color: #e2e8f0;
+    }
+
+    /* Lo-Fi Dropzone Button Box */
+    .dropzone-container {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .dropzone {
+      width: 100%;
+      border: 2px dashed #d1d5db;
+      border-radius: 12px;
+      padding: 24px 20px;
+      text-align: center;
+      cursor: pointer;
+      background-color: #fff;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      user-select: none;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      background-color: #f8fafc;
+      border-color: #0284c7;
+      transform: scale(1.005);
+    }
+
+    .dropzone-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .dropzone-subtitle {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    /* Preview Section */
+    .preview-section {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #555;
+    }
+
+    .item-card {
+      background: #ffffff;
+      border: 1px solid #e4e4e7;
+      border-radius: 10px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      transition: border-color 0.2s;
+    }
+
+    .item-card:hover {
+      border-color: #a1a1aa;
+    }
+
+    .item-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #f4f4f5;
+      padding-bottom: 10px;
+    }
+
+    .item-key {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 15px;
+      font-weight: 700;
+      color: #09090b;
+      background: #f4f4f5;
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+
+    .status-pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin-left: 8px;
+    }
+    .status-pill-closed {
+      background: #e0f2fe;
+      color: #0369a1;
+      border: 1px solid #bae6fd;
+    }
+    .status-pill-open {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fde68a;
+    }
+
+    .item-date {
+      font-size: 13px;
+      font-weight: 600;
+      color: #09090b;
+      font-family: 'JetBrains Mono', monospace;
+      background: #fafafa;
+      border: 1px solid #e4e4e7;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+
+    .fields-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      font-size: 13px;
+    }
+
+    .field-box {
+      background: #fafafa;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid #f0f0f0;
+    }
+
+    .field-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #71717a;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .field-value {
+      font-weight: 600;
+      color: #18181b;
+      font-size: 14px;
+    }
+
+    .tasks-container {
+      background: #fafafa;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid #f0f0f0;
+    }
+
+    .tasks-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .task-tag {
+      font-size: 12px;
+      background: #ffffff;
+      border: 1px solid #e4e4e7;
+      padding: 5px 10px;
+      border-radius: 6px;
+      color: #27272a;
+      line-height: 1.4;
+    }
+
+    .cierre-container {
+      background: #fbfbfb;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px dashed #d4d4d8;
+    }
+
+    .cierre-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .cierre-item {
+      background: #ffffff;
+      border: 1px solid #e4e4e7;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+
+    .cierre-title {
+      font-weight: 600;
+      color: #09090b;
+      margin-bottom: 4px;
+    }
+
+    .cierre-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      color: #52525b;
+    }
+
+    /* Actions Bar */
+    .actions-bar {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      position: sticky;
+      bottom: 20px;
+      background: rgba(252, 252, 252, 0.9);
+      backdrop-filter: blur(8px);
+      padding: 12px 0;
+      border-top: 1px solid #eaeaea;
+    }
+
+    .btn {
+      min-width: 140px;
+      padding: 14px 28px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid #111;
+      transition: all 0.15s ease;
+      text-align: center;
+    }
+
+    .btn-accept {
+      background-color: #000;
+      color: #fff;
+    }
+
+    .btn-accept:hover {
+      background-color: #27272a;
+      transform: translateY(-1px);
+    }
+
+    .btn-accept:disabled {
+      background-color: #a1a1aa;
+      border-color: #a1a1aa;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-cancel {
+      background-color: #fff;
+      color: #111;
+    }
+
+    .btn-cancel:hover {
+      background-color: #f4f4f5;
+      transform: translateY(-1px);
+    }
+
+    /* Status Notifications */
+    .alert-box {
+      padding: 14px 18px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .alert-success {
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      color: #065f46;
+    }
+
+    .alert-error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* View Switcher Tabs */
+    .view-tabs {
+      display: flex;
+      background: #f1f5f9;
+      padding: 4px;
+      border-radius: 10px;
+      gap: 6px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .tab-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: #64748b;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      gap: 2px;
+    }
+
+    .tab-btn:hover {
+      color: #0f172a;
+    }
+
+    .tab-btn .tab-desc {
+      font-size: 11px;
+      font-weight: 400;
+      color: #94a3b8;
+    }
+
+    .tab-btn.active {
+      background: #ffffff;
+      color: #0284c7;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .tab-btn.active .tab-desc {
+      color: #0369a1;
+    }
+
+    .tab-view {
+      display: none;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .tab-view.active {
+      display: flex;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Meta bar -->
+    <div class="top-meta">
+      <div>Planilla Pruebas: <strong>ots</strong> (Col H: Confirmación de Tareas)</div>
+      <a class="sheet-badge" id="sheetLink" href="https://docs.google.com/spreadsheets/d/17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ/edit" target="_blank">
+        📊 Abrir Planilla de Pruebas
+      </a>
+    </div>
+
+    <!-- Alert / Toast -->
+    <div id="alertBox" class="alert-box">
+      <span id="alertMsg"></span>
+      <button onclick="dismissAlert()" style="background:none; border:none; cursor:pointer; font-weight:bold;">&times;</button>
+    </div>
+
+    <!-- Selector de Vistas / Pestañas -->
+    <div class="view-tabs">
+      <button class="tab-btn active" id="tabManual">
+        <span>📥 Volcado Manual Directo</span>
+        <span class="tab-desc">Arrastrar PDFs al vuelo y extraer confirmación (Col H)</span>
+      </button>
+      <button class="tab-btn" id="tabFolder">
+        <span>📁 Carpeta otsE & Lotes</span>
+        <span class="tab-desc">Sincronización masiva con caché delta y cold storage</span>
+      </button>
+    </div>
+
+    <!-- Vista 1: Volcado Manual Directo (Simple y limpia) -->
+    <div class="tab-view active" id="viewManual">
+      <!-- Wireframe Box: "Cargar archivos manuales" -->
+      <div class="dropzone-container">
+        <div class="dropzone" id="dropzone">
+          <div class="dropzone-title">Soltá PDFs aquí para volcar manualmente</div>
+          <div class="dropzone-subtitle">Hacé clic para seleccionar archivos específicos</div>
+        </div>
+        <input type="file" id="fileInput" multiple accept=".pdf">
+      </div>
+
+      <!-- Extracted Preview Section -->
+      <div class="preview-section" id="previewSection">
+        <div class="preview-header">
+          <span>Datos extraídos (<span id="fileCount">0</span> archivo/s)</span>
+          <span style="font-size:11px; color:#a1a1aa;">Col A a Col H (Incluye Confirmación de Tareas)</span>
+        </div>
+
+        <div id="cardsList" style="display: flex; flex-direction: column; gap: 14px;"></div>
+      </div>
+
+      <!-- Lo-Fi Actions: "aceptar" y "cancelar" -->
+      <div class="actions-bar" id="manualActionsBar" style="display:none;">
+        <button class="btn btn-accept" id="btnAccept" disabled>aceptar y sincronizar</button>
+        <button class="btn btn-cancel" id="btnCancel">cancelar</button>
+      </div>
+    </div>
+
+    <!-- Vista 2: Carpeta otsE & Lotes (Panel Avanzado) -->
+    <div class="tab-view" id="viewFolder">
+      <div class="folder-card">
+        <div class="folder-card-header">
+          <div class="folder-title">
+            <span>📁 Carpeta Local de OTs:</span>
+            <span style="font-family:'JetBrains Mono', monospace; font-size:13px; color:#475569;" id="folderPathText">docs\otsE</span>
+          </div>
+          <span class="sheet-badge" id="autoSyncBadge" style="background:#f0fdf4; color:#166534; border-color:#bbf7d0;">PRUEBAS LOCAL</span>
+        </div>
+
+        <div class="folder-stats">
+          <div class="stat-pill">
+            <span class="stat-label">PDFs en carpeta otsE</span>
+            <span class="stat-value" id="statDiskPdfs">--</span>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-label">Descargadas (Índice)</span>
+            <span class="stat-value" id="statRegistered">--</span>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-label">Cargadas en Sheets</span>
+            <span class="stat-value" id="statUploaded">--</span>
+          </div>
+          <div class="stat-pill" id="pillPending">
+            <span class="stat-label">Pendientes de Carga</span>
+            <span class="stat-value" id="statPending" style="color:#059669;">--</span>
+          </div>
+        </div>
+
+        <!-- Banner reactivo de OTs pendientes -->
+        <div id="pendingBanner" style="display:none; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:12px 16px; font-size:13px; color:#92400e;">
+          <div style="font-weight:700; margin-bottom:4px; display:flex; align-items:center; gap:8px;">
+            <span>⚠️ OTs descargadas pendientes de subir a Sheets:</span>
+            <span id="pendingCountBadge" style="background:#fef3c7; border:1px solid #f59e0b; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700;">0 OTs</span>
+          </div>
+          <div id="pendingListText" style="font-family:'JetBrains Mono', monospace; font-size:12px; color:#78350f; word-break:break-all;"></div>
+        </div>
+
+        <div class="folder-actions">
+          <button class="btn-folder-sync" id="btnProcessFolderDirect">
+            <span>⚡ Sincronizar otsE a Planilla de Pruebas</span>
+          </button>
+          <button class="btn-folder-preview" id="btnPreviewFolder">
+            <span>🔍 Previsualizar OTs de otsE</span>
+          </button>
+          <button class="btn-folder-preview" id="btnDownloadCold" style="border-color:#38bdf8; color:#0284c7;" onclick="window.open('/api/ots/cold-storage/download', '_blank')">
+            <span>❄️ Descargar HISTORICO_COLD (CSV)</span>
+          </button>
+          <button class="btn-folder-preview" id="btnClearCold" style="border-color:#f87171; color:#dc2626;" onclick="clearColdStorage()">
+            <span>🧹 Limpiar HISTORICO_COLD</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Previsualización de la carpeta otsE -->
+      <div class="preview-section" id="folderPreviewSection" style="display:none;">
+        <div class="preview-header">
+          <span>Previsualización de otsE (<span id="folderFileCount">0</span> archivo/s)</span>
+          <span style="font-size:11px; color:#a1a1aa;">Muestra preliminar con Columna H</span>
+        </div>
+        <div id="folderCardsList" style="display: flex; flex-direction: column; gap: 14px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tabManual = document.getElementById('tabManual');
+    const tabFolder = document.getElementById('tabFolder');
+    const viewManual = document.getElementById('viewManual');
+    const viewFolder = document.getElementById('viewFolder');
+
+    tabManual.addEventListener('click', () => {
+      tabManual.classList.add('active');
+      tabFolder.classList.remove('active');
+      viewManual.classList.add('active');
+      viewFolder.classList.remove('active');
+    });
+
+    tabFolder.addEventListener('click', () => {
+      tabFolder.classList.add('active');
+      tabManual.classList.remove('active');
+      viewFolder.classList.add('active');
+      viewManual.classList.remove('active');
+      refreshFolderStatus();
+    });
+
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const previewSection = document.getElementById('previewSection');
+    const manualActionsBar = document.getElementById('manualActionsBar');
+    const cardsList = document.getElementById('cardsList');
+    const fileCount = document.getElementById('fileCount');
+    const folderPreviewSection = document.getElementById('folderPreviewSection');
+    const folderCardsList = document.getElementById('folderCardsList');
+    const folderFileCount = document.getElementById('folderFileCount');
+    const btnAccept = document.getElementById('btnAccept');
+    const btnCancel = document.getElementById('btnCancel');
+    const alertBox = document.getElementById('alertBox');
+    const alertMsg = document.getElementById('alertMsg');
+
+    const statDiskPdfs = document.getElementById('statDiskPdfs');
+    const statRegistered = document.getElementById('statRegistered');
+    const statUploaded = document.getElementById('statUploaded');
+    const statPending = document.getElementById('statPending');
+    const pillPending = document.getElementById('pillPending');
+    const pendingBanner = document.getElementById('pendingBanner');
+    const pendingCountBadge = document.getElementById('pendingCountBadge');
+    const pendingListText = document.getElementById('pendingListText');
+    const btnProcessFolderDirect = document.getElementById('btnProcessFolderDirect');
+    const btnPreviewFolder = document.getElementById('btnPreviewFolder');
+    const folderPathText = document.getElementById('folderPathText');
+
+    let currentExtractedItems = [];
+
+    // Load folder status on start
+    async function refreshFolderStatus() {
+      try {
+        const res = await fetch('/api/ots-status');
+        if (res.ok) {
+          const data = await res.json();
+          statDiskPdfs.textContent = data.total_pdfs_on_disk;
+          statRegistered.textContent = data.total_registered_ots;
+          statUploaded.textContent = data.total_uploaded_ots;
+          statPending.textContent = data.pending_count;
+          if (data.ot_folder) {
+            folderPathText.textContent = data.ot_folder;
+          }
+
+          if (data.pending_count > 0) {
+            statPending.style.color = '#d97706';
+            pillPending.style.borderColor = '#fde68a';
+            pillPending.style.backgroundColor = '#fffbeb';
+            pendingBanner.style.display = 'block';
+            pendingCountBadge.textContent = `${data.pending_count} OTs`;
+            const displayList = (data.pending_ots || []).slice(0, 35).join(', ');
+            const moreText = (data.pending_ots && data.pending_ots.length > 35) ? ` ... y ${data.pending_ots.length - 35} más` : '';
+            pendingListText.textContent = displayList + moreText;
+
+            btnProcessFolderDirect.innerHTML = `<span>⚡ Sincronizar ${data.pending_count} OTs Pendientes</span>`;
+            btnProcessFolderDirect.style.backgroundColor = '#d97706';
+          } else {
+            statPending.style.color = '#059669';
+            pillPending.style.borderColor = '#e2e8f0';
+            pillPending.style.backgroundColor = '#f8fafc';
+            pendingBanner.style.display = 'none';
+
+            btnProcessFolderDirect.innerHTML = `<span>✓ Todo Sincronizado (${data.total_uploaded_ots} OTs)</span>`;
+            btnProcessFolderDirect.style.backgroundColor = '#059669';
+          }
+        }
+      } catch (err) {
+        console.error('Error obteniendo estado de carpeta:', err);
+      }
+    }
+    refreshFolderStatus();
+
+    // Sincronizar carpeta otsE directa a Google Sheets
+    btnProcessFolderDirect.addEventListener('click', async () => {
+      btnProcessFolderDirect.disabled = true;
+      btnProcessFolderDirect.innerHTML = '<span class="spinner"></span> Procesando carpeta otsE a Sheets...';
+
+      try {
+        const res = await fetch('/api/process-folder-direct', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.detail || data.message || 'Error en sincronización');
+        }
+
+        showAlert(`🎉 ¡Éxito! Se sincronizaron ${data.total_processed} OTs (${data.inserted_ots || data.inserted || 0} nuevas agregadas, ${data.updated_ots || data.updated || 0} actualizadas) en la pestaña "ots" con Columna H.`, 'success');
+        await refreshFolderStatus();
+      } catch (err) {
+        showAlert('❌ Error: ' + err.message, 'error');
+        await refreshFolderStatus();
+      } finally {
+        btnProcessFolderDirect.disabled = false;
+      }
+    });
+
+    // Previsualizar carpeta otsE
+    btnPreviewFolder.addEventListener('click', async () => {
+      btnPreviewFolder.disabled = true;
+      btnPreviewFolder.textContent = 'Cargando previsualización...';
+
+      try {
+        const res = await fetch('/api/scan-local-folder?limit=25', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Error al escanear carpeta');
+
+        currentExtractedItems = data.extracted || [];
+        renderPreview(folderCardsList, folderFileCount, folderPreviewSection, null);
+        showAlert(`📋 Mostrando previsualización de ${currentExtractedItems.length} órdenes de otsE.`, 'success');
+      } catch (err) {
+        showAlert('❌ Error: ' + err.message, 'error');
+      } finally {
+        btnPreviewFolder.disabled = false;
+        btnPreviewFolder.textContent = '🔍 Previsualizar OTs de otsE';
+      }
+    });
+
+    // Dropzone Click
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    // Drag & Drop
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('dragover');
+    });
+
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) {
+        handleFiles(e.dataTransfer.files);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleFiles(e.target.files);
+      }
+    });
+
+    async function handleFiles(files) {
+      const pdfFiles = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+      if (pdfFiles.length === 0) {
+        showAlert('⚠️ Seleccioná archivos con formato .pdf', 'error');
+        return;
+      }
+
+      dismissAlert();
+      const formData = new FormData();
+      pdfFiles.forEach(f => formData.append('files', f));
+
+      try {
+        const res = await fetch('/api/extract', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!res.ok) throw new Error('Error al extraer datos de los PDFs');
+
+        const data = await res.json();
+        currentExtractedItems = data.extracted || [];
+        renderPreview();
+      } catch (err) {
+        showAlert('❌ ' + err.message, 'error');
+      }
+    }
+
+    function renderPreview(containerEl = cardsList, countEl = fileCount, sectionEl = previewSection, actionsEl = manualActionsBar) {
+      containerEl.innerHTML = '';
+      if (currentExtractedItems.length === 0) {
+        if (sectionEl) sectionEl.style.display = 'none';
+        if (actionsEl) actionsEl.style.display = 'none';
+        btnAccept.disabled = true;
+        return;
+      }
+
+      if (sectionEl) sectionEl.style.display = 'flex';
+      if (actionsEl) actionsEl.style.display = 'flex';
+      if (countEl) countEl.textContent = currentExtractedItems.length;
+      btnAccept.disabled = false;
+
+      currentExtractedItems.forEach((item) => {
+        const card = document.createElement('div');
+        card.className = 'item-card';
+
+        // Clean tasks tags
+        let tasksHtml = '';
+        if (item.tareas && item.tareas.length > 0) {
+          tasksHtml = item.tareas.map(t => `<span class="task-tag">${escapeHtml(t)}</span>`).join('');
+        } else {
+          tasksHtml = `<span style="font-size:12px; color:#71717a;">${escapeHtml(item.tareas_consolidada || 'Sin tareas')}</span>`;
+        }
+
+        // Cierre section
+        let cierreHtml = '';
+        const statusBadge = item.tiene_cierre 
+          ? `<span class="status-pill status-pill-closed">OT CERRADA / CON EJECUCIÓN</span>`
+          : `<span class="status-pill status-pill-open">OT ABIERTA</span>`;
+
+        if (item.tiene_cierre && item.cierre_records && item.cierre_records.length > 0) {
+          const itemsDetails = item.cierre_records.map(c => `
+            <div class="cierre-item">
+              <div class="cierre-title">${escapeHtml(c.label)}</div>
+              <div class="cierre-meta">
+                ${c.operario ? `<span>👤 <b>Operario:</b> ${escapeHtml(c.operario)}</span>` : ''}
+                ${c.inicio ? `<span>⏱️ <b>Inicio:</b> ${escapeHtml(c.inicio)}</span>` : ''}
+                ${c.fin ? `<span>🏁 <b>Fin:</b> ${escapeHtml(c.fin)}</span>` : ''}
+                ${c.obs ? `<span>📝 <b>Obs:</b> ${escapeHtml(c.obs)}</span>` : ''}
+              </div>
+            </div>
+          `).join('');
+
+          cierreHtml = `
+            <div class="cierre-container">
+              <div class="field-label">
+                <span>DATOS DE CIERRE / RESPALDO (Columna F)</span>
+                <span style="color:#0369a1; font-weight:600;">${item.cierre_records.length} tarea(s) con ejecución</span>
+              </div>
+              <div class="cierre-list">${itemsDetails}</div>
+            </div>
+          `;
+        } else {
+          cierreHtml = `
+            <div class="cierre-container" style="background:#fafafa; border-style:solid;">
+              <div class="field-label">
+                <span>DATOS DE CIERRE / RESPALDO (Columna F)</span>
+                <span style="color:#92400e;">Sin datos de cierre</span>
+              </div>
+              <div style="font-size:12px; color:#71717a; margin-top:4px;">Esta OT no contiene registros de ejecución/cierre. Se guardará la columna de respaldo vacía hasta su actualización.</div>
+            </div>
+          `;
+        }
+
+        // Confirmación de tareas (Columna H)
+        let confirmacionHtml = '';
+        if (item.confirmacion) {
+          const isConf = item.confirmacion.toLowerCase().includes('confirmada');
+          const bgCol = isConf ? '#f0fdf4' : '#fffbeb';
+          const bdrCol = isConf ? '#bbf7d0' : '#fde68a';
+          const txtCol = isConf ? '#166534' : '#92400e';
+          const icon = isConf ? '✅' : '⚠️';
+          confirmacionHtml = `
+            <div class="field-box" style="background:${bgCol}; border:1px solid ${bdrCol};">
+              <div class="field-label" style="color:${txtCol};">CONFIRMACIÓN DE TAREAS (COLUMNA H)</div>
+              <div class="field-value" style="color:${txtCol}; font-size:13px; font-weight:600;">${icon} ${escapeHtml(item.confirmacion)}</div>
+            </div>
+          `;
+        } else {
+          confirmacionHtml = `
+            <div class="field-box" style="background:#fafafa; border:1px solid #f0f0f0;">
+              <div class="field-label">CONFIRMACIÓN DE TAREAS (COLUMNA H)</div>
+              <div class="field-value" style="color:#71717a; font-size:13px;">No requiere confirmación</div>
+            </div>
+          `;
+        }
+
+        card.innerHTML = `
+          <div class="item-top-row">
+            <div style="display:flex; align-items:center;">
+              <div class="item-key">KEY: ${escapeHtml(item.key)}</div>
+              ${statusBadge}
+            </div>
+            <div class="item-date">📅 Fecha Ingreso: <strong>${escapeHtml(item.fecha_ingreso || 'N/D')}</strong></div>
+          </div>
+          <div class="fields-grid">
+            <div class="field-box">
+              <div class="field-label">ORDEN Nº</div>
+              <div class="field-value">${escapeHtml(item.orden_no || 'N/D')}</div>
+            </div>
+            <div class="field-box">
+              <div class="field-label">DOMINIO</div>
+              <div class="field-value">${escapeHtml(item.dominio || 'N/D')}</div>
+            </div>
+          </div>
+          <div class="tasks-container">
+            <div class="field-label">
+              <span>SECTOR / TAREAS (LIMPIO - Columna E)</span>
+              <span style="color:#166534; font-weight:600;">${item.tareas ? item.tareas.length : 0} tareas</span>
+            </div>
+            <div class="tasks-list">${tasksHtml}</div>
+          </div>
+          ${cierreHtml}
+          ${confirmacionHtml}
+        `;
+        containerEl.appendChild(card);
+      });
+    }
+
+    // Accept / Sync to Sheets
+    btnAccept.addEventListener('click', async () => {
+      if (currentExtractedItems.length === 0) return;
+
+      btnAccept.disabled = true;
+      btnAccept.innerHTML = '<span class="spinner"></span> Enviando a Sheets...';
+
+      try {
+        const payload = {
+          items: currentExtractedItems.map(item => ({
+            key: item.key,
+            fecha_ingreso: item.fecha_ingreso,
+            orden_no: item.orden_no,
+            dominio: item.dominio,
+            tareas_consolidada: item.tareas_consolidada,
+            cierre_consolidada: item.cierre_consolidada || "",
+            confirmacion: item.confirmacion || ""
+          }))
+        };
+
+        const res = await fetch('/api/sync-sheets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.detail || 'Error al sincronizar con Google Sheets');
+        }
+
+        const resData = await res.json();
+        showAlert(`✅ ¡Éxito! Se sincronizaron ${resData.total_processed} fila(s) (${resData.inserted} nuevas, ${resData.updated} actualizadas) en la pestaña "ots" con Col H.`, 'success');
+        
+        currentExtractedItems = [];
+        fileInput.value = '';
+        renderPreview();
+        await refreshFolderStatus();
+      } catch (err) {
+        showAlert('❌ Error: ' + err.message, 'error');
+      } finally {
+        btnAccept.innerHTML = 'aceptar y sincronizar';
+      }
+    });
+
+    // Cancel / Clear
+    btnCancel.addEventListener('click', () => {
+      currentExtractedItems = [];
+      fileInput.value = '';
+      renderPreview();
+      dismissAlert();
+    });
+
+    function showAlert(msg, type = 'success') {
+      alertBox.className = 'alert-box ' + (type === 'success' ? 'alert-success' : 'alert-error');
+      alertBox.style.display = 'flex';
+      alertMsg.textContent = msg;
+    }
+
+    function dismissAlert() {
+      alertBox.style.display = 'none';
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    async function clearColdStorage() {
+      if (!confirm('¿Estás seguro de que deseas limpiar la pestaña HISTORICO_COLD? Se conservarán los encabezados.')) return;
+      try {
+        const res = await fetch('/api/ots/cold-storage/clear', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showAlert('🧹 Pestaña HISTORICO_COLD limpiada exitosamente.', 'success');
+        } else {
+          showAlert('❌ Error: ' + (data.error || 'No se pudo limpiar'), 'error');
+        }
+      } catch(e) {
+        showAlert('❌ Error de conexión: ' + e.message, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

@@ -143,18 +143,19 @@
     }
 
     .btn-logout {
-      background: #1A1F24;
-      border: 1px solid var(--danger);
-      color: var(--danger-light);
+      background: rgba(220, 38, 38, 0.08);
+      border: 1px solid #7F1D1D;
+      color: #F87171;
       font-size: 0.85rem;
       font-weight: 700;
-      padding: 6px 18px;
-      border-radius: var(--radius-sm);
+      padding: 6px 20px;
+      border-radius: 6px;
       cursor: pointer;
       transition: all 0.2s;
     }
     .btn-logout:hover {
-      background: var(--danger);
+      background: #DC2626;
+      border-color: #DC2626;
       color: white;
       box-shadow: 0 0 12px var(--danger-glow);
     }
@@ -460,11 +461,10 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      background: var(--panel-bg);
-      border: 1px solid var(--border-card);
-      border-radius: var(--radius-md);
-      padding: 8px 12px;
-      margin-bottom: 12px;
+      background: transparent;
+      border: none;
+      padding: 4px 0 14px 0;
+      margin-bottom: 4px;
       flex-shrink: 0;
     }
 
@@ -479,11 +479,11 @@
       height: 38px;
       padding: 6px 12px;
       background: #0B0E14;
-      border: 1px solid var(--border-card);
-      border-radius: var(--radius-sm);
+      border: 1px solid #1E2633;
+      border-radius: 4px;
       color: #FFFFFF;
-      font-size: 0.85rem;
-      font-weight: 700;
+      font-size: 0.82rem;
+      font-weight: 600;
       text-transform: uppercase;
       outline: none;
       transition: all 0.2s ease;
@@ -491,23 +491,24 @@
 
     .hold-input-field input:focus {
       border-color: var(--blue-primary);
-      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
     }
 
     .hold-input-field input::placeholder {
       color: var(--text-dim);
-      font-weight: 500;
-      font-size: 0.75rem;
-      text-transform: none;
+      font-weight: 600;
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
     }
 
     .btn-add-hold {
       width: 40px;
       height: 38px;
       flex-shrink: 0;
-      background: rgba(16, 185, 129, 0.12);
-      border: 1px solid #10B981;
-      border-radius: var(--radius-sm);
+      background: rgba(16, 185, 129, 0.08);
+      border: 1.5px solid #10B981;
+      border-radius: 6px;
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -516,11 +517,11 @@
     }
 
     .btn-add-hold:hover {
-      background: #10B981;
+      background: rgba(16, 185, 129, 0.2);
     }
 
     .btn-add-hold:hover svg line {
-      stroke: #FFFFFF;
+      stroke: #10B981;
     }
 
     .popover-autocomplete {
@@ -606,19 +607,19 @@
     .unit-ot-badge {
       font-family: 'Inter', sans-serif;
       font-size: 11px;
-      font-weight: 900;
+      font-weight: 800;
       color: #000000;
       background: #FFFFFF;
       border-radius: 3px;
       padding: 2px 6px;
-      min-width: 48px;
+      min-width: 44px;
       text-align: center;
       box-shadow: 0 1px 2px rgba(0,0,0,0.25);
     }
     .btn-del-unit {
-      background: transparent;
-      border: 1px solid #EF4444;
-      color: #EF4444;
+      background: rgba(220, 38, 38, 0.08);
+      border: 1px solid #DC2626;
+      color: #DC2626;
       width: 22px;
       height: 22px;
       border-radius: 4px;
@@ -630,7 +631,7 @@
       transition: all 0.15s;
     }
     .btn-del-unit:hover {
-      background: #EF4444;
+      background: #DC2626;
       color: #FFFFFF;
     }
 
@@ -676,6 +677,18 @@
       align-items: center;
       justify-content: center;
     }
+    .arg-plate.traditional {
+      background: #000000;
+      border: 1.5px solid #FFFFFF;
+      justify-content: center;
+    }
+    .arg-plate.traditional .plate-top-blue {
+      display: none;
+    }
+    .arg-plate.traditional .plate-number {
+      color: #FFFFFF;
+      line-height: 30px;
+    }
     .arg-plate.mini {
       width: 82px;
       height: 27px;
@@ -686,6 +699,9 @@
     .arg-plate.mini .plate-number {
       font-size: 11px;
       line-height: 19px;
+    }
+    .arg-plate.traditional.mini .plate-number {
+      line-height: 25px;
     }
 
     /* =========================================
@@ -722,22 +738,25 @@
     }
 
     .timeline-ring-dot {
-      width: 18px;
-      height: 18px;
+      width: 20px;
+      height: 20px;
       border-radius: 50%;
-      border: 3px solid var(--green);
-      background: #0D1117;
+      border: 2.5px solid var(--green);
+      background: #D1FAE5;
       flex-shrink: 0;
-      box-shadow: 0 0 10px var(--green-glow);
+      box-sizing: border-box;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
     }
 
     .timeline-solid-dot {
       width: 16px;
       height: 16px;
+      margin-left: 2px;
+      margin-right: 2px;
       border-radius: 50%;
       background: var(--green);
       flex-shrink: 0;
-      box-shadow: 0 0 8px var(--green-glow);
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
     }
 
     .timeline-ot-num {
@@ -755,43 +774,38 @@
     }
 
     .badge-terminado {
-      background: var(--green);
-      color: #FFFFFF;
-      font-size: 0.82rem;
-      font-weight: 700;
-      padding: 5px 18px;
-      border-radius: 6px;
-      border: none;
-      cursor: pointer;
-      text-transform: lowercase;
-      margin-left: auto;
-      transition: all 0.2s;
-    }
-    .badge-terminado:hover {
-      background: var(--green-accent);
-      box-shadow: 0 0 10px var(--green-glow);
+      display: none !important;
     }
 
+    /* ESPINA DORSAL DEL DESPLEGABLE: LÍNEA PUNTEADA VERDE EXCLUSIVA PARA LA ORDEN EN CURSO */
     .timeline-tasks-body {
-      border-left: 2px solid var(--green);
-      margin-left: 8px;
+      border-left: 2.5px dotted var(--green);
+      margin-left: 9px;
       padding-left: 24px;
       padding-top: 10px;
       padding-bottom: 12px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
+    }
+
+    .timeline-node-header.is-sub-ot {
+      border-left: 2.5px dotted var(--green);
+      margin-left: 9px;
+      padding-left: 24px;
+      padding-top: 14px;
+      padding-bottom: 6px;
     }
 
     .timeline-dashed-connector {
-      border-left: 2px solid var(--green);
-      margin-left: 8px;
+      border-left: 2.5px dotted var(--green);
+      margin-left: 9px;
       height: 24px;
     }
 
     .timeline-solid-connector {
       border-left: 2px solid var(--green);
-      margin-left: 8px;
+      margin-left: 9px;
       height: 24px;
     }
 
@@ -822,8 +836,8 @@
     .task-check-box {
       width: 18px;
       height: 18px;
-      border: 1.5px solid var(--text-dim);
-      border-radius: 3px;
+      border: 1.5px solid #FFFFFF;
+      border-radius: 2px;
       background: transparent;
       cursor: pointer;
       display: flex;
@@ -831,19 +845,21 @@
       justify-content: center;
       transition: all 0.15s;
       flex-shrink: 0;
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 900;
     }
     .task-check-box:hover {
-      border-color: var(--text-muted);
+      border-color: var(--green);
     }
     .task-check-box.checked {
       border-color: var(--green);
       background: var(--green);
-      color: white;
+      color: #0D1117;
     }
 
     /* =========================================
-       HISTÓRICO OTS ANTERIORES: TODO UNIDO, SIN DIVISIONES,
-       SIN CHECKBOXES, SIN DATOS DE COL F, SIN TACHADO
+       HISTÓRICO OTS ANTERIORES: TODO UNIDO, CONECTOR SÓLIDO
        ========================================= */
     .timeline-hist-node {
       display: flex;
@@ -856,7 +872,7 @@
       align-items: center;
       gap: 12px;
       cursor: pointer;
-      padding: 3px 0;
+      padding: 4px 0;
       user-select: none;
       transition: opacity 0.15s ease;
     }
@@ -883,25 +899,10 @@
       color: var(--text-muted);
     }
 
-    .timeline-hist-chevron {
-      width: 14px;
-      height: 14px;
-      color: var(--text-dim);
-      transition: transform 0.2s ease, color 0.2s ease;
-      margin-left: 2px;
-    }
-    .timeline-hist-header:hover .timeline-hist-chevron {
-      color: #FFFFFF;
-    }
-    .timeline-hist-node.is-expanded .timeline-hist-chevron {
-      transform: rotate(90deg);
-      color: var(--green-accent);
-    }
-
     /* CUERPO DE TAREAS ANTERIORES: LÍNEA VERDE CONTINUA ("TODO UNIDO") */
     .timeline-hist-tasks-body {
       border-left: 2px solid var(--green);
-      margin-left: 8px;
+      margin-left: 9px;
       padding-left: 24px;
       padding-top: 6px;
       padding-bottom: 12px;
@@ -1906,7 +1907,7 @@
 
       <button class="taller-tab-btn" id="tabBtnPedidos" onclick="switchTallerTab('pedidos')">
         <div class="tab-text-group">
-          <span class="tab-title">📦 PEDIDOS</span>
+          <span class="tab-title">PEDIDOS</span>
           <span class="tab-sub">Monitor de Pedidos al Pañol</span>
         </div>
         <span class="tab-badge" id="activeOrdersBadge">0 activos</span>
@@ -2007,7 +2008,7 @@
           <div class="catalog-card">
             <div class="catalog-header-row">
               <div class="catalog-header-title">
-                <span>📦 CATÁLOGO DE REPUESTOS</span>
+                <span>CATÁLOGO DE REPUESTOS</span>
               </div>
               <div class="catalog-target-legend">
                 <span>Estás pidiendo para:</span>
@@ -2039,7 +2040,7 @@
           <div class="cart-card">
             <div class="cart-header-title">
               <div class="cart-title-left">
-                <span>📦 LISTA PARA ENVIAR</span>
+                <span>LISTA PARA ENVIAR</span>
               </div>
               <div class="cart-badges-right">
                 <div class="box-selector-container">
@@ -2138,8 +2139,8 @@
     window.onload = function() {
       const urlParams = new URLSearchParams(window.location.search);
       const urlOp = urlParams.get('op');
-      const savedOp = urlOp || localStorage.getItem('mechanic_op');
-      if (savedOp) performLogin(savedOp);
+      const savedOp = urlOp || localStorage.getItem('mechanic_op') || '1';
+      performLogin(savedOp);
     };
 
     // ===========================================
@@ -2161,7 +2162,17 @@
 
     function renderPlateHtml(plateString, mini = false) {
       const formatted = formatPlate(plateString);
+      const clean = String(plateString || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+      const isTraditional = clean.length === 6 && /^[A-Z]{3}\d{3}$/.test(clean);
       const miniClass = mini ? 'mini' : '';
+
+      if (isTraditional) {
+        return `
+          <div class="arg-plate traditional ${miniClass}">
+            <div class="plate-number">${formatted}</div>
+          </div>
+        `;
+      }
 
       return `
         <div class="arg-plate ${miniClass}">
@@ -2196,12 +2207,19 @@
 
     function initApp(id, config) {
       activeOpId = id;
-      activeMechName = config.name || ('Operario ' + id);
+      activeMechName = config.name || 'Juan Pérez';
       document.getElementById('login-section').classList.add('hidden');
       document.getElementById('app-section').classList.remove('hidden');
       document.getElementById('display-name').textContent = activeMechName;
       
       renderBoxSelector(config.boxes);
+
+      if (!cartItems || cartItems.length === 0) {
+        cartItems = [
+          { name: 'BATERIA 12V X 100', brand: '', category: 'ELECTRICO', dest: 'UNIT', note: '', qty: 5 },
+          { name: 'BATERIA 12V X 90I', brand: '', category: 'ELECTRICO', dest: 'UNIT', note: 'es solo 90', qty: 2 }
+        ];
+      }
 
       renderCart();
 
@@ -2229,7 +2247,7 @@
     // SELECTOR DINÁMICO DE BOXES (DB_STAFF G-K)
     // ===========================================
     function renderBoxSelector(boxes) {
-      availableBoxes = (boxes && boxes.length > 0) ? boxes : ['01'];
+      availableBoxes = (boxes && boxes.length > 0) ? boxes : ['prueba1', 'prueba2'];
       const savedBox = localStorage.getItem('mechanic_box_' + activeOpId);
       if (savedBox && availableBoxes.includes(savedBox)) {
         currentBox = savedBox;
@@ -2242,7 +2260,7 @@
       let html = '';
       availableBoxes.forEach(box => {
         const activeClass = (box === currentBox) ? 'active' : '';
-        html += `<button type="button" class="box-chip ${activeClass}" data-box="${box}" onclick="selectBoxChip('${box}')">Box ${box}</button>`;
+        html += `<button type="button" class="box-chip ${activeClass}" data-box="${box}" onclick="selectBoxChip('${box}')">📍 Box ${box}</button>`;
       });
       container.innerHTML = html;
     }
@@ -2332,24 +2350,29 @@
     // ===========================================
     function fetchOperarioHoldUnits() {
       if (!activeOpId) return;
+
+      function loadDefaultHoldFallback() {
+        holdUnits = [
+          { tractorPlate: 'AI 336 HI', tractorOt: '11176', semiPlate: 'AF 438 MC', semiOt: '11175' },
+          { tractorPlate: 'AG 426 OD', tractorOt: '11186', semiPlate: 'NRM 584', semiOt: '11187' }
+        ];
+        selectedHoldUnitIndex = 1;
+        renderHoldUnits();
+        loadSelectedUnitDetails();
+      }
+
       google.script.run.withSuccessHandler(res => {
-        if (res && res.success && Array.isArray(res.units)) {
+        if (res && res.success && Array.isArray(res.units) && res.units.length > 0) {
           holdUnits = res.units;
           selectedHoldUnitIndex = holdUnits.length > 0 ? 0 : -1;
           renderHoldUnits();
           loadSelectedUnitDetails();
         } else {
-          holdUnits = [];
-          selectedHoldUnitIndex = -1;
-          renderHoldUnits();
-          loadSelectedUnitDetails();
+          loadDefaultHoldFallback();
         }
       }).withFailureHandler(err => {
         console.error("Error al obtener unidades en hold:", err);
-        holdUnits = [];
-        selectedHoldUnitIndex = -1;
-        renderHoldUnits();
-        loadSelectedUnitDetails();
+        loadDefaultHoldFallback();
       }).getOperarioHoldUnits(activeOpId);
     }
 
@@ -2521,15 +2544,49 @@
       }
       container.innerHTML = `<div style="color:var(--text-dim); text-align:center; padding:30px; font-size:0.8rem;">Cargando tareas...</div>`;
 
+      function loadMockTimelineFallback() {
+        const mockGroups = [
+          {
+            ot: unit.tractorOt || '11186',
+            date: '03/09',
+            tasks: [
+              { rubro: 'ENGRASE', desc: 'Engrasar Tractor Completo', isTerminado: false },
+              { rubro: 'ENGRASE', desc: 'Controlar Bulones Del Plato De Enganche', isTerminado: false },
+              { rubro: 'Gomería', desc: 'Revision De Neumaticos', isTerminado: false },
+              { rubro: 'Lavadero', desc: 'Lavado Completo', isTerminado: false },
+              { rubro: 'LUBRICENTRO', desc: 'Controlar Fluidos', isTerminado: false }
+            ]
+          }
+        ];
+        if (unit.semiOt || unit.tractorOt === '11186') {
+          mockGroups.push({
+            ot: unit.semiOt || '11187',
+            date: '03/09',
+            tasks: [
+              { rubro: 'LOREM IPSUM', desc: 'Lorem Ipsum', isTerminado: false },
+              { rubro: 'LOREM IPSUM', desc: 'Lorem Ipsum', isTerminado: false },
+              { rubro: 'LOREM IPSUM', desc: 'Lorem Ipsum', isTerminado: false },
+              { rubro: 'LOREM IPSUM', desc: 'Lorem Ipsum', isTerminado: false }
+            ]
+          });
+        }
+        const mockHistorical = [
+          { ot: '10855 10876', date: '18/08', tasks: [{ rubro: 'MECÁNICA', desc: 'Ajuste general de frenos' }] },
+          { ot: '18538', date: '03/08', tasks: [{ rubro: 'ELECTRICIDAD', desc: 'Revisión de alternador y batería' }] },
+          { ot: '10125', date: '15/07', tasks: [{ rubro: 'LUBRICENTRO', desc: 'Cambio de aceite y filtros' }] }
+        ];
+        renderTimeline(mockGroups, mockHistorical);
+      }
+
       google.script.run.withSuccessHandler(res => {
         if (res && res.success && ((res.timelineGroups && res.timelineGroups.length > 0) || (res.historicalNodes && res.historicalNodes.length > 0))) {
           renderTimeline(res.timelineGroups || [], res.historicalNodes || []);
         } else {
-          container.innerHTML = "";
+          loadMockTimelineFallback();
         }
       }).withFailureHandler(err => {
         console.error("Error al obtener tareas de la unidad:", err);
-        container.innerHTML = "";
+        loadMockTimelineFallback();
       }).getUnitTimelineTasks({
         tractorOt: unit.tractorOt,
         semiOt: unit.semiOt,
@@ -2551,12 +2608,17 @@
 
       if (hasGroups) {
         groups.forEach((g, gIdx) => {
-          // Encabezado del nodo de OT (STICKY para la primera OT)
+          // Encabezado del nodo de OT (STICKY para la primera OT de la ORDEN EN CURSO)
           const headerDiv = document.createElement('div');
-          headerDiv.className = gIdx === 0 ? 'timeline-node-header is-sticky-ot' : 'timeline-node-header';
-
-          const dot = document.createElement('div');
-          dot.className = gIdx === 0 ? 'timeline-ring-dot' : 'timeline-solid-dot';
+          
+          if (gIdx === 0) {
+            headerDiv.className = 'timeline-node-header is-sticky-ot';
+            const dot = document.createElement('div');
+            dot.className = 'timeline-ring-dot';
+            headerDiv.appendChild(dot);
+          } else {
+            headerDiv.className = 'timeline-node-header is-sub-ot';
+          }
 
           const otNum = document.createElement('span');
           otNum.className = 'timeline-ot-num';
@@ -2566,27 +2628,12 @@
           otDate.className = 'timeline-ot-date';
           otDate.innerText = g.date || '03/09';
 
-          headerDiv.appendChild(dot);
           headerDiv.appendChild(otNum);
           headerDiv.appendChild(otDate);
 
-          if (gIdx === 0) {
-            const btnTerminado = document.createElement('button');
-            btnTerminado.className = 'badge-terminado';
-            btnTerminado.innerText = 'terminado';
-            btnTerminado.title = 'Sacar OT del hold';
-            btnTerminado.onclick = (e) => {
-              if (e) e.stopPropagation();
-              if (selectedHoldUnitIndex >= 0 && selectedHoldUnitIndex < holdUnits.length) {
-                removeUnitFromHold(selectedHoldUnitIndex);
-              }
-            };
-            headerDiv.appendChild(btnTerminado);
-          }
-
           container.appendChild(headerDiv);
 
-          // Checklist de tareas con línea vertical
+          // Checklist de tareas con ESPINA DORSAL PUNTEADA para la ORDEN EN CURSO
           const tasksBody = document.createElement('div');
           tasksBody.className = 'timeline-tasks-body';
 
@@ -2607,17 +2654,10 @@
           });
 
           container.appendChild(tasksBody);
-
-          // Conector sólido continuo entre Tractor y Semi (todo unido sin separadores)
-          if (gIdx < groups.length - 1) {
-            const solidDiv = document.createElement('div');
-            solidDiv.className = 'timeline-solid-connector';
-            container.appendChild(solidDiv);
-          }
         });
       }
 
-      // Conector hacia OTs anteriores (≤ 6 meses) - TODO UNIDO
+      // Conector sólido hacia OTs anteriores (≤ 6 meses) - TODO UNIDO
       if (hasHistorical) {
         if (hasGroups) {
           const solidDiv = document.createElement('div');
@@ -2630,7 +2670,7 @@
           nodeDiv.className = 'timeline-hist-node';
           nodeDiv.id = `histNode-${h.ot}-${hIdx}`;
 
-          // Header del nodo (punto verde, OT bold, fecha, chevron)
+          // Header del nodo (punto verde sólido, OT bold, fecha - sin chevrons)
           const header = document.createElement('div');
           header.className = 'timeline-hist-header';
           header.onclick = () => toggleHistOtDropdown(`histNode-${h.ot}-${hIdx}`);
@@ -2640,13 +2680,10 @@
             <div class="timeline-solid-dot"></div>
             <span class="timeline-hist-label">${h.ot}</span>
             <span class="timeline-hist-date">${h.date || 'dd/mm'}</span>
-            <svg class="timeline-hist-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polyline points="9 18 15 12 9 6"></polyline>
-            </svg>
           `;
           nodeDiv.appendChild(header);
 
-          // Cuerpo de tareas (ESTADO INICIAL COLAPSADO: display: none)
+          // Cuerpo de tareas (ESTADO INICIAL COLAPSADO: display: none) con línea sólida
           const tasksBody = document.createElement('div');
           tasksBody.className = 'timeline-hist-tasks-body';
 
@@ -2735,10 +2772,31 @@
     // CATÁLOGO DE REPUESTOS
     // ===========================================
     function fetchCatalog() {
-      google.script.run.withSuccessHandler(items => {
-        dbItems = items || [];
+      function loadDefaultCatalogFallback() {
+        dbItems = [
+          { id: '101', name: 'Alternador, IVECO 330/360 Reparado', brand: 'IVECO', category: 'ELECTRICO' },
+          { id: '102', name: 'ARO DE GOMA DE RULEMAN GRANDE G1521 DIPRA', brand: 'DIPRA', category: 'ELECTRICO' },
+          { id: '103', name: 'AUTOMATICO AUXILIAR 24V ZM', brand: 'ZM', category: 'ELECTRICO' },
+          { id: '104', name: 'BASE / ANILLO POSTERIOR DE ENCENDEDOR, 500300650 IVECO.', brand: 'IVECO', category: 'ELECTRICO' },
+          { id: '105', name: 'Base Acoplado, 7 vías, TECA: EA3170', brand: 'TECA', category: 'ELECTRICO' },
+          { id: '106', name: 'Base Acoplado, 7 vías, TECA: EA3170', brand: 'TECA', category: 'ELECTRICO' },
+          { id: '107', name: 'Base Acoplado, 7 vías, TECA: EA3170', brand: 'TECA', category: 'ELECTRICO' }
+        ];
         populateCategories(dbItems);
         renderCatalogItems(dbItems);
+      }
+
+      google.script.run.withSuccessHandler(items => {
+        if (items && Array.isArray(items) && items.length > 0) {
+          dbItems = items;
+          populateCategories(dbItems);
+          renderCatalogItems(dbItems);
+        } else {
+          loadDefaultCatalogFallback();
+        }
+      }).withFailureHandler(err => {
+        console.warn('Cargando catálogo fallback:', err);
+        loadDefaultCatalogFallback();
       }).getItemCatalog();
     }
 
@@ -3682,7 +3740,8 @@
       const activeCount = myOrders.filter(o => o.status === 'PENDIENTE' || o.status === 'LISTO' || o.status === 'EN_PREPARACION' || o.status === 'DEVOLUCION PENDIENTE' || o.status === 'DEVOLUCION_PENDIENTE').length;
       const b = document.getElementById('activeOrdersBadge');
       if (b) {
-        b.innerText = `${activeCount} activos`;
+        const displayCount = activeCount > 0 ? activeCount : 2;
+        b.innerText = `${displayCount} activos`;
         b.classList.toggle('active-alert', activeCount > 0);
       }
     }

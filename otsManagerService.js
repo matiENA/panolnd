@@ -17,6 +17,7 @@ const { extractPlates } = require('./plateNormalizer');
 
 const OTS_TAB = 'ots';
 const OTS_ANTERIORES_TAB = 'ots_anteriores';
+const HISTORICO_COLD_TAB = 'HISTORICO_COLD';
 const DB_OT_LIST_TAB = 'DB_OT_LIST';
 
 const ARCHIVE_DIR = path.join(__dirname, 'data');
@@ -31,7 +32,8 @@ const OTS_HEADERS = [
   'DOMINIO',
   'SECTOR / TAREAS',
   'CIERRE / RESPALDO TAREAS',
-  'PAYLOAD'
+  'PAYLOAD',
+  'CONFIRMACIÓN DE TAREAS'
 ];
 
 /**
@@ -124,6 +126,17 @@ async function ensureOtsStructure(sheetsClient, spreadsheetId, force = false) {
       });
     }
 
+    if (!existingSheets.includes(HISTORICO_COLD_TAB)) {
+      requests.push({
+        addSheet: {
+          properties: {
+            title: HISTORICO_COLD_TAB,
+            gridProperties: { rowCount: 3000, columnCount: 10 }
+          }
+        }
+      });
+    }
+
     if (requests.length > 0) {
       await sheetsClient.spreadsheets.batchUpdate({
         spreadsheetId,
@@ -132,34 +145,50 @@ async function ensureOtsStructure(sheetsClient, spreadsheetId, force = false) {
       console.log(`✅ [otsManager] Pestañas creadas: ${requests.map(r => r.addSheet.properties.title).join(', ')}`);
     }
 
-    // Asegurar encabezados en 'ots'
+    // Asegurar encabezados en 'ots' (A1:H1)
     const otsHeadRes = await sheetsClient.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${OTS_TAB}'!A1:G1`
+      range: `'${OTS_TAB}'!A1:H1`
     });
-    if (!otsHeadRes.data.values || otsHeadRes.data.values.length === 0) {
+    if (!otsHeadRes.data.values || otsHeadRes.data.values.length === 0 || otsHeadRes.data.values[0].length < 8) {
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${OTS_TAB}'!A1:G1`,
+        range: `'${OTS_TAB}'!A1:H1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [OTS_HEADERS] }
       });
     }
 
-    // Asegurar encabezados en 'ots_anteriores'
+    // Asegurar encabezados en 'ots_anteriores' (A1:H1)
     const antHeadRes = await sheetsClient.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${OTS_ANTERIORES_TAB}'!A1:G1`
+      range: `'${OTS_ANTERIORES_TAB}'!A1:H1`
     });
-    if (!antHeadRes.data.values || antHeadRes.data.values.length === 0 || !antHeadRes.data.values[0] || antHeadRes.data.values[0].length === 0) {
+    if (!antHeadRes.data.values || antHeadRes.data.values.length === 0 || antHeadRes.data.values[0].length < 8) {
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${OTS_ANTERIORES_TAB}'!A1:G1`,
+        range: `'${OTS_ANTERIORES_TAB}'!A1:H1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [OTS_HEADERS] }
       });
       console.log(`✅ [otsManager] Encabezados inicializados en ${OTS_ANTERIORES_TAB}`);
     }
+
+    // Asegurar encabezados en 'HISTORICO_COLD' (A1:H1)
+    const coldHeadRes = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${HISTORICO_COLD_TAB}'!A1:H1`
+    });
+    if (!coldHeadRes.data.values || coldHeadRes.data.values.length === 0 || coldHeadRes.data.values[0].length < 8) {
+      await sheetsClient.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'${HISTORICO_COLD_TAB}'!A1:H1`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [OTS_HEADERS] }
+      });
+      console.log(`✅ [otsManager] Encabezados inicializados en ${HISTORICO_COLD_TAB}`);
+    }
+
     otsStructureEnsured = true;
   } catch (err) {
     console.error('❌ [otsManager] Error en ensureOtsStructure:', err.message);
@@ -205,6 +234,7 @@ function archiveColdOts(rowsToArchive) {
       const sectorTareas = String(r[4] || '').trim();
       const cierreRespaldo = String(r[5] || '').trim();
       const payload = r[6] || '';
+      const confirmacion = String(r[7] || '').trim();
 
       if (!cleanDom || !cleanOt) return;
 
@@ -221,6 +251,7 @@ function archiveColdOts(rowsToArchive) {
         sectorTareas,
         cierreRespaldo,
         payload,
+        confirmacion,
         archivedAt: new Date().toISOString()
       });
     });
@@ -230,7 +261,7 @@ function archiveColdOts(rowsToArchive) {
 
     fs.writeFileSync(ARCHIVE_JSON_FILE, JSON.stringify(combinedList, null, 2), 'utf8');
 
-    const csvHeader = ['KEY', 'FECHA INGRESO', 'ORDEN Nº', 'DOMINIO', 'SECTOR / TAREAS', 'CIERRE / RESPALDO TAREAS', 'PAYLOAD', 'ARCHIVED_AT'].join(';');
+    const csvHeader = ['KEY', 'FECHA INGRESO', 'ORDEN Nº', 'DOMINIO', 'SECTOR / TAREAS', 'CIERRE / RESPALDO TAREAS', 'PAYLOAD', 'CONFIRMACIÓN DE TAREAS', 'ARCHIVED_AT'].join(';');
     const csvRows = combinedList.map(item => {
       const escapeCsv = (str) => `"${String(str || '').replace(/"/g, '""').replace(/\r?\n/g, ' ')}"`;
       return [
@@ -241,6 +272,7 @@ function archiveColdOts(rowsToArchive) {
         escapeCsv(item.sectorTareas),
         escapeCsv(item.cierreRespaldo),
         escapeCsv(item.payload),
+        escapeCsv(item.confirmacion),
         escapeCsv(item.archivedAt)
       ].join(';');
     });
@@ -268,15 +300,19 @@ async function migrateAndDeduplicateOts(sheetsClient, spreadsheetId) {
 
   await ensureOtsStructure(sheetsClient, spreadsheetId);
 
-  // 1. Una sola lectura HTTP en batch para 'ots' y 'ots_anteriores' (mínimo trabajo de backend)
+  // 1. Una sola lectura HTTP en batch para 'ots', 'ots_anteriores' e 'HISTORICO_COLD' (mínimo trabajo de backend)
   const batchRes = await sheetsClient.spreadsheets.values.batchGet({
     spreadsheetId,
-    ranges: [`'${OTS_TAB}'!A2:G1000`, `'${OTS_ANTERIORES_TAB}'!A2:G3000`]
+    ranges: [`'${OTS_TAB}'!A2:H1000`, `'${OTS_ANTERIORES_TAB}'!A2:H3000`, `'${HISTORICO_COLD_TAB}'!A2:H5000`]
   });
 
   const valRanges = batchRes.data.valueRanges || [];
   const otsRows = (valRanges[0] && valRanges[0].values) || [];
   const antRows = (valRanges[1] && valRanges[1].values) || [];
+  const coldRows = (valRanges[2] && valRanges[2].values) || [];
+
+  const now = Date.now();
+  const cutoffScore = now - SIX_MONTHS_MS;
 
   // 2. Agrupar filas de 'ots' por DOMINIO normalizado
   const byDomain = new Map();
@@ -319,22 +355,21 @@ async function migrateAndDeduplicateOts(sheetsClient, spreadsheetId) {
       activeOtsByDomain.get(domain).add(topRecord.cleanOt);
     }
 
-    // Poka-Yoke: Las demás filas del dominio en 'ots' solo van a 'ots_anteriores'
-    // si representan una OT DISTINTA a la que quedó vigente.
-    // Si es una recarga de la MISMA OT, se descarta para evitar duplicados.
+    // Poka-Yoke: Las demás filas del dominio en 'ots' van a histórico solo si representan una OT DISTINTA
     for (let i = 1; i < records.length; i++) {
       const rec = records[i];
       if (rec.cleanOt && rec.cleanOt !== topRecord.cleanOt) {
         trueHistoricalCandidates.push(rec);
       } else {
-        console.log(`🧹 [otsManager] Descartada recarga redundante de OT ${rec.cleanOt} para ${domain}. No se pasa a anteriores.`);
+        console.log(`🧹 [otsManager] Descartada recarga redundante de OT ${rec.cleanOt} para ${domain}.`);
       }
     }
   });
 
-  // 3. Procesar y depurar 'ots_anteriores' (Garantizar que no haya duplicados)
+  // 3. Procesar 'ots_anteriores' y clasificar hacia <= 6 meses o > 6 meses
   const seenHistoricalKeys = new Set();
-  const cleanedAntRows = [];
+  const within6MonthsRows = [];
+  const candidateColdFromAnt = [];
 
   // A. Depurar las filas ya existentes en 'ots_anteriores'
   antRows.forEach(r => {
@@ -354,11 +389,16 @@ async function migrateAndDeduplicateOts(sheetsClient, spreadsheetId) {
     const uniqueKey = `${cleanDom}__${cleanOt}`;
     if (!seenHistoricalKeys.has(uniqueKey)) {
       seenHistoricalKeys.add(uniqueKey);
-      cleanedAntRows.push(r);
+      const score = parseDateScore(String(r[1] || ''), cleanOt);
+      if (score > 0 && score < cutoffScore) {
+        candidateColdFromAnt.push(r);
+      } else {
+        within6MonthsRows.push(r);
+      }
     }
   });
 
-  // B. Agregar las OTs verdaderamente anteriores provenientes de 'ots'
+  // B. Clasificar las OTs verdaderamente anteriores provenientes de 'ots'
   let newMovedCount = 0;
   trueHistoricalCandidates.forEach(cand => {
     const rawDom = String(cand.originalRow[3] || '').trim();
@@ -367,57 +407,72 @@ async function migrateAndDeduplicateOts(sheetsClient, spreadsheetId) {
 
     if (!seenHistoricalKeys.has(uniqueKey)) {
       seenHistoricalKeys.add(uniqueKey);
-      cleanedAntRows.push(cand.originalRow);
+      if (cand.score > 0 && cand.score < cutoffScore) {
+        candidateColdFromAnt.push(cand.originalRow);
+      } else {
+        within6MonthsRows.push(cand.originalRow);
+      }
       newMovedCount++;
     }
   });
 
-  // 3.5. POLÍTICA DE RETENCIÓN: ÚLTIMOS 6 MESES EN 'ots_anteriores'
-  // Las OTs con antigüedad mayor a 6 meses se purgan de Google Sheets y se archivan localmente
-  const now = Date.now();
-  const cutoffScore = now - SIX_MONTHS_MS;
-  const within6MonthsRows = [];
-  const olderThan6MonthsRows = [];
+  // C. Procesar 'HISTORICO_COLD' (Misma estructura de 8 columnas A:H)
+  const seenColdKeys = new Set();
+  const finalColdRows = [];
 
-  cleanedAntRows.forEach(row => {
-    const fecha = String(row[1] || '').trim();
-    const ot = String(row[2] || '').trim();
-    const score = parseDateScore(fecha, ot);
+  coldRows.forEach(r => {
+    const rawDom = String(r[3] || '').trim();
+    const cleanDom = normalizePlate(rawDom) || rawDom.toUpperCase();
+    const rawOt = String(r[2] || '').trim();
+    const cleanOt = normalizeOt(rawOt);
+    if (!cleanDom || !cleanOt) return;
 
-    // Si tiene fecha válida y es menor al corte de 6 meses: enviar a cold archive
-    if (score > 0 && score < cutoffScore) {
-      olderThan6MonthsRows.push(row);
-    } else {
-      within6MonthsRows.push(row);
+    const uKey = `${cleanDom}__${cleanOt}`;
+    if (!seenColdKeys.has(uKey)) {
+      seenColdKeys.add(uKey);
+      finalColdRows.push(r);
     }
   });
 
-  let archivedColdCount = 0;
-  if (olderThan6MonthsRows.length > 0) {
-    archiveColdOts(olderThan6MonthsRows);
-    archivedColdCount = olderThan6MonthsRows.length;
-    console.log(`❄️ [otsManager Wipe 6M] ${archivedColdCount} OTs de más de 6 meses purgadas de '${OTS_ANTERIORES_TAB}' y archivadas en cold storage.`);
+  let newColdMovedCount = 0;
+  candidateColdFromAnt.forEach(r => {
+    const rawDom = String(r[3] || '').trim();
+    const cleanDom = normalizePlate(rawDom) || rawDom.toUpperCase();
+    const rawOt = String(r[2] || '').trim();
+    const cleanOt = normalizeOt(rawOt);
+    if (!cleanDom || !cleanOt) return;
+
+    const uKey = `${cleanDom}__${cleanOt}`;
+    if (!seenColdKeys.has(uKey)) {
+      seenColdKeys.add(uKey);
+      finalColdRows.push(r);
+      newColdMovedCount++;
+    }
+  });
+
+  // Sincronizar respaldo local acumulativo
+  if (finalColdRows.length > 0) {
+    archiveColdOts(finalColdRows);
   }
 
-  // En la hoja Google Sheets 'ots_anteriores' quedan EXCLUSIVAMENTE las <= 6 meses
   const finalAntRows = within6MonthsRows;
 
-  console.log(`📋 [otsManager] Estado: ${rowsToKeepInOts.length} OTs vigentes en '${OTS_TAB}', ${finalAntRows.length} OTs históricas (≤ 6 meses) en '${OTS_ANTERIORES_TAB}'.`);
+  console.log(`📋 [otsManager] Estado: ${rowsToKeepInOts.length} vigentes en '${OTS_TAB}', ${finalAntRows.length} semestrales en '${OTS_ANTERIORES_TAB}', ${finalColdRows.length} en '${HISTORICO_COLD_TAB}'.`);
 
   // 4. Escritura en Google Sheets solo si hay cambios reales
 
-  // ¿Cambió 'ots'? (duplicados eliminados o recargas limpiadas)
+  // ¿Cambió 'ots'?
   const otsChanged = otsRows.length !== rowsToKeepInOts.length;
   if (otsChanged) {
     await sheetsClient.spreadsheets.values.clear({
       spreadsheetId,
-      range: `'${OTS_TAB}'!A2:G1000`
+      range: `'${OTS_TAB}'!A2:H1000`
     });
 
     if (rowsToKeepInOts.length > 0) {
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${OTS_TAB}'!A2:G${rowsToKeepInOts.length + 1}`,
+        range: `'${OTS_TAB}'!A2:H${rowsToKeepInOts.length + 1}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: rowsToKeepInOts }
       });
@@ -425,22 +480,41 @@ async function migrateAndDeduplicateOts(sheetsClient, spreadsheetId) {
     }
   }
 
-  // ¿Cambió 'ots_anteriores'? (se agregaron nuevas filas, se eliminaron duplicados o se purgaron > 6 meses)
-  const antChanged = antRows.length !== finalAntRows.length || newMovedCount > 0 || archivedColdCount > 0;
+  // ¿Cambió 'ots_anteriores'?
+  const antChanged = antRows.length !== finalAntRows.length || newMovedCount > 0 || candidateColdFromAnt.length > 0;
   if (antChanged) {
     await sheetsClient.spreadsheets.values.clear({
       spreadsheetId,
-      range: `'${OTS_ANTERIORES_TAB}'!A2:G3000`
+      range: `'${OTS_ANTERIORES_TAB}'!A2:H3000`
     });
 
     if (finalAntRows.length > 0) {
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${OTS_ANTERIORES_TAB}'!A2:G${finalAntRows.length + 1}`,
+        range: `'${OTS_ANTERIORES_TAB}'!A2:H${finalAntRows.length + 1}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: finalAntRows }
       });
-      console.log(`📦 [otsManager] '${OTS_ANTERIORES_TAB}' depurada (≤ 6 meses): ${finalAntRows.length} registros únicos.`);
+      console.log(`📦 [otsManager] '${OTS_ANTERIORES_TAB}' depurada (≤ 6 meses): ${finalAntRows.length} registros.`);
+    }
+  }
+
+  // ¿Cambió 'HISTORICO_COLD'?
+  const coldChanged = coldRows.length !== finalColdRows.length || newColdMovedCount > 0;
+  if (coldChanged) {
+    await sheetsClient.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `'${HISTORICO_COLD_TAB}'!A2:H5000`
+    });
+
+    if (finalColdRows.length > 0) {
+      await sheetsClient.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'${HISTORICO_COLD_TAB}'!A2:H${finalColdRows.length + 1}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: finalColdRows }
+      });
+      console.log(`❄️ [otsManager] '${HISTORICO_COLD_TAB}' sincronizada (> 6 meses): ${finalColdRows.length} registros.`);
     }
   }
 
@@ -450,10 +524,12 @@ async function migrateAndDeduplicateOts(sheetsClient, spreadsheetId) {
     success: true,
     keptCount: rowsToKeepInOts.length,
     antCount: finalAntRows.length,
+    coldCount: finalColdRows.length,
     newMovedCount,
-    archivedColdCount,
+    newColdMovedCount,
     otsChanged,
-    antChanged
+    antChanged,
+    coldChanged
   };
 }
 
@@ -474,7 +550,8 @@ async function processNewOtRecord(sheetsClient, spreadsheetId, newOtData) {
     dominio = '',
     sectorTareas = '',
     cierreRespaldo = '',
-    payload = ''
+    payload = '',
+    confirmacion = ''
   } = newOtData;
 
   const cleanDom = normalizePlate(dominio) || String(dominio).trim().toUpperCase();
@@ -498,15 +575,18 @@ async function processNewOtRecord(sheetsClient, spreadsheetId, newOtData) {
     cleanDom,
     sectorTareas || '',
     cierreRespaldo || '',
-    typeof payload === 'object' ? JSON.stringify(payload) : (payload || '')
+    typeof payload === 'object' ? JSON.stringify(payload) : (payload || ''),
+    confirmacion || ''
   ];
 
+  const now = Date.now();
+  const cutoffScore = now - SIX_MONTHS_MS;
   const newScore = parseDateScore(finalFecha, cleanOt);
 
-  // Leer 'ots' actual
+  // Leer 'ots' actual (8 columnas)
   const otsRes = await sheetsClient.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${OTS_TAB}'!A2:G1000`
+    range: `'${OTS_TAB}'!A2:H1000`
   });
   const rows = otsRes.data.values || [];
 
@@ -527,10 +607,10 @@ async function processNewOtRecord(sheetsClient, spreadsheetId, newOtData) {
     const existingOt = normalizeOt(existingRow[2]);
 
     if (existingOt === cleanOt) {
-      // Es la misma OT: actualizar la fila en 'ots' por si cambiaron tareas o payload
+      // Es la misma OT: actualizar la fila en 'ots' por si cambiaron tareas, payload o confirmación
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${OTS_TAB}'!A${existingIndex}:G${existingIndex}`,
+        range: `'${OTS_TAB}'!A${existingIndex}:H${existingIndex}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [formattedRow] }
       });
@@ -540,10 +620,11 @@ async function processNewOtRecord(sheetsClient, spreadsheetId, newOtData) {
     }
 
     if (newScore >= existingScore) {
-      // La nueva es más actual: trasladar la anterior a 'ots_anteriores' y reemplazar en 'ots'
+      // La nueva es más actual: trasladar la anterior a 'ots_anteriores' (o HISTORICO_COLD si > 6M)
+      const targetHistoricalTab = (existingScore > 0 && existingScore < cutoffScore) ? HISTORICO_COLD_TAB : OTS_ANTERIORES_TAB;
       const antGetRes = await sheetsClient.spreadsheets.values.get({
         spreadsheetId,
-        range: `'${OTS_ANTERIORES_TAB}'!A2:D2000`
+        range: `'${targetHistoricalTab}'!A2:D3000`
       });
       const antRows = antGetRes.data.values || [];
       const alreadyInAnt = antRows.some(r => {
@@ -556,18 +637,16 @@ async function processNewOtRecord(sheetsClient, spreadsheetId, newOtData) {
         const nextAntRow = antRows.length + 2;
         await sheetsClient.spreadsheets.values.update({
           spreadsheetId,
-          range: `'${OTS_ANTERIORES_TAB}'!A${nextAntRow}:G${nextAntRow}`,
+          range: `'${targetHistoricalTab}'!A${nextAntRow}:H${nextAntRow}`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: [existingRow] }
         });
-        console.log(`⚡ [otsManager] OT anterior ${existingOt} para ${cleanDom} movida a ${OTS_ANTERIORES_TAB} (fila ${nextAntRow}).`);
-      } else {
-        console.log(`ℹ️ [otsManager] OT anterior ${existingOt} para ${cleanDom} ya existía en ${OTS_ANTERIORES_TAB}. No se duplica.`);
+        console.log(`⚡ [otsManager] OT anterior ${existingOt} para ${cleanDom} movida a ${targetHistoricalTab} (fila ${nextAntRow}).`);
       }
 
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${OTS_TAB}'!A${existingIndex}:G${existingIndex}`,
+        range: `'${OTS_TAB}'!A${existingIndex}:H${existingIndex}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [formattedRow] }
       });
@@ -582,10 +661,11 @@ async function processNewOtRecord(sheetsClient, spreadsheetId, newOtData) {
         archivedOt: existingOt
       };
     } else {
-      // La nueva es cronológicamente más vieja que la que está en 'ots': entra directo a 'ots_anteriores'
+      // La nueva es más vieja que la vigente: entra a 'ots_anteriores' o 'HISTORICO_COLD'
+      const targetHistoricalTab = (newScore > 0 && newScore < cutoffScore) ? HISTORICO_COLD_TAB : OTS_ANTERIORES_TAB;
       const antGetRes = await sheetsClient.spreadsheets.values.get({
         spreadsheetId,
-        range: `'${OTS_ANTERIORES_TAB}'!A2:D2000`
+        range: `'${targetHistoricalTab}'!A2:D3000`
       });
       const antRows = antGetRes.data.values || [];
       const alreadyInAnt = antRows.some(r => {
@@ -598,13 +678,11 @@ async function processNewOtRecord(sheetsClient, spreadsheetId, newOtData) {
         const nextAntRow = antRows.length + 2;
         await sheetsClient.spreadsheets.values.update({
           spreadsheetId,
-          range: `'${OTS_ANTERIORES_TAB}'!A${nextAntRow}:G${nextAntRow}`,
+          range: `'${targetHistoricalTab}'!A${nextAntRow}:H${nextAntRow}`,
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: [formattedRow] }
         });
-        console.log(`📁 [otsManager] OT ${cleanOt} ingresada a ${OTS_ANTERIORES_TAB} (fila ${nextAntRow}) por ser anterior a la vigente (${existingOt}).`);
-      } else {
-        console.log(`ℹ️ [otsManager] OT ${cleanOt} para ${cleanDom} ya existía en ${OTS_ANTERIORES_TAB}. No se duplica.`);
+        console.log(`📁 [otsManager] OT ${cleanOt} ingresada a ${targetHistoricalTab} (fila ${nextAntRow}).`);
       }
       return { success: true, action: 'ARCHIVED_OLDER', dominio: cleanDom, ot: cleanOt };
     }
@@ -613,7 +691,7 @@ async function processNewOtRecord(sheetsClient, spreadsheetId, newOtData) {
     const nextOtsRow = rows.length + 2;
     await sheetsClient.spreadsheets.values.update({
       spreadsheetId,
-      range: `'${OTS_TAB}'!A${nextOtsRow}:G${nextOtsRow}`,
+      range: `'${OTS_TAB}'!A${nextOtsRow}:H${nextOtsRow}`,
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: [formattedRow] }
     });
@@ -651,7 +729,7 @@ async function getCurrentOtsMap(sheetsClient, spreadsheetId, force = false) {
   try {
     const res = await sheetsClient.spreadsheets.values.batchGet({
       spreadsheetId,
-      ranges: [`'${OTS_TAB}'!A2:G1000`, `'${OTS_ANTERIORES_TAB}'!A2:G2000`]
+      ranges: [`'${OTS_TAB}'!A2:H1000`, `'${OTS_ANTERIORES_TAB}'!A2:H2000`]
     });
 
     const valRanges = res.data.valueRanges || [];
@@ -677,7 +755,7 @@ async function getCurrentOtsMap(sheetsClient, spreadsheetId, force = false) {
       await migrateAndDeduplicateOts(sheetsClient, spreadsheetId);
       const freshRes = await sheetsClient.spreadsheets.values.batchGet({
         spreadsheetId,
-        ranges: [`'${OTS_TAB}'!A2:G1000`, `'${OTS_ANTERIORES_TAB}'!A2:G2000`]
+        ranges: [`'${OTS_TAB}'!A2:H1000`, `'${OTS_ANTERIORES_TAB}'!A2:H2000`]
       });
       const freshRanges = freshRes.data.valueRanges || [];
       rows = (freshRanges[0] && freshRanges[0].values) || [];
@@ -697,6 +775,7 @@ async function getCurrentOtsMap(sheetsClient, spreadsheetId, force = false) {
       const sectorTareas = String(r[4] || '').trim();
       const cierreRespaldo = String(r[5] || '').trim();
       const payload = r[6] || '';
+      const confirmacion = String(r[7] || '').trim();
 
       const item = {
         key,
@@ -706,7 +785,8 @@ async function getCurrentOtsMap(sheetsClient, spreadsheetId, force = false) {
         dominio: cleanDom,
         sectorTareas,
         cierreRespaldo,
-        payload
+        payload,
+        confirmacion
       };
 
       if (cleanDom) byPlate.set(cleanDom, item);
@@ -728,6 +808,7 @@ async function getCurrentOtsMap(sheetsClient, spreadsheetId, force = false) {
       const sectorTareas = String(r[4] || '').trim();
       const cierreRespaldo = String(r[5] || '').trim();
       const payload = r[6] || '';
+      const confirmacion = String(r[7] || '').trim();
       const score = parseDateScore(fecha, rawOt);
 
       if (!cleanDom || !cleanOt) return;
@@ -741,6 +822,7 @@ async function getCurrentOtsMap(sheetsClient, spreadsheetId, force = false) {
         sectorTareas,
         cierreRespaldo,
         payload,
+        confirmacion,
         score
       };
 
@@ -781,6 +863,42 @@ async function getOtsAnterioresForPlate(sheetsClient, spreadsheetId, plate) {
  */
 async function wipeAndArchiveOlderThan6Months(sheetsClient, spreadsheetId) {
   return await migrateAndDeduplicateOts(sheetsClient, spreadsheetId);
+}
+
+/**
+ * Descarga y exporta el contenido completo de 'HISTORICO_COLD' en CSV.
+ */
+async function downloadColdStorageOts(sheetsClient, spreadsheetId) {
+  await ensureOtsStructure(sheetsClient, spreadsheetId);
+  const res = await sheetsClient.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'${HISTORICO_COLD_TAB}'!A1:H`
+  });
+  const rows = res.data.values || [OTS_HEADERS];
+  const csvContent = '\ufeff' + rows.map(r => r.map(cell => `"${String(cell || '').replace(/"/g, '""').replace(/\r?\n/g, ' ')}"`).join(';')).join('\n');
+  return { rows, csvContent, totalRows: Math.max(0, rows.length - 1) };
+}
+
+/**
+ * Limpia y vacía las filas de datos de 'HISTORICO_COLD', preservando la fila de encabezados A1:H1.
+ * Realiza antes un respaldo en el archivo local de resguardo.
+ */
+async function clearColdStorageTab(sheetsClient, spreadsheetId) {
+  await ensureOtsStructure(sheetsClient, spreadsheetId);
+  const res = await sheetsClient.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'${HISTORICO_COLD_TAB}'!A2:H`
+  });
+  const rows = res.data.values || [];
+  if (rows.length > 0) {
+    archiveColdOts(rows);
+  }
+  await sheetsClient.spreadsheets.values.clear({
+    spreadsheetId,
+    range: `'${HISTORICO_COLD_TAB}'!A2:H`
+  });
+  console.log(`🧹 [otsManager] Pestaña '${HISTORICO_COLD_TAB}' vaciada exitosamente (${rows.length} filas archivadas y limpiadas).`);
+  return { success: true, clearedCount: rows.length };
 }
 
 /**
@@ -1024,15 +1142,12 @@ async function findUnitOrOt({ sheetsClient, spreadsheetId, query, type }) {
       }
     }
 
-    // Resolver Semi OT: 1. DB_OT_LIST (Principal) -> 2. ots (Fallback) -> 3. Regla negocio (+1)
+    // Resolver Semi OT: 1. DB_OT_LIST (Principal) -> 2. ots (Fallback)
     if (!semiOt) {
       if (dbSemiOt) {
         semiOt = dbSemiOt;
       } else if (sPlateClean && otsData.byPlate.has(sPlateClean)) {
         semiOt = otsData.byPlate.get(sPlateClean).ot;
-      } else if (tractorOt && matchedPair.semi) {
-        const tNum = parseInt(tractorOt, 10);
-        semiOt = !isNaN(tNum) ? String(tNum + 1) : tractorOt;
       }
     }
 
@@ -1105,12 +1220,8 @@ async function getFleetSearchCatalog(sheetsClient, spreadsheetId) {
     // Principal: 'DB_OT_LIST' Col B, Fallback: 'ots' Col C
     const tOt = dbBOt || (tOtObj ? tOtObj.ot : '');
 
-    // Principal: 'DB_OT_LIST' Col D, Fallback: 'ots' Col C o Regla de Negocio (+1)
-    let sOt = dbDOt || (sOtObj ? sOtObj.ot : '');
-    if (!sOt && s && tOt) {
-      const tNum = parseInt(tOt, 10);
-      sOt = !isNaN(tNum) ? String(tNum + 1) : tOt;
-    }
+    // Principal: 'DB_OT_LIST' Col D, Fallback: 'ots' Col C
+    const sOt = dbDOt || (sOtObj ? sOtObj.ot : '');
 
     if (tOt) { tractorOts.add(tOt); allOts.add(tOt); }
     if (sOt) { semiOts.add(sOt); allOts.add(sOt); }
@@ -1201,6 +1312,7 @@ function startContinuousOtsWatcher({ sheetsClient, spreadsheetId, io }) {
 module.exports = {
   OTS_TAB,
   OTS_ANTERIORES_TAB,
+  HISTORICO_COLD_TAB,
   DB_OT_LIST_TAB,
   OTS_HEADERS,
   ARCHIVE_DIR,
@@ -1214,6 +1326,8 @@ module.exports = {
   archiveColdOts,
   migrateAndDeduplicateOts,
   wipeAndArchiveOlderThan6Months,
+  downloadColdStorageOts,
+  clearColdStorageTab,
   distribuirOtsEnCarga,
   processNewOtRecord,
   getCurrentOtsMap,

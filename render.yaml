@@ -7,10 +7,25 @@ services:
     startCommand: npm start
     envVars:
       - key: SPREADSHEET_ID
-        value: 1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc
-      - key: SOURCE_SPREADSHEET_ID
-        value: 1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk
+        value: 17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ
+      - key: MES_MOVIMIENTOS_ID
+        value: 1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8
       - key: OT_SYNC_INTERVAL_MINUTES
         value: 2
       - key: NODE_ENV
         value: production
+
+  - type: web
+    name: ot-extractor-service
+    env: python
+    region: oregon
+    rootDir: extractor
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SPREADSHEET_ID
+        value: 17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ
+      - key: GOOGLE_CREDENTIALS
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.0
