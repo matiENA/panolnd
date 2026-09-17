@@ -119,8 +119,28 @@ io.use((socket, next) => {
   return next();
 });
 
-// === 1. CREDENCIALES CENTRALIZADAS CON GOOGLE SHEETS ===
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ';
+// === 1. CREDENCIALES CENTRALIZADAS CON GOOGLE SHEETS Y AISLAMIENTO DE ENTORNOS ===
+const PROD_SPREADSHEET_ID = '1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc';   // Database PRUEBAS (Render Cloud / Producción)
+const LOCAL_SPREADSHEET_ID = '17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ';  // Database PRUEBAS LOCAL (Localhost / Desarrollo)
+
+// Determinación robusta del entorno (Render inyecta RENDER=true y NODE_ENV=production)
+const isProdEnvironment = (process.env.NODE_ENV === 'production') || 
+                          (process.env.RENDER === 'true') || 
+                          (process.env.RENDER === '1') ||
+                          (process.env.SPREADSHEET_ID === PROD_SPREADSHEET_ID);
+
+// Fallback por defecto según entorno
+let targetSpreadsheetId = process.env.SPREADSHEET_ID || (isProdEnvironment ? PROD_SPREADSHEET_ID : LOCAL_SPREADSHEET_ID);
+
+// SALVAGUARDA POKA-YOKE:
+// En producción (Render Cloud), NUNCA permitir que SPREADSHEET_ID apunte a la base LOCAL (17yFPB...).
+// Si por desconfiguración de variables en Render se recibe el ID local, se redirige inmediatamente a PRODUCCIÓN.
+if (isProdEnvironment && targetSpreadsheetId === LOCAL_SPREADSHEET_ID) {
+  console.warn(`🚨 [POKA-YOKE ENTORNO] Proceso en PRODUCCIÓN detectó SPREADSHEET_ID apuntando a LOCAL (${LOCAL_SPREADSHEET_ID}). Redirigiendo forzosamente a PRODUCCIÓN (${PROD_SPREADSHEET_ID}).`);
+  targetSpreadsheetId = PROD_SPREADSHEET_ID;
+}
+
+const SPREADSHEET_ID = targetSpreadsheetId;
 const SOURCE_SPREADSHEET_ID = process.env.SOURCE_SPREADSHEET_ID || '1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk';
 const MES_MOVIMIENTOS_ID = process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8';
 const OT_SYNC_INTERVAL_MINUTES = parseInt(process.env.OT_SYNC_INTERVAL_MINUTES || '0', 10);
@@ -631,11 +651,11 @@ app.get('/api/auth/status', (req, res) => {
 
 // Información del entorno actual (Localhost vs Render)
 app.get('/api/env-info', (req, res) => {
-  const isProd = (process.env.NODE_ENV === 'production') || (SPREADSHEET_ID === '1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc');
   res.json({
-    environment: isProd ? 'production' : 'development',
-    isProduction: isProd,
-    spreadsheetTitle: isProd ? 'Database PRUEBAS' : 'Database PRUEBAS LOCAL',
+    environment: isProdEnvironment ? 'production' : 'development',
+    isProduction: isProdEnvironment,
+    spreadsheetTitle: isProdEnvironment ? 'Database PRUEBAS' : 'Database PRUEBAS LOCAL',
+    spreadsheetId: SPREADSHEET_ID,
     spreadsheetIdShort: SPREADSHEET_ID.slice(0, 6) + '...' + SPREADSHEET_ID.slice(-4),
     serverTime: new Date().toISOString()
   });
@@ -843,13 +863,15 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
           requestBody: { values: rowsToAppend }
         });
 
+        console.log(`🛒 [DB_TRANSACTIONS] Pedido ${reqId} guardado (${rowsToAppend.length} filas) en ${isProdEnvironment ? '🔴 PRODUCCIÓN' : '🟢 LOCAL'} | Planilla: ${SPREADSHEET_ID}`);
+
         (items || []).forEach(itemObj => {
           updateStockByName(itemObj.item, -Math.abs(Number(itemObj.qty) || 0));
         });
       }
       await syncDataFromSheets();
       io.emit('orders_sync', ordersCache);
-      result = { success: true, reqId: reqId };
+      result = { success: true, reqId: reqId, environment: isProdEnvironment ? 'production' : 'development' };
     }
     else if (action === 'updatePendingItemQty') {
       const reqId = String(args[0] || '').trim();
@@ -1718,6 +1740,13 @@ app.get('/ping', (req, res) => res.send('PONG'));
 // === 5. WEBSOCKETS EN TIEMPO REAL ===
 io.on('connection', (socket) => {
   socket.emit('orders_sync', ordersCache);
+  socket.emit('env_info', {
+    environment: isProdEnvironment ? 'production' : 'development',
+    isProduction: isProdEnvironment,
+    spreadsheetTitle: isProdEnvironment ? 'Database PRUEBAS' : 'Database PRUEBAS LOCAL',
+    spreadsheetIdShort: SPREADSHEET_ID.slice(0, 6) + '...' + SPREADSHEET_ID.slice(-4),
+    serverTime: new Date().toISOString()
+  });
 });
 
 // === 6. PROGRAMACIÓN DE TAREAS Y ARRANQUE DEL SERVIDOR ===
@@ -1757,11 +1786,10 @@ function startServer(port) {
   });
 
   server.once('listening', async () => {
-    const isProd = (process.env.NODE_ENV === 'production') || (SPREADSHEET_ID === '1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc');
     console.log('================================================================');
     console.log(`🚀 Servidor Monolito Pañol activo en puerto ${port}`);
-    console.log(`🌍 Entorno:          ${isProd ? '🔴 PRODUCCIÓN (Render Cloud)' : '🟢 LOCAL / DESARROLLO (VS Code / localhost)'}`);
-    console.log(`📊 Spreadsheet Base: ${isProd ? 'Database PRUEBAS' : 'Database PRUEBAS LOCAL'}`);
+    console.log(`🌍 Entorno:          ${isProdEnvironment ? '🔴 PRODUCCIÓN (Render Cloud)' : '🟢 LOCAL / DESARROLLO (VS Code / localhost)'}`);
+    console.log(`📊 Spreadsheet Base: ${isProdEnvironment ? 'Database PRUEBAS' : 'Database PRUEBAS LOCAL'}`);
     console.log(`🆔 ID Planilla:      ${SPREADSHEET_ID}`);
     console.log(`🔗 URL Base:         http://localhost:${port}`);
     console.log('================================================================');

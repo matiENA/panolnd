@@ -61,7 +61,12 @@ def get_target_spreadsheet_ids() -> List[str]:
     # Sincronización dual activa por defecto para paridad total Local vs Render
     return [LOCAL_SPREADSHEET_ID, PROD_SPREADSHEET_ID]
 
-SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", LOCAL_SPREADSHEET_ID)
+is_production = (os.environ.get("NODE_ENV") == "production") or bool(os.environ.get("RENDER")) or (os.environ.get("ENV") == "production")
+default_spreadsheet_id = PROD_SPREADSHEET_ID if is_production else LOCAL_SPREADSHEET_ID
+configured_id = os.environ.get("SPREADSHEET_ID", default_spreadsheet_id)
+if is_production and configured_id == LOCAL_SPREADSHEET_ID:
+    configured_id = PROD_SPREADSHEET_ID
+SPREADSHEET_ID = configured_id
 TAB_NAME = "ots"
 SERVICE_ACCOUNT_EMAIL = "firebase-adminsdk-fbsvc@ute-logistica.iam.gserviceaccount.com"
 

@@ -37,3 +37,5 @@ data/*.csv
 cargadas_tracker.json
 parsed_cache.json
 registro_ots.json
+
+/deploy 9171214

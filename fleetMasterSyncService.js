@@ -18,7 +18,16 @@ const { extractPlates } = require('./plateNormalizer');
 
 const ID_SHEET_MOVIMIENTOS_DEFAULT = process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8';
 const ID_RESPUESTAS_FORM4_DEFAULT = process.env.SOURCE_SPREADSHEET_ID || '1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk';
-const ID_TARGET_DEFAULT = process.env.SPREADSHEET_ID || '17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ';
+
+const PROD_SPREADSHEET_ID = '1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc';
+const LOCAL_SPREADSHEET_ID = '17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ';
+const isProdEnvironment = (process.env.NODE_ENV === 'production') || !!process.env.RENDER || (process.env.SPREADSHEET_ID === PROD_SPREADSHEET_ID);
+
+let defaultTarget = process.env.SPREADSHEET_ID || (isProdEnvironment ? PROD_SPREADSHEET_ID : LOCAL_SPREADSHEET_ID);
+if (isProdEnvironment && defaultTarget === LOCAL_SPREADSHEET_ID) {
+  defaultTarget = PROD_SPREADSHEET_ID;
+}
+const ID_TARGET_DEFAULT = defaultTarget;
 
 const mesesAbrev = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 const mesesLargo = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];

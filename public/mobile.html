@@ -395,6 +395,9 @@
     <div class="container">
       
       <div id="login-section" class="card fade-in">
+        <div id="loginEnvBadge" style="display:flex; align-items:center; justify-content:center; margin-bottom:12px; padding:6px 10px; border-radius:6px; font-size:0.75rem; font-weight:700; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">
+          <span id="loginEnvTitle">Conectando...</span>
+        </div>
         <h3 style="margin-top:0; color:var(--dark)">Entrar</h3>
         <div class="input-group">
           <label>Ingresa tu N° de Operario</label>
@@ -408,6 +411,11 @@
 
       <div id="app-section" class="hidden fade-in">
         
+        <div id="mobileEnvBadge" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; padding:6px 12px; border-radius:6px; font-size:0.75rem; font-weight:700; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">
+          <span id="envBadgeTitle">Conectando...</span>
+          <span id="envBadgeHost" style="font-size:0.68rem; opacity:0.8;"></span>
+        </div>
+
         <div class="user-header">
           <div class="user-info">
             <div>OPERARIO CONECTADO</div>
@@ -610,7 +618,36 @@
       window.onload = function() {
         const savedOp = localStorage.getItem('mechanic_op');
         if (savedOp) performLogin(savedOp);
+        if (window.__ENV_INFO__) updateEnvUI(window.__ENV_INFO__);
       };
+
+      window.onEnvInfoReceived = function(info) {
+        updateEnvUI(info);
+      };
+
+      function updateEnvUI(info) {
+        if (!info) return;
+        const isProd = info.isProduction;
+        const bg = isProd ? '#fef2f2' : '#f0fdf4';
+        const color = isProd ? '#b91c1c' : '#15803d';
+        const border = isProd ? '1px solid #fecaca' : '1px solid #bbf7d0';
+        const label = isProd ? '🔴 PRODUCCIÓN (DB CENTRAL)' : '🟢 MODO PRUEBAS LOCAL (DB LOCAL)';
+        
+        ['mobileEnvBadge', 'loginEnvBadge'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.style.background = bg;
+            el.style.color = color;
+            el.style.border = border;
+          }
+        });
+        const t1 = document.getElementById('envBadgeTitle');
+        if (t1) t1.textContent = label;
+        const t2 = document.getElementById('loginEnvTitle');
+        if (t2) t2.textContent = label;
+        const h1 = document.getElementById('envBadgeHost');
+        if (h1) h1.textContent = info.spreadsheetIdShort || '';
+      }
 
       // ===========================================
       // 1. MESSAGING / RECEIVER LOGIC

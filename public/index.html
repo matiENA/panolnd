@@ -1957,6 +1957,10 @@
           <span class="tag">OPERARIO CONECTADO</span>
           <span class="name" id="display-name">---</span>
         </div>
+        <div id="desktopEnvBadge" style="display:flex; align-items:center; gap:6px; padding:4px 10px; border-radius:6px; font-size:0.75rem; font-weight:700; background:#1e293b; color:#94a3b8; border:1px solid #334155;">
+          <span id="desktopEnvDot">●</span>
+          <span id="desktopEnvTitle">Conectando...</span>
+        </div>
       </div>
 
       <div class="header-actions">
@@ -2210,7 +2214,34 @@
       const urlOp = urlParams.get('op');
       const savedOp = urlOp || localStorage.getItem('mechanic_op') || '1';
       performLogin(savedOp);
+      if (window.__ENV_INFO__) updateDesktopEnvUI(window.__ENV_INFO__);
     };
+
+    window.onEnvInfoReceived = function(info) {
+      updateDesktopEnvUI(info);
+    };
+
+    function updateDesktopEnvUI(info) {
+      if (!info) return;
+      const isProd = info.isProduction;
+      const badge = document.getElementById('desktopEnvBadge');
+      const title = document.getElementById('desktopEnvTitle');
+      const dot = document.getElementById('desktopEnvDot');
+      if (!badge || !title) return;
+      if (isProd) {
+        badge.style.background = '#450a0a';
+        badge.style.color = '#f87171';
+        badge.style.border = '1px solid #7f1d1d';
+        if (dot) dot.style.color = '#ef4444';
+        title.textContent = 'PRODUCCIÓN (' + info.spreadsheetTitle + ')';
+      } else {
+        badge.style.background = '#052e16';
+        badge.style.color = '#4ade80';
+        badge.style.border = '1px solid #14532d';
+        if (dot) dot.style.color = '#22c55e';
+        title.textContent = 'LOCAL / PRUEBAS (' + info.spreadsheetTitle + ')';
+      }
+    }
 
     // ===========================================
     // FORMATO PATENTE ARGENTINA (AA 123 BB o AAA 123)

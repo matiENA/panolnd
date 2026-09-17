@@ -1113,8 +1113,12 @@
 
     <header>
       <div class="header-row-top">
-        <div class="header-brand">
+        <div class="header-brand" style="display:flex; align-items:center; gap:12px;">
           <h1>PAÑOL</h1>
+          <div id="panolEnvBadge" style="display:flex; align-items:center; gap:6px; padding:4px 10px; border-radius:6px; font-size:0.75rem; font-weight:700; background:#1e293b; color:#94a3b8; border:1px solid #334155;">
+            <span id="panolEnvDot">●</span>
+            <span id="panolEnvTitle">Conectando...</span>
+          </div>
         </div>
 
         <div class="top-nav">
@@ -1232,8 +1236,35 @@
         applyFilters();
       }
 
+      window.onEnvInfoReceived = function(info) {
+        updatePanolEnvUI(info);
+      };
+
+      function updatePanolEnvUI(info) {
+        if (!info) return;
+        const isProd = info.isProduction;
+        const badge = document.getElementById('panolEnvBadge');
+        const title = document.getElementById('panolEnvTitle');
+        const dot = document.getElementById('panolEnvDot');
+        if (!badge || !title) return;
+        if (isProd) {
+          badge.style.background = '#450a0a';
+          badge.style.color = '#f87171';
+          badge.style.border = '1px solid #7f1d1d';
+          if (dot) dot.style.color = '#ef4444';
+          title.textContent = 'PRODUCCIÓN (' + info.spreadsheetTitle + ')';
+        } else {
+          badge.style.background = '#052e16';
+          badge.style.color = '#4ade80';
+          badge.style.border = '1px solid #14532d';
+          if (dot) dot.style.color = '#22c55e';
+          title.textContent = 'LOCAL / PRUEBAS (' + info.spreadsheetTitle + ')';
+        }
+      }
+
       function initApp() {
         initCarouselEvents();
+        if (window.__ENV_INFO__) updatePanolEnvUI(window.__ENV_INFO__);
         google.script.run
           .withSuccessHandler(staff => {
             panolStaffList = staff || [];

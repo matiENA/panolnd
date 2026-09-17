@@ -28,8 +28,30 @@
           window.onDataReceived(orders);
         }
       });
+      socket.on('env_info', function(info) {
+        window.__ENV_INFO__ = info;
+        console.log(`🌍 [Pañol] Conectado a: ${info.environment === 'production' ? '🔴 PRODUCCIÓN' : '🟢 LOCAL / DESARROLLO'} (${info.spreadsheetTitle})`);
+        if (typeof window.onEnvInfoReceived === 'function') {
+          window.onEnvInfoReceived(info);
+        }
+      });
     } catch(e) {}
   }
+
+  // Auto-cargar info de entorno al arrancar para UI
+  try {
+    fetch((API_BASE || '') + '/api/env-info')
+      .then(r => r.ok ? r.json() : null)
+      .then(info => {
+        if (!info) return;
+        window.__ENV_INFO__ = info;
+        console.log(`🌍 [Pañol] Entorno actual: ${info.environment === 'production' ? '🔴 PRODUCCIÓN' : '🟢 LOCAL'} (${info.spreadsheetTitle})`);
+        if (typeof window.onEnvInfoReceived === 'function') {
+          window.onEnvInfoReceived(info);
+        }
+      })
+      .catch(() => {});
+  } catch(e) {}
 
   function createRunner() {
     let successCb = null;
