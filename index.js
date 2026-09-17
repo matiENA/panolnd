@@ -724,6 +724,49 @@ async function updateStockByName(itemName, deltaQty) {
   }
 }
 
+// Función para buscar operario en DB_STAFF soportando coincidencia exacta, IDs duplicados (ej. 190190 <-> 190, 106 <-> 106106) y nombres
+function findStaffMember(rows, opId) {
+  if (!rows || !rows.length || !opId) return null;
+  const cleanId = String(opId).trim();
+  
+  // 1. Coincidencia exacta por ID
+  let match = rows.find(r => String(r[0] || '').trim() === cleanId);
+  if (match) return match;
+  
+  // 2. Si el ID ingresado está repetido (ej. "190190" -> "190")
+  if (cleanId.length >= 4 && cleanId.length % 2 === 0) {
+    const half = cleanId.slice(0, cleanId.length / 2);
+    if (half === cleanId.slice(cleanId.length / 2)) {
+      match = rows.find(r => String(r[0] || '').trim() === half);
+      if (match) return match;
+    }
+  }
+  
+  // 3. Si el ID en la planilla está repetido (ej. planilla tiene "106106" y se ingresó "106")
+  match = rows.find(r => {
+    const rowId = String(r[0] || '').trim();
+    if (rowId.length >= 4 && rowId.length % 2 === 0) {
+      const half = rowId.slice(0, rowId.length / 2);
+      if (half === rowId.slice(rowId.length / 2) && half === cleanId) return true;
+    }
+    return false;
+  });
+  if (match) return match;
+
+  // 4. Coincidencia numérica (ej. "01" == "1")
+  const numId = parseInt(cleanId, 10);
+  if (!isNaN(numId)) {
+    match = rows.find(r => parseInt(String(r[0] || '').trim(), 10) === numId);
+    if (match) return match;
+  }
+
+  // 5. Coincidencia por nombre completo si se ingresó nombre
+  match = rows.find(r => String(r[1] || '').trim().toLowerCase() === cleanId.toLowerCase());
+  if (match) return match;
+
+  return null;
+}
+
 // === 4. RPC UNIVERSAL DISPATCHER (google.script.run Polyfill - Protegido por requireAuth) ===
 app.post('/api/rpc', requireAuth, async (req, res) => {
   const { action, args = [] } = req.body;
@@ -738,7 +781,12 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
         try {
           const sRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_STAFF!A1:L100' });
           const rows = sRes.data.values || [];
-          staffRow = rows.find(r => String(r[0] || '').trim() === opId);
+          staffRow = findStaffMember(rows, opId);
+          // Si no se encontró en la planilla actual y es distinta a la de producción, consultar también producción
+          if (!staffRow && SPREADSHEET_ID !== PROD_SPREADSHEET_ID) {
+            const sProdRes = await sheets.spreadsheets.values.get({ spreadsheetId: PROD_SPREADSHEET_ID, range: 'DB_STAFF!A1:L100' });
+            staffRow = findStaffMember(sProdRes.data.values || [], opId);
+          }
         } catch(e) {}
       }
       if (staffRow) {
@@ -750,8 +798,8 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
           result = { success: true, name: staffRow[1] || ('Operario ' + opId), role: staffRow[2] || 'MECANICO', boxes: boxes.length > 0 ? boxes : ['01', '02', '03'] };
         }
       } else if (isLocal) {
-        // En entorno local de pruebas: permitir cualquier número de operario
-        result = { success: true, name: 'Operario Local ' + (opId || 'Test'), role: 'MECANICO', boxes: ['01', '02', '03'] };
+        // En entorno local de pruebas: permitir cualquier número de operario sin agregar "Local"
+        result = { success: true, name: 'Operario ' + (opId || 'Test'), role: 'MECANICO', boxes: ['01', '02', '03'] };
       } else {
         result = { success: false, error: "Usuario no encontrado o sin acceso activo" };
       }
@@ -821,7 +869,29 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
     else if (action === 'submitBatchRequest' || action === 'createOrder') {
       const payload = args[0] || {};
       const opId = payload.opId || '';
-      const mechanicName = payload.mechanicName || payload.mechName || '';
+      const rawMechName = payload.mechanicName || payload.mechName || '';
+
+      // Poka-Yoke: Garantizar que NUNCA se guarde ni imprima "Operario Local", usar el mismo nombre real
+      let cleanMechName = String(rawMechName || '').trim();
+      cleanMechName = cleanMechName.replace(/Operario\s+Local\b/gi, 'Operario');
+
+      if (sheets && opId) {
+        try {
+          const sRes = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'DB_STAFF!A1:L100' });
+          const staffRows = sRes.data.values || [];
+          let staffMatch = findStaffMember(staffRows, opId);
+          if (!staffMatch && SPREADSHEET_ID !== PROD_SPREADSHEET_ID) {
+            const sProdRes = await sheets.spreadsheets.values.get({ spreadsheetId: PROD_SPREADSHEET_ID, range: 'DB_STAFF!A1:L100' });
+            staffMatch = findStaffMember(sProdRes.data.values || [], opId);
+          }
+          if (staffMatch && staffMatch[1]) {
+            const realName = String(staffMatch[1]).trim();
+            const boxMatch = cleanMechName.match(/\[Box\s*[^\]]+\]/i);
+            cleanMechName = boxMatch ? `${realName} ${boxMatch[0]}` : realName;
+          }
+        } catch(e) {}
+      }
+      const mechanicName = cleanMechName || ('Operario ' + opId);
       const otNumber = payload.otNumber || payload.ot || '';
       const unitId = payload.unitId || payload.unit || '';
       const items = payload.items || [];
