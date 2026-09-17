@@ -395,8 +395,8 @@
     <div class="container">
       
       <div id="login-section" class="card fade-in">
-        <div id="loginEnvBadge" style="display:flex; align-items:center; justify-content:center; margin-bottom:12px; padding:6px 10px; border-radius:6px; font-size:0.75rem; font-weight:700; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">
-          <span id="loginEnvTitle">Conectando...</span>
+        <div id="loginEnvBadge" style="display:none; align-items:center; justify-content:center; margin-bottom:12px; padding:6px 10px; border-radius:6px; font-size:0.75rem; font-weight:700; background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0;">
+          <span id="loginEnvTitle">🟢 MODO PRUEBAS LOCAL</span>
         </div>
         <h3 style="margin-top:0; color:var(--dark)">Entrar</h3>
         <div class="input-group">
@@ -411,8 +411,8 @@
 
       <div id="app-section" class="hidden fade-in">
         
-        <div id="mobileEnvBadge" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; padding:6px 12px; border-radius:6px; font-size:0.75rem; font-weight:700; background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;">
-          <span id="envBadgeTitle">Conectando...</span>
+        <div id="mobileEnvBadge" style="display:none; align-items:center; justify-content:space-between; margin-bottom:10px; padding:6px 12px; border-radius:6px; font-size:0.75rem; font-weight:700; background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0;">
+          <span id="envBadgeTitle">🟢 MODO PRUEBAS LOCAL</span>
           <span id="envBadgeHost" style="font-size:0.68rem; opacity:0.8;"></span>
         </div>
 
@@ -627,15 +627,25 @@
 
       function updateEnvUI(info) {
         if (!info) return;
-        const isProd = info.isProduction;
-        const bg = isProd ? '#fef2f2' : '#f0fdf4';
-        const color = isProd ? '#b91c1c' : '#15803d';
-        const border = isProd ? '1px solid #fecaca' : '1px solid #bbf7d0';
-        const label = isProd ? '🔴 PRODUCCIÓN (DB CENTRAL)' : '🟢 MODO PRUEBAS LOCAL (DB LOCAL)';
-        
+
+        // Si estamos en producción (Render Cloud), se oculta por completo el badge
+        if (info.isProduction) {
+          ['mobileEnvBadge', 'loginEnvBadge'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+          });
+          return;
+        }
+
+        const bg = '#f0fdf4';
+        const color = '#15803d';
+        const border = '1px solid #bbf7d0';
+        const label = '🟢 MODO PRUEBAS LOCAL (' + (info.spreadsheetTitle || 'DB LOCAL') + ')';
+
         ['mobileEnvBadge', 'loginEnvBadge'].forEach(id => {
           const el = document.getElementById(id);
           if (el) {
+            el.style.display = 'flex';
             el.style.background = bg;
             el.style.color = color;
             el.style.border = border;

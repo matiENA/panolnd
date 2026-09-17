@@ -1957,9 +1957,9 @@
           <span class="tag">OPERARIO CONECTADO</span>
           <span class="name" id="display-name">---</span>
         </div>
-        <div id="desktopEnvBadge" style="display:flex; align-items:center; gap:6px; padding:4px 10px; border-radius:6px; font-size:0.75rem; font-weight:700; background:#1e293b; color:#94a3b8; border:1px solid #334155;">
-          <span id="desktopEnvDot">●</span>
-          <span id="desktopEnvTitle">Conectando...</span>
+        <div id="desktopEnvBadge" style="display:none; align-items:center; gap:6px; padding:4px 10px; border-radius:6px; font-size:0.75rem; font-weight:700; background:#052e16; color:#4ade80; border:1px solid #14532d;">
+          <span id="desktopEnvDot" style="color:#22c55e;">●</span>
+          <span id="desktopEnvTitle">LOCAL / PRUEBAS</span>
         </div>
       </div>
 
@@ -2223,24 +2223,24 @@
 
     function updateDesktopEnvUI(info) {
       if (!info) return;
-      const isProd = info.isProduction;
       const badge = document.getElementById('desktopEnvBadge');
       const title = document.getElementById('desktopEnvTitle');
       const dot = document.getElementById('desktopEnvDot');
       if (!badge || !title) return;
-      if (isProd) {
-        badge.style.background = '#450a0a';
-        badge.style.color = '#f87171';
-        badge.style.border = '1px solid #7f1d1d';
-        if (dot) dot.style.color = '#ef4444';
-        title.textContent = 'PRODUCCIÓN (' + info.spreadsheetTitle + ')';
-      } else {
-        badge.style.background = '#052e16';
-        badge.style.color = '#4ade80';
-        badge.style.border = '1px solid #14532d';
-        if (dot) dot.style.color = '#22c55e';
-        title.textContent = 'LOCAL / PRUEBAS (' + info.spreadsheetTitle + ')';
+
+      // Si estamos en producción (Render Cloud), se oculta por completo el badge
+      if (info.isProduction) {
+        badge.style.display = 'none';
+        return;
       }
+
+      // Únicamente se muestra en localhost / pruebas local
+      badge.style.display = 'inline-flex';
+      badge.style.background = '#052e16';
+      badge.style.color = '#4ade80';
+      badge.style.border = '1px solid #14532d';
+      if (dot) dot.style.color = '#22c55e';
+      title.textContent = 'LOCAL / PRUEBAS (' + (info.spreadsheetTitle || 'DB LOCAL') + ')';
     }
 
     // ===========================================
