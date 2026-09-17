@@ -741,8 +741,8 @@
       width: 20px;
       height: 20px;
       border-radius: 50%;
-      border: 2.5px solid var(--green);
-      background: #D1FAE5;
+      border: 2px solid var(--green);
+      background: #0E2F2A;
       flex-shrink: 0;
       box-sizing: border-box;
       box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
@@ -757,6 +757,7 @@
       background: var(--green);
       flex-shrink: 0;
       box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+      transition: transform 0.15s ease;
     }
 
     .timeline-ot-num {
@@ -777,36 +778,44 @@
       display: none !important;
     }
 
-    /* ESPINA DORSAL DEL DESPLEGABLE: LÍNEA PUNTEADA VERDE EXCLUSIVA PARA LA ORDEN EN CURSO */
+    /* ESPINA DORSAL DEL DESPLEGABLE: LÍNEA DISCONTINUA (DASHED) VERDE PARA LA ORDEN EN CURSO */
+    .timeline-current-cluster {
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
     .timeline-tasks-body {
-      border-left: 2.5px dotted var(--green);
+      border-left: 2px dashed var(--green);
       margin-left: 9px;
       padding-left: 24px;
-      padding-top: 10px;
-      padding-bottom: 12px;
+      padding-top: 8px;
+      padding-bottom: 4px;
       display: flex;
       flex-direction: column;
       gap: 10px;
     }
 
-    .timeline-node-header.is-sub-ot {
-      border-left: 2.5px dotted var(--green);
-      margin-left: 9px;
-      padding-left: 24px;
-      padding-top: 14px;
-      padding-bottom: 6px;
+    .timeline-sub-ot-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 18px;
+      margin-bottom: 6px;
     }
 
     .timeline-dashed-connector {
-      border-left: 2.5px dotted var(--green);
+      border-left: 2px dashed var(--green);
       margin-left: 9px;
-      height: 24px;
+      height: 28px;
+      flex-shrink: 0;
     }
 
     .timeline-solid-connector {
       border-left: 2px solid var(--green);
       margin-left: 9px;
       height: 24px;
+      flex-shrink: 0;
     }
 
     .timeline-task-row {
@@ -821,6 +830,8 @@
       font-size: 0.84rem;
       color: #E5E7EB;
       line-height: 1.35;
+      flex: 1;
+      min-width: 0;
     }
     .timeline-task-desc .rubro-bold {
       font-weight: 800;
@@ -828,38 +839,97 @@
       text-transform: uppercase;
     }
     .timeline-task-desc.is-done {
-      color: var(--green-accent);
+      color: var(--text-dim);
       text-decoration: line-through;
-      opacity: 0.85;
+      opacity: 0.65;
     }
 
-    .task-check-box {
-      width: 18px;
-      height: 18px;
-      border: 1.5px solid #FFFFFF;
-      border-radius: 2px;
-      background: transparent;
-      cursor: pointer;
+    /* CONTENEDOR Y BOTONES DE ACCIÓN DE TRACKING (EMPECÉ / TERMINÉ) */
+    .timeline-task-actions {
       display: flex;
       align-items: center;
-      justify-content: center;
-      transition: all 0.15s;
+      gap: 8px;
       flex-shrink: 0;
-      color: var(--green);
-      font-size: 13px;
-      font-weight: 900;
     }
-    .task-check-box:hover {
-      border-color: var(--green);
+
+    .btn-task-action {
+      height: 28px;
+      padding: 0 16px;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      user-select: none;
+      font-family: inherit;
     }
-    .task-check-box.checked {
-      border-color: var(--green);
-      background: var(--green);
-      color: #0D1117;
+
+    /* Botón Empecé (Verde esmeralda Figma) */
+    .btn-task-empece {
+      background: #00A86B;
+      color: #FFFFFF;
+      border-color: #009E60;
+    }
+    .btn-task-empece:hover:not(:disabled) {
+      background: #009E60;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
+    }
+    .btn-task-empece:disabled {
+      background: #1E242C;
+      color: #4B5563;
+      border-color: #262C36;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+    .btn-task-empece.in-progress {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34D399;
+      border-color: rgba(16, 185, 129, 0.3);
+      cursor: default;
+      opacity: 0.9;
+    }
+
+    /* Botón Terminé (Gris neutro Figma) */
+    .btn-task-termino {
+      background: #B3B3B3;
+      color: #4B5563;
+      border-color: transparent;
+      cursor: not-allowed;
+    }
+    .btn-task-termino.can-finish {
+      background: #374151;
+      color: #FFFFFF;
+      border-color: #4B5563;
+      cursor: pointer;
+    }
+    .btn-task-termino.can-finish:hover {
+      background: #00A86B;
+      color: #FFFFFF;
+      border-color: #009E60;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.35);
+    }
+    .btn-task-termino:disabled {
+      background: #B3B3B3;
+      color: #4B5563;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+    .btn-task-termino.completed {
+      background: #161B22;
+      color: #4B5563;
+      border-color: #21262D;
+      cursor: not-allowed;
+      opacity: 0.6;
     }
 
     /* =========================================
-       HISTÓRICO OTS ANTERIORES: TODO UNIDO, CONECTOR SÓLIDO
+       HISTÓRICO OTS ANTERIORES: SOLO LECTURA, LÍNEA LISA, DROPDOWN CONTENIDO
        ========================================= */
     .timeline-hist-node {
       display: flex;
@@ -872,7 +942,7 @@
       align-items: center;
       gap: 12px;
       cursor: pointer;
-      padding: 4px 0;
+      padding: 3px 0;
       user-select: none;
       transition: opacity 0.15s ease;
     }
@@ -899,14 +969,14 @@
       color: var(--text-muted);
     }
 
-    /* CUERPO DE TAREAS ANTERIORES: LÍNEA VERDE CONTINUA ("TODO UNIDO") */
+    /* CUERPO DE TAREAS ANTERIORES: LÍNEA LISA CONTINUA ("SOLO LECTURA") */
     .timeline-hist-tasks-body {
       border-left: 2px solid var(--green);
       margin-left: 9px;
       padding-left: 24px;
       padding-top: 6px;
-      padding-bottom: 12px;
-      display: none; /* Estado inicial colapsado */
+      padding-bottom: 8px;
+      display: none; /* Estado inicial colapsado / contenido por defecto */
       flex-direction: column;
       gap: 6px;
     }
@@ -914,7 +984,7 @@
       display: flex;
     }
 
-    /* FILA DE TAREA HISTÓRICA: SIN CHECKBOXES, SIN TACHADO */
+    /* FILA DE TAREA HISTÓRICA: SOLO LECTURA, SIN BOTONES */
     .timeline-hist-task-row {
       display: flex;
       align-items: baseline;
@@ -923,7 +993,7 @@
     }
     .timeline-hist-task-row .timeline-task-desc {
       font-size: 0.84rem;
-      color: #D1D5DB; /* Texto limpio sin tachado */
+      color: #D1D5DB;
       line-height: 1.35;
       text-decoration: none !important;
       opacity: 1 !important;
@@ -1945,9 +2015,9 @@
 
             <div class="hold-input-field" style="max-width:130px;">
               <input type="text" id="holdTractorOt" placeholder="OT TRACTOR" autocomplete="off"
-                     onkeyup="filterUnitAutocomplete(this.value, 'holdTractorOt', 'tractorOtPop', 'OT_TRACTOR'); autoFillSemiOt();"
+                     onkeyup="filterUnitAutocomplete(this.value, 'holdTractorOt', 'tractorOtPop', 'OT_TRACTOR')"
                      onkeydown="handleSearchKeydown(event, 'holdTractorOt', 'tractorOtPop', 'OT_TRACTOR')"
-                     onblur="handleSearchBlur('holdTractorOt', 'tractorOtPop', 'OT_TRACTOR'); autoFillSemiOt();">
+                     onblur="handleSearchBlur('holdTractorOt', 'tractorOtPop', 'OT_TRACTOR')">
               <div id="tractorOtPop" class="popover-autocomplete"></div>
             </div>
 
@@ -1961,7 +2031,6 @@
 
             <div class="hold-input-field" style="max-width:130px;">
               <input type="text" id="holdSemiOt" placeholder="OT SEMI" autocomplete="off"
-                     oninput="if(this.value) delete this.dataset.autoFilled;"
                      onkeyup="filterUnitAutocomplete(this.value, 'holdSemiOt', 'semiOtPop', 'SEMI_OT')"
                      onkeydown="handleSearchKeydown(event, 'holdSemiOt', 'semiOtPop', 'SEMI_OT')"
                      onblur="handleSearchBlur('holdSemiOt', 'semiOtPop', 'SEMI_OT')">
@@ -2207,19 +2276,14 @@
 
     function initApp(id, config) {
       activeOpId = id;
-      activeMechName = config.name || 'Juan Pérez';
+      activeMechName = config.name || ('Operario ' + id);
       document.getElementById('login-section').classList.add('hidden');
       document.getElementById('app-section').classList.remove('hidden');
       document.getElementById('display-name').textContent = activeMechName;
       
       renderBoxSelector(config.boxes);
 
-      if (!cartItems || cartItems.length === 0) {
-        cartItems = [
-          { name: 'BATERIA 12V X 100', brand: '', category: 'ELECTRICO', dest: 'UNIT', note: '', qty: 5 },
-          { name: 'BATERIA 12V X 90I', brand: '', category: 'ELECTRICO', dest: 'UNIT', note: 'es solo 90', qty: 2 }
-        ];
-      }
+      cartItems = [];
 
       renderCart();
 
@@ -2351,28 +2415,22 @@
     function fetchOperarioHoldUnits() {
       if (!activeOpId) return;
 
-      function loadDefaultHoldFallback() {
-        holdUnits = [
-          { tractorPlate: 'AI 336 HI', tractorOt: '11176', semiPlate: 'AF 438 MC', semiOt: '11175' },
-          { tractorPlate: 'AG 426 OD', tractorOt: '11186', semiPlate: 'NRM 584', semiOt: '11187' }
-        ];
-        selectedHoldUnitIndex = 1;
-        renderHoldUnits();
-        loadSelectedUnitDetails();
-      }
-
       google.script.run.withSuccessHandler(res => {
-        if (res && res.success && Array.isArray(res.units) && res.units.length > 0) {
+        if (res && res.success && Array.isArray(res.units)) {
           holdUnits = res.units;
           selectedHoldUnitIndex = holdUnits.length > 0 ? 0 : -1;
-          renderHoldUnits();
-          loadSelectedUnitDetails();
         } else {
-          loadDefaultHoldFallback();
+          holdUnits = [];
+          selectedHoldUnitIndex = -1;
         }
+        renderHoldUnits();
+        loadSelectedUnitDetails();
       }).withFailureHandler(err => {
         console.error("Error al obtener unidades en hold:", err);
-        loadDefaultHoldFallback();
+        holdUnits = [];
+        selectedHoldUnitIndex = -1;
+        renderHoldUnits();
+        loadSelectedUnitDetails();
       }).getOperarioHoldUnits(activeOpId);
     }
 
@@ -2439,6 +2497,11 @@
       container.innerHTML = "";
 
       if (holdUnits.length === 0) {
+        container.innerHTML = `
+          <div style="color:var(--text-dim); text-align:center; padding:30px 10px; font-size:0.75rem; border:1px dashed var(--border); border-radius:8px; margin:4px 0;">
+            Sin unidades en curso.<br>Ingresa patente u OT arriba para cargar una unidad.
+          </div>
+        `;
         return;
       }
 
@@ -2489,7 +2552,7 @@
           catalogPlateContainer.innerHTML = `<span style="color:var(--text-dim); font-size:0.75rem;">(Ninguna unidad seleccionada)</span>`;
         }
         if (timelineContainer) {
-          timelineContainer.innerHTML = "";
+          timelineContainer.innerHTML = `<div style="color:var(--text-dim); text-align:center; padding:40px 15px; font-size:0.8rem; border:1px dashed var(--border); border-radius:8px;">No hay unidad seleccionada. Carga o selecciona una unidad para ver sus tareas.</div>`;
         }
         renderCart();
         return;
@@ -2533,7 +2596,7 @@
     }
 
     // ===========================================
-    // TIMELINE DE TAREAS (ots Col G & Tareas)
+    // TIMELINE DE TAREAS (DB_OT_TASKS)
     // ===========================================
     function fetchUnitTimeline(unit) {
       const container = document.getElementById('timelineContainer');
@@ -2542,51 +2605,17 @@
         container.innerHTML = "";
         return;
       }
-      container.innerHTML = `<div style="color:var(--text-dim); text-align:center; padding:30px; font-size:0.8rem;">Cargando tareas...</div>`;
-
-      function loadMockTimelineFallback() {
-        const mockGroups = [
-          {
-            ot: unit.tractorOt || '11186',
-            date: '03/09',
-            tasks: [
-              { rubro: 'ENGRASE', desc: 'Engrasar Tractor Completo', isTerminado: false },
-              { rubro: 'ENGRASE', desc: 'Controlar Bulones Del Plato De Enganche', isTerminado: false },
-              { rubro: 'Gomería', desc: 'Revision De Neumaticos', isTerminado: false },
-              { rubro: 'Lavadero', desc: 'Lavado Completo', isTerminado: false },
-              { rubro: 'LUBRICENTRO', desc: 'Controlar Fluidos', isTerminado: false }
-            ]
-          }
-        ];
-        if (unit.semiOt || unit.tractorOt === '11186') {
-          mockGroups.push({
-            ot: unit.semiOt || '11187',
-            date: '03/09',
-            tasks: [
-              { rubro: 'LOREM IPSUM', desc: 'Lorem Ipsum', isTerminado: false },
-              { rubro: 'LOREM IPSUM', desc: 'Lorem Ipsum', isTerminado: false },
-              { rubro: 'LOREM IPSUM', desc: 'Lorem Ipsum', isTerminado: false },
-              { rubro: 'LOREM IPSUM', desc: 'Lorem Ipsum', isTerminado: false }
-            ]
-          });
-        }
-        const mockHistorical = [
-          { ot: '10855 10876', date: '18/08', tasks: [{ rubro: 'MECÁNICA', desc: 'Ajuste general de frenos' }] },
-          { ot: '18538', date: '03/08', tasks: [{ rubro: 'ELECTRICIDAD', desc: 'Revisión de alternador y batería' }] },
-          { ot: '10125', date: '15/07', tasks: [{ rubro: 'LUBRICENTRO', desc: 'Cambio de aceite y filtros' }] }
-        ];
-        renderTimeline(mockGroups, mockHistorical);
-      }
+      container.innerHTML = `<div style="color:var(--text-dim); text-align:center; padding:30px; font-size:0.8rem;">Cargando tareas desde DB_OT_TASKS...</div>`;
 
       google.script.run.withSuccessHandler(res => {
         if (res && res.success && ((res.timelineGroups && res.timelineGroups.length > 0) || (res.historicalNodes && res.historicalNodes.length > 0))) {
           renderTimeline(res.timelineGroups || [], res.historicalNodes || []);
         } else {
-          loadMockTimelineFallback();
+          container.innerHTML = `<div style="color:var(--text-dim); text-align:center; padding:30px; font-size:0.8rem;">No hay tareas registradas en DB_OT_TASKS para esta unidad.</div>`;
         }
       }).withFailureHandler(err => {
-        console.error("Error al obtener tareas de la unidad:", err);
-        loadMockTimelineFallback();
+        console.error("Error al obtener tareas de DB_OT_TASKS:", err);
+        container.innerHTML = `<div style="color:#EF4444; text-align:center; padding:20px; font-size:0.8rem;">Error al cargar tareas de DB_OT_TASKS.</div>`;
       }).getUnitTimelineTasks({
         tractorOt: unit.tractorOt,
         semiOt: unit.semiOt,
@@ -2603,87 +2632,158 @@
       const hasGroups = groups && groups.length > 0;
       const hasHistorical = historicalNodes && historicalNodes.length > 0;
       if (!hasGroups && !hasHistorical) {
+        container.innerHTML = `<div style="color:var(--text-dim); text-align:center; padding:30px; font-size:0.8rem;">No hay tareas en DB_OT_TASKS para esta unidad.</div>`;
         return;
       }
 
+      // 1. ÓRDENES ACTUALES (DB_OT_TASKS): Agrupadas bajo línea vertical discontinua (dashed) con botones de tracking
       if (hasGroups) {
-        groups.forEach((g, gIdx) => {
-          // Encabezado del nodo de OT (STICKY para la primera OT de la ORDEN EN CURSO)
-          const headerDiv = document.createElement('div');
-          
-          if (gIdx === 0) {
-            headerDiv.className = 'timeline-node-header is-sticky-ot';
-            const dot = document.createElement('div');
-            dot.className = 'timeline-ring-dot';
-            headerDiv.appendChild(dot);
-          } else {
-            headerDiv.className = 'timeline-node-header is-sub-ot';
-          }
+        const clusterDiv = document.createElement('div');
+        clusterDiv.className = 'timeline-current-cluster';
 
-          const otNum = document.createElement('span');
-          otNum.className = 'timeline-ot-num';
-          otNum.innerText = g.ot;
+        const primaryGroup = groups[0];
 
-          const otDate = document.createElement('span');
-          otDate.className = 'timeline-ot-date';
-          otDate.innerText = g.date || '03/09';
+        // Encabezado principal (OT inicial con anillo verde hueco)
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'timeline-node-header is-sticky-ot';
 
-          headerDiv.appendChild(otNum);
-          headerDiv.appendChild(otDate);
+        const dot = document.createElement('div');
+        dot.className = 'timeline-ring-dot';
+        headerDiv.appendChild(dot);
 
-          container.appendChild(headerDiv);
+        const otNum = document.createElement('span');
+        otNum.className = 'timeline-ot-num';
+        otNum.innerText = primaryGroup.ot || '---';
 
-          // Checklist de tareas con ESPINA DORSAL PUNTEADA para la ORDEN EN CURSO
-          const tasksBody = document.createElement('div');
-          tasksBody.className = 'timeline-tasks-body';
+        const otDate = document.createElement('span');
+        otDate.className = 'timeline-ot-date';
+        otDate.innerText = primaryGroup.date || '';
 
-          (g.tasks || []).forEach(t => {
-            const isDone = !!t.isTerminado;
+        headerDiv.appendChild(otNum);
+        headerDiv.appendChild(otDate);
+        clusterDiv.appendChild(headerDiv);
+
+        // Espina dorsal continua: borde vertical dashed para todas las tareas y sub-OTs actuales
+        const tasksBody = document.createElement('div');
+        tasksBody.className = 'timeline-tasks-body';
+
+        // Helper para renderizar tareas de la orden actual con botones de acción
+        const appendTasksToBody = (taskList) => {
+          (taskList || []).forEach(t => {
+            const isDone = !!t.isTerminado || t.estado === 'COMPLETADA';
+            const isEmpezado = !isDone && (!!t.isEmpezado || t.estado === 'EN_CURSO' || (t.empezo && t.empezo.trim()));
+
             const rowDiv = document.createElement('div');
             rowDiv.className = 'timeline-task-row';
+            rowDiv.id = `taskRow-${t.id}`;
 
             rowDiv.innerHTML = `
               <div class="timeline-task-desc ${isDone ? 'is-done' : ''}">
-                <span class="rubro-bold">${t.rubro}:</span> ${t.desc}
+                <span class="rubro-bold">${t.rubro || 'RUBRO'}:</span> ${t.desc || ''}
               </div>
-              <div class="task-check-box ${isDone ? 'checked' : ''}" onclick="toggleTaskCheckbox(this)">
-                ${isDone ? '✓' : ''}
+              <div class="timeline-task-actions">
+                <button class="btn-task-action btn-task-empece ${isEmpezado ? 'in-progress' : ''}" 
+                        ${(isDone || isEmpezado) ? 'disabled' : ''} 
+                        onclick="handleTaskEmpece('${t.id}')"
+                        title="${t.empezo ? 'Empezó: ' + t.empezo : 'Marcar inicio de tarea'}">
+                  Empecé
+                </button>
+                <button class="btn-task-action btn-task-termino ${isDone ? 'completed' : (isEmpezado ? 'can-finish' : '')}" 
+                        ${(!isEmpezado || isDone) ? 'disabled' : ''} 
+                        onclick="handleTaskTermino('${t.id}')"
+                        title="${t.termino ? 'Terminó: ' + t.termino : (isEmpezado ? 'Finalizar tarea' : 'Debe iniciar la tarea primero')}">
+                  Terminé
+                </button>
               </div>
             `;
             tasksBody.appendChild(rowDiv);
           });
+        };
 
-          container.appendChild(tasksBody);
-        });
-      }
+        // Renderizar tareas de la OT primaria
+        appendTasksToBody(primaryGroup.tasks);
 
-      // Conector sólido hacia OTs anteriores (≤ 6 meses) - TODO UNIDO
-      if (hasHistorical) {
-        if (hasGroups) {
-          const solidDiv = document.createElement('div');
-          solidDiv.className = 'timeline-solid-connector';
-          container.appendChild(solidDiv);
+        // Si existen OTs adicionales en la unidad actual (ej. sub-OT Semi), se integran en la misma línea dashed continua sin círculo
+        for (let i = 1; i < groups.length; i++) {
+          const subGroup = groups[i];
+          const subHeader = document.createElement('div');
+          subHeader.className = 'timeline-sub-ot-header';
+
+          const subOtNum = document.createElement('span');
+          subOtNum.className = 'timeline-ot-num';
+          subOtNum.innerText = subGroup.ot || '---';
+
+          const subOtDate = document.createElement('span');
+          subOtDate.className = 'timeline-ot-date';
+          subOtDate.innerText = subGroup.date || '';
+
+          subHeader.appendChild(subOtNum);
+          subHeader.appendChild(subOtDate);
+          tasksBody.appendChild(subHeader);
+
+          appendTasksToBody(subGroup.tasks);
         }
 
-        historicalNodes.forEach((h, hIdx) => {
+        clusterDiv.appendChild(tasksBody);
+
+        // Conector vertical dashed hacia el primer círculo sólido del histórico
+        if (hasHistorical) {
+          const dashedConn = document.createElement('div');
+          dashedConn.className = 'timeline-dashed-connector';
+          clusterDiv.appendChild(dashedConn);
+        }
+
+        container.appendChild(clusterDiv);
+      }
+
+      // 2. ÓRDENES ANTERIORES (ots_anteriores): Solo lectura, línea lisa, dropdown contenido por defecto
+      if (hasHistorical) {
+        // Agrupar nodos históricos por fecha para que si tractor y semi coinciden en la misma fecha,
+        // se muestren juntos en la cabecera (ej. "10855 10876 18/08")
+        const groupedHistorical = [];
+        const histDateMap = new Map();
+
+        historicalNodes.forEach(h => {
+          const dateKey = (h.date || 'S/F').trim();
+          if (!histDateMap.has(dateKey)) {
+            const groupObj = {
+              ots: [String(h.ot || '').trim()].filter(Boolean),
+              date: dateKey,
+              tasks: [...(h.tasks || [])]
+            };
+            histDateMap.set(dateKey, groupObj);
+            groupedHistorical.push(groupObj);
+          } else {
+            const existing = histDateMap.get(dateKey);
+            const otClean = String(h.ot || '').trim();
+            if (otClean && !existing.ots.includes(otClean)) {
+              existing.ots.push(otClean);
+            }
+            if (h.tasks && h.tasks.length > 0) {
+              existing.tasks.push(...h.tasks);
+            }
+          }
+        });
+
+        groupedHistorical.forEach((h, hIdx) => {
           const nodeDiv = document.createElement('div');
           nodeDiv.className = 'timeline-hist-node';
-          nodeDiv.id = `histNode-${h.ot}-${hIdx}`;
+          nodeDiv.id = `histNode-${hIdx}`;
 
-          // Header del nodo (punto verde sólido, OT bold, fecha - sin chevrons)
+          // Header del nodo (círculo verde sólido, OTs bold, fecha)
           const header = document.createElement('div');
           header.className = 'timeline-hist-header';
-          header.onclick = () => toggleHistOtDropdown(`histNode-${h.ot}-${hIdx}`);
-          header.title = 'Clic para desplegar tareas';
+          header.onclick = () => toggleHistOtDropdown(`histNode-${hIdx}`);
+          header.title = 'Clic para desplegar tareas (solo lectura)';
 
           header.innerHTML = `
             <div class="timeline-solid-dot"></div>
-            <span class="timeline-hist-label">${h.ot}</span>
-            <span class="timeline-hist-date">${h.date || 'dd/mm'}</span>
+            <span class="timeline-hist-label">${h.ots.join(' ')}</span>
+            <span class="timeline-hist-date">${h.date || ''}</span>
           `;
           nodeDiv.appendChild(header);
 
-          // Cuerpo de tareas (ESTADO INICIAL COLAPSADO: display: none) con línea sólida
+          // Dropdown de tareas: contenido por defecto (display: none) y SOLO LECTURA
           const tasksBody = document.createElement('div');
           tasksBody.className = 'timeline-hist-tasks-body';
 
@@ -2694,7 +2794,7 @@
               rowDiv.className = 'timeline-hist-task-row';
               rowDiv.innerHTML = `
                 <div class="timeline-task-desc">
-                  <span class="rubro-bold">${t.rubro}:</span> ${t.desc}
+                  <span class="rubro-bold">${t.rubro || 'GENERAL'}:</span> ${t.desc || t.descripcion || ''}
                 </div>
               `;
               tasksBody.appendChild(rowDiv);
@@ -2711,8 +2811,8 @@
           nodeDiv.appendChild(tasksBody);
           container.appendChild(nodeDiv);
 
-          // Conector sólido entre nodos ("todo unido")
-          if (hIdx < historicalNodes.length - 1) {
+          // Conector sólido ("línea lisa") entre nodos históricos
+          if (hIdx < groupedHistorical.length - 1) {
             const conn = document.createElement('div');
             conn.className = 'timeline-solid-connector';
             container.appendChild(conn);
@@ -2728,43 +2828,95 @@
       }
     }
 
-    // Interacción client-side para checkboxes y botón terminado (sin comunicación al backend)
-    function toggleTaskCheckbox(el) {
-      const isChecked = el.classList.toggle('checked');
-      el.innerText = isChecked ? '✓' : '';
-      const row = el.closest('.timeline-task-row');
+    // ===========================================
+    // GESTIÓN DE EJECUCIÓN DE TAREAS (DB_OT_TASKS Col I & J)
+    // ===========================================
+    function handleTaskEmpece(taskId) {
+      if (!taskId) return;
+      const now = new Date();
+      const d = String(now.getDate()).padStart(2, '0');
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const nowStr = `${d}/${m} ${hh}:${mm}`;
+
+      // Actualización optimista inmediata en UI
+      const row = document.getElementById(`taskRow-${taskId}`);
       if (row) {
-        const desc = row.querySelector('.timeline-task-desc');
-        if (desc) {
-          desc.classList.toggle('is-done', isChecked);
+        const empeceBtn = row.querySelector('.btn-task-empece');
+        const terminoBtn = row.querySelector('.btn-task-termino');
+        if (empeceBtn) {
+          empeceBtn.classList.add('in-progress');
+          empeceBtn.disabled = true;
+          empeceBtn.title = `Empezó: ${nowStr}`;
+        }
+        if (terminoBtn) {
+          terminoBtn.className = 'btn-task-action btn-task-termino can-finish';
+          terminoBtn.disabled = false;
+          terminoBtn.textContent = 'Terminé';
+          terminoBtn.setAttribute('onclick', `handleTaskTermino('${taskId}')`);
+          terminoBtn.title = 'Finalizar tarea';
         }
       }
+
+      const opName = activeMechName || ('Operario ' + (activeOpId || '1'));
+      const boxName = currentBox ? `Box ${currentBox}` : '';
+
+      google.script.run.withSuccessHandler(res => {
+        console.log('✅ Tarea iniciada en DB_OT_TASKS (Col I):', taskId, res);
+      }).withFailureHandler(err => {
+        console.error('❌ Error al iniciar tarea en DB_OT_TASKS:', err);
+        if (holdUnits.length > 0 && holdUnits[selectedHoldUnitIndex]) {
+          fetchUnitTimeline(holdUnits[selectedHoldUnitIndex]);
+        }
+      }).updateTaskExecution({
+        taskId: taskId,
+        empezo: nowStr,
+        estado: 'EN_CURSO',
+        operario: opName,
+        ubicacion: boxName
+      });
     }
 
-    function toggleAllTasksTerminado() {
-      const container = document.getElementById('timelineContainer');
-      if (!container) return;
-      const checkBoxes = container.querySelectorAll('.timeline-tasks-body .task-check-box');
-      if (!checkBoxes || checkBoxes.length === 0) return;
+    function handleTaskTermino(taskId) {
+      if (!taskId) return;
+      const now = new Date();
+      const d = String(now.getDate()).padStart(2, '0');
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const nowStr = `${d}/${m} ${hh}:${mm}`;
 
-      const anyUnchecked = Array.from(checkBoxes).some(cb => !cb.classList.contains('checked'));
-      const setDone = anyUnchecked;
+      // Actualización optimista inmediata en UI
+      const row = document.getElementById(`taskRow-${taskId}`);
+      if (row) {
+        const desc = row.querySelector('.timeline-task-desc');
+        const empeceBtn = row.querySelector('.btn-task-empece');
+        const terminoBtn = row.querySelector('.btn-task-termino');
+        if (desc) desc.classList.add('is-done');
+        if (empeceBtn) {
+          empeceBtn.className = 'btn-task-action btn-task-empece';
+          empeceBtn.disabled = true;
+        }
+        if (terminoBtn) {
+          terminoBtn.className = 'btn-task-action btn-task-termino completed';
+          terminoBtn.disabled = true;
+          terminoBtn.textContent = 'Terminé';
+          terminoBtn.title = `Terminó: ${nowStr}`;
+        }
+      }
 
-      checkBoxes.forEach(cb => {
-        if (setDone) {
-          cb.classList.add('checked');
-          cb.innerText = '✓';
-        } else {
-          cb.classList.remove('checked');
-          cb.innerText = '';
+      google.script.run.withSuccessHandler(res => {
+        console.log('✅ Tarea terminada en DB_OT_TASKS (Col J):', taskId, res);
+      }).withFailureHandler(err => {
+        console.error('❌ Error al finalizar tarea en DB_OT_TASKS:', err);
+        if (holdUnits.length > 0 && holdUnits[selectedHoldUnitIndex]) {
+          fetchUnitTimeline(holdUnits[selectedHoldUnitIndex]);
         }
-        const row = cb.closest('.timeline-task-row');
-        if (row) {
-          const desc = row.querySelector('.timeline-task-desc');
-          if (desc) {
-            desc.classList.toggle('is-done', setDone);
-          }
-        }
+      }).updateTaskExecution({
+        taskId: taskId,
+        termino: nowStr,
+        estado: 'COMPLETADA'
       });
     }
 
@@ -2772,31 +2924,21 @@
     // CATÁLOGO DE REPUESTOS
     // ===========================================
     function fetchCatalog() {
-      function loadDefaultCatalogFallback() {
-        dbItems = [
-          { id: '101', name: 'Alternador, IVECO 330/360 Reparado', brand: 'IVECO', category: 'ELECTRICO' },
-          { id: '102', name: 'ARO DE GOMA DE RULEMAN GRANDE G1521 DIPRA', brand: 'DIPRA', category: 'ELECTRICO' },
-          { id: '103', name: 'AUTOMATICO AUXILIAR 24V ZM', brand: 'ZM', category: 'ELECTRICO' },
-          { id: '104', name: 'BASE / ANILLO POSTERIOR DE ENCENDEDOR, 500300650 IVECO.', brand: 'IVECO', category: 'ELECTRICO' },
-          { id: '105', name: 'Base Acoplado, 7 vías, TECA: EA3170', brand: 'TECA', category: 'ELECTRICO' },
-          { id: '106', name: 'Base Acoplado, 7 vías, TECA: EA3170', brand: 'TECA', category: 'ELECTRICO' },
-          { id: '107', name: 'Base Acoplado, 7 vías, TECA: EA3170', brand: 'TECA', category: 'ELECTRICO' }
-        ];
-        populateCategories(dbItems);
-        renderCatalogItems(dbItems);
-      }
-
       google.script.run.withSuccessHandler(items => {
         if (items && Array.isArray(items) && items.length > 0) {
           dbItems = items;
           populateCategories(dbItems);
           renderCatalogItems(dbItems);
         } else {
-          loadDefaultCatalogFallback();
+          dbItems = [];
+          populateCategories([]);
+          renderCatalogItems([]);
         }
       }).withFailureHandler(err => {
-        console.warn('Cargando catálogo fallback:', err);
-        loadDefaultCatalogFallback();
+        console.warn('Error al cargar catálogo:', err);
+        dbItems = [];
+        populateCategories([]);
+        renderCatalogItems([]);
       }).getItemCatalog();
     }
 
@@ -3458,23 +3600,6 @@
       }).getFleetSearchCatalog();
     }
 
-    function autoFillSemiOt() {
-      const otInput = document.getElementById('holdTractorOt');
-      const semiOtInput = document.getElementById('holdSemiOt');
-      if (!otInput || !semiOtInput) return;
-      const otVal = otInput.value.trim();
-      if (otVal) {
-        const match = otVal.match(/\d+/);
-        if (match) {
-          const num = parseInt(match[0], 10);
-          if (!semiOtInput.value || semiOtInput.dataset.autoFilled === "true") {
-            semiOtInput.value = otVal.replace(match[0], String(num + 1));
-            semiOtInput.dataset.autoFilled = "true";
-          }
-        }
-      }
-    }
-
     function filterUnitAutocomplete(val, inputId, listId, type) {
       const list = document.getElementById(listId);
       if (!list) return;
@@ -3615,9 +3740,6 @@
           document.getElementById(inputId).value = item.val;
           list.style.display = "none";
           searchAndAutofillPair(item.val, type);
-          if (type === 'OT' || type === 'OT_TRACTOR') {
-            autoFillSemiOt();
-          }
         };
         list.appendChild(div);
       });
@@ -3632,9 +3754,6 @@
         const val = document.getElementById(inputId).value.trim();
         if (val) {
           searchAndAutofillPair(val, type);
-          if (type === 'OT' || type === 'OT_TRACTOR') {
-            autoFillSemiOt();
-          }
         }
       } else if (event.key === 'Escape') {
         const list = document.getElementById(listId);
@@ -3688,8 +3807,6 @@
           if (res.semiOt && elSemiOt) {
             elSemiOt.value = res.semiOt;
             if (type !== 'SEMI_OT') flashInputHighlight(elSemiOt);
-          } else if (res.ot && elSemiOt && !elSemiOt.value) {
-            autoFillSemiOt();
           }
         }
       }).withFailureHandler(err => {
@@ -3910,6 +4027,12 @@
       });
 
       socket.on('task_status_changed', data => {
+        if (holdUnits.length > 0 && holdUnits[selectedHoldUnitIndex]) {
+          fetchUnitTimeline(holdUnits[selectedHoldUnitIndex]);
+        }
+      });
+
+      socket.on('task_updated', data => {
         if (holdUnits.length > 0 && holdUnits[selectedHoldUnitIndex]) {
           fetchUnitTimeline(holdUnits[selectedHoldUnitIndex]);
         }

@@ -539,10 +539,15 @@
   <div class="container">
     <!-- Meta bar -->
     <div class="top-meta">
-      <div>Planilla Pruebas: <strong>ots</strong> (Col H: Confirmación de Tareas)</div>
-      <a class="sheet-badge" id="sheetLink" href="https://docs.google.com/spreadsheets/d/17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ/edit" target="_blank">
-        📊 Abrir Planilla de Pruebas
-      </a>
+      <div>Sincronización Dual: <strong>Database PRUEBAS LOCAL</strong> + <strong>Database PRUEBAS (Render)</strong></div>
+      <div style="display:flex; gap:8px;">
+        <a class="sheet-badge" id="sheetLinkLocal" href="https://docs.google.com/spreadsheets/d/17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ/edit" target="_blank">
+          📊 Planilla Local
+        </a>
+        <a class="sheet-badge" id="sheetLinkProd" href="https://docs.google.com/spreadsheets/d/1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc/edit" target="_blank" style="border-color:#bae6fd; color:#0369a1; background:#f0f9ff;">
+          🚀 Planilla Render
+        </a>
+      </div>
     </div>
 
     <!-- Alert / Toast -->
@@ -599,7 +604,7 @@
             <span>📁 Carpeta Local de OTs:</span>
             <span style="font-family:'JetBrains Mono', monospace; font-size:13px; color:#475569;" id="folderPathText">docs\otsE</span>
           </div>
-          <span class="sheet-badge" id="autoSyncBadge" style="background:#f0fdf4; color:#166534; border-color:#bbf7d0;">PRUEBAS LOCAL</span>
+          <span class="sheet-badge" id="autoSyncBadge" style="background:#f0fdf4; color:#166534; border-color:#bbf7d0;">🟢 SYNC DUAL (LOCAL + RENDER)</span>
         </div>
 
         <div class="folder-stats">
@@ -632,7 +637,7 @@
 
         <div class="folder-actions">
           <button class="btn-folder-sync" id="btnProcessFolderDirect">
-            <span>⚡ Sincronizar otsE a Planilla de Pruebas</span>
+            <span>⚡ Sincronizar otsE a Ambas Planillas</span>
           </button>
           <button class="btn-folder-preview" id="btnPreviewFolder">
             <span>🔍 Previsualizar OTs de otsE</span>

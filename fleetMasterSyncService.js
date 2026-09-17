@@ -6,16 +6,18 @@
  * 1. La planilla mensual (1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8) es la Fuente Única de la Verdad (SSOT)
  *    de la flota activa y sus uniones vigentes (Cols E y F).
  * 2. Se descartan patentes dadas de baja o pares históricos obsoletos.
- * 3. Las OTs vigentes se inyectan EXCLUSIVAMENTE desde la pestaña 'ots' (Col C: OT, Col D: Dominio).
- *    - Si la patente de Tractor (Col A) está en 'ots' (Col D), se inserta su OT en Col B (OT Tractor).
- *    - Si la patente de Semi (Col C) está en 'ots' (Col D), se inserta su OT en Col D (OT Semi).
- * 4. No se utiliza la fuente obsoleta e inestable de Google Apps Script / Formulario 4.
- * 5. DB_OT_LIST queda blindada con exactamente las unidades en operación.
+ * 3. DB_OT_LIST es llenada con los números de OT provenientes de Formulario 4 (1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk):
+ *    - Col B: OT Tractor
+ *    - Col D: OT Semi
+ * 4. La pestaña 'ots' (Col C: ORDEN Nº, Col E: SECTOR / TAREAS) sigue siendo surtida por el extractor externo.
+ *    La unión entre DB_OT_LIST y 'ots' se realiza exclusivamente para el frontend / consultas de la aplicación.
+ * 5. DB_OT_LIST queda blindada con exactamente las unidades de la flota activa.
  */
 
 const { extractPlates } = require('./plateNormalizer');
 
 const ID_SHEET_MOVIMIENTOS_DEFAULT = process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8';
+const ID_RESPUESTAS_FORM4_DEFAULT = process.env.SOURCE_SPREADSHEET_ID || '1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk';
 const ID_TARGET_DEFAULT = process.env.SPREADSHEET_ID || '17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ';
 
 const mesesAbrev = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
@@ -165,21 +167,58 @@ async function extractActiveOtsFromOtsTab({ sheetsClient, targetSpreadsheetId })
 }
 
 /**
- * Función principal: Blindar DB_OT_LIST con la flota canónica mensual e inyectar OTs vigentes desde tab 'ots'.
+ * Extrae las OTs vigentes indexadas por patente directamente desde Formulario 4 (1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk).
+ * Recorre en orden inverso (LIFO: de más reciente a más antiguo) para asegurar que se tome la última OT emitida por dominio.
+ */
+async function extractLatestOtsFromForm({ sheetsClient, formSpreadsheetId = ID_RESPUESTAS_FORM4_DEFAULT }) {
+  const latestOts = new Map();
+  const formId = formSpreadsheetId || process.env.SOURCE_SPREADSHEET_ID || ID_RESPUESTAS_FORM4_DEFAULT;
+  try {
+    console.log(`📋 Leyendo OTs desde Formulario 4 (${formId})...`);
+    const res = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId: formId,
+      range: "'Respuestas de formulario 4'!A:K"
+    });
+    const rows = res.data.values || [];
+    for (let i = rows.length - 1; i >= 1; i--) {
+      const r = rows[i];
+      if (!r || r.length === 0) continue;
+      const rawPlate = r[4];
+      const ot = String(r[8] || '').trim();
+      if (!ot || ot === '#REF!' || !rawPlate) continue;
+
+      const plates = extractPlates(rawPlate);
+      plates.forEach(p => {
+        if (!latestOts.has(p)) {
+          latestOts.set(p, ot);
+        }
+      });
+    }
+    console.log(`✅ OTs vigentes indexadas desde Formulario 4: ${latestOts.size} patentes únicas.`);
+  } catch (errForm) {
+    console.warn('⚠️ Advertencia al leer Formulario 4:', errForm.message);
+  }
+  return latestOts;
+}
+
+/**
+ * Función principal: Blindar DB_OT_LIST con la flota canónica mensual e inyectar OTs vigentes desde Formulario 4.
  * Flujo:
  * 1. Flota canónica extraída de planilla mensual (1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8) -> Col A (Tractor) y Col C (Semi).
- * 2. Búsqueda en tab 'ots':
- *    - Tractor (Col A) -> busca en 'ots' Col D -> inyecta en Col B (OT Tractor)
- *    - Semi (Col C) -> busca en 'ots' Col D -> inyecta en Col D (OT Semi)
- * 3. Si no existe en 'ots', la OT queda vacía.
+ * 2. OTs vigentes extraídas de Formulario 4 (1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk):
+ *    - Tractor (Col A) -> busca en Form 4 -> inyecta en Col B (OT Tractor)
+ *    - Semi (Col C) -> busca en Form 4 -> inyecta en Col D (OT Semi)
+ * 3. Si no existe en Form 4, la OT queda vacía.
+ * 4. La pestaña 'ots' se mantiene para tareas y uso del front-end.
  */
 async function syncCanonicalFleetToDbOtList({
   sheetsClient,
   targetSpreadsheetId = ID_TARGET_DEFAULT,
-  movimientosSpreadsheetId = ID_SHEET_MOVIMIENTOS_DEFAULT
+  movimientosSpreadsheetId = ID_SHEET_MOVIMIENTOS_DEFAULT,
+  formSpreadsheetId = ID_RESPUESTAS_FORM4_DEFAULT
 }) {
   const startTime = Date.now();
-  console.log('🛡️ INICIANDO BLINDAJE DE DB_OT_LIST (SSOT: Movimientos + Tab ots)...');
+  console.log('🛡️ INICIANDO BLINDAJE DE DB_OT_LIST (SSOT: Movimientos + OTs: Formulario 4)...');
 
   // 1. Preservar marcas conocidas y excepciones manuales del sistema (ej: INTERNO TALLER)
   const existingRes = await sheetsClient.spreadsheets.values.get({
@@ -240,13 +279,19 @@ async function syncCanonicalFleetToDbOtList({
     spreadsheetId: movimientosSpreadsheetId
   });
 
-  // 3. Extraer OTs vigentes exclusivamente desde la pestaña canónica 'ots'
-  const latestOts = await extractActiveOtsFromOtsTab({
+  // 3. Extraer OTs de Tractores desde Formulario 4 (1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk)
+  const formTractorOts = await extractLatestOtsFromForm({
+    sheetsClient,
+    formSpreadsheetId
+  });
+
+  // 4. Extraer OTs de Semis desde la pestaña 'ots' (buscar Col C SEMI en Col D DOMINIO -> tomar Col C ORDEN Nº)
+  const otsTabOts = await extractActiveOtsFromOtsTab({
     sheetsClient,
     targetSpreadsheetId
   });
 
-  // 4. Construir las filas blindadas de DB_OT_LIST (7 columnas)
+  // 5. Construir las filas blindadas de DB_OT_LIST (7 columnas)
   const canonicalRows = [];
   let matchedCount = 0;
 
@@ -254,11 +299,11 @@ async function syncCanonicalFleetToDbOtList({
     const tractor = unit.tractor;
     const semi = unit.semi;
 
-    // BUSCAR Tractor (Col A) en 'ots' (Col D) -> Si existe, Col B = OT Tractor. Si no, ''
-    const otNumber = (tractor && latestOts.has(tractor)) ? latestOts.get(tractor) : '';
+    // BUSCAR Tractor (Col A) en Formulario 4 -> Col B: OT Tractor
+    const otNumber = (tractor && formTractorOts.has(tractor)) ? formTractorOts.get(tractor) : '';
 
-    // BUSCAR Semi (Col C) en 'ots' (Col D) -> Si existe, Col D = OT Semi. Si no, ''
-    const semiOtNumber = (semi && latestOts.has(semi)) ? latestOts.get(semi) : '';
+    // BUSCAR Semi (Col C) en pestaña 'ots' (Col D DOMINIO -> Col C ORDEN Nº) -> Col D: OT Semi
+    const semiOtNumber = (semi && otsTabOts.has(semi)) ? otsTabOts.get(semi) : '';
 
     if (otNumber || semiOtNumber) matchedCount++;
 
@@ -267,9 +312,9 @@ async function syncCanonicalFleetToDbOtList({
 
     canonicalRows.push([
       tractor,            // Col A: UNIT_ID (Tractor)
-      otNumber,           // Col B: OT_NUMBER (ot tractor)
-      semi,               // Col C: SEMI
-      semiOtNumber,       // Col D: OT_NUMBER (OT SEMI)
+      otNumber,           // Col B: OT_NUMBER (ot tractor desde Form 4)
+      semi,               // Col C: SEMI (Semi canónico)
+      semiOtNumber,       // Col D: OT_NUMBER (OT SEMI desde ots Col C)
       unit.category,      // Col E: PRODUCTO
       marcaT,             // Col F: MARCA
       marcaS              // Col G: MARCA_SEMI
@@ -278,11 +323,10 @@ async function syncCanonicalFleetToDbOtList({
 
   // Regla de Negocio: Inyectar al final las excepciones manuales del sistema protegidas
   manualExceptions.forEach(ex => {
-    // Si la excepción tiene OT en la pestaña 'ots', inyectarla también
     const tPlate = cleanPlate(ex.tractor);
     const sPlate = cleanPlate(ex.semi);
-    const tOt = (tPlate && latestOts.has(tPlate)) ? latestOts.get(tPlate) : (ex.otNumber || '');
-    const sOt = (sPlate && latestOts.has(sPlate)) ? latestOts.get(sPlate) : (ex.semiOt || '');
+    const tOt = (tPlate && formTractorOts.has(tPlate)) ? formTractorOts.get(tPlate) : (ex.otNumber || '');
+    const sOt = (sPlate && otsTabOts.has(sPlate)) ? otsTabOts.get(sPlate) : (ex.semiOt || '');
 
     canonicalRows.push([
       ex.tractor,
@@ -331,7 +375,9 @@ module.exports = {
   getTabName,
   extractCanonicalFleet,
   extractActiveOtsFromOtsTab,
+  extractLatestOtsFromForm,
   syncCanonicalFleetToDbOtList,
   ID_SHEET_MOVIMIENTOS_DEFAULT,
+  ID_RESPUESTAS_FORM4_DEFAULT,
   ID_TARGET_DEFAULT
 };

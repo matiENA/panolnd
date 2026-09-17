@@ -7,7 +7,9 @@ services:
     startCommand: npm start
     envVars:
       - key: SPREADSHEET_ID
-        value: 17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ
+        value: 1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc
+      - key: SOURCE_SPREADSHEET_ID
+        value: 1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk
       - key: MES_MOVIMIENTOS_ID
         value: 1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8
       - key: OT_SYNC_INTERVAL_MINUTES
@@ -24,7 +26,7 @@ services:
     startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: SPREADSHEET_ID
-        value: 17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ
+        value: 1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc
       - key: GOOGLE_CREDENTIALS
         sync: false
       - key: PYTHON_VERSION

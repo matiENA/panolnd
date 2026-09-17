@@ -4,7 +4,8 @@
   "description": "Microservicio Node.js para normalización de patentes, gestión de OTs, Pañol Monitor y Devoluciones con WebSockets",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dev": "node --watch index.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

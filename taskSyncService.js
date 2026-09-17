@@ -27,7 +27,9 @@ const DB_TASKS_HEADERS = [
   'ASIGNADO',
   'EMPEZO',
   'TERMINO',
-  'ESTADO'
+  'ESTADO',
+  'ORIGEN_TAB',
+  'METADATA_JSON'
 ];
 
 const COLD_STORAGE_HEADERS = [
@@ -92,15 +94,15 @@ async function ensureSheetsStructure(sheetsClient, spreadsheetId) {
       console.log(`✅ Pestañas inicializadas: ${requests.map(r => r.addSheet.properties.title).join(', ')}`);
     }
 
-    // Asegurar encabezados en DB_OT_TASKS (11 columnas A1:K1)
+    // Asegurar encabezados en DB_OT_TASKS (13 columnas A1:M1)
     const tasksRes = await sheetsClient.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${DB_TASKS_TAB}'!A1:K1`
+      range: `'${DB_TASKS_TAB}'!A1:M1`
     });
-    if (!tasksRes.data.values || tasksRes.data.values.length === 0) {
+    if (!tasksRes.data.values || tasksRes.data.values.length === 0 || tasksRes.data.values[0].length < 13) {
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${DB_TASKS_TAB}'!A1:K1`,
+        range: `'${DB_TASKS_TAB}'!A1:M1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [DB_TASKS_HEADERS] }
       });
@@ -215,21 +217,24 @@ async function syncOtsToTasksDatabase({ sheetsClient, spreadsheetId }) {
   try {
     await ensureSheetsStructure(sheetsClient, spreadsheetId);
 
-    // 1. Leer pestaña 'ots' (Ingesta)
-    const otsRes = await sheetsClient.spreadsheets.values.get({
+    // 1. Leer pestañas 'ots' y 'ots_anteriores' en batch (A2:I)
+    const batchOtsRes = await sheetsClient.spreadsheets.values.batchGet({
       spreadsheetId,
-      range: `'${OTS_SOURCE_TAB}'!A2:F500`
+      ranges: [`'${OTS_SOURCE_TAB}'!A2:I1000`, `'ots_anteriores'!A2:I3000`]
     });
 
-    const otsRows = otsRes.data.values || [];
-    if (otsRows.length === 0) {
-      return { success: true, count: 0, message: "No hay datos en la pestaña 'ots'" };
+    const valRanges = batchOtsRes.data.valueRanges || [];
+    const otsRows = (valRanges[0] && valRanges[0].values) || [];
+    const antRows = (valRanges[1] && valRanges[1].values) || [];
+
+    if (otsRows.length === 0 && antRows.length === 0) {
+      return { success: true, count: 0, message: "No hay datos en 'ots' ni 'ots_anteriores'" };
     }
 
     // 2. Leer tareas existentes en 'DB_OT_TASKS' (A:E para indexar TASK_ID, OT, DOMINIO, RUBRO, DESCRIPCION)
     const currentTasksRes = await sheetsClient.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${DB_TASKS_TAB}'!A2:E1500`
+      range: `'${DB_TASKS_TAB}'!A2:E2000`
     });
     const currentTaskRows = currentTasksRes.data.values || [];
 
@@ -268,58 +273,87 @@ async function syncOtsToTasksDatabase({ sheetsClient, spreadsheetId }) {
     const newRowsToAppend = [];
     let skippedExistingCount = 0;
 
-    for (const row of otsRows) {
-      const rawOt = String(row[2] || '').trim(); // Col C: ORDEN Nº
-      const rawDominio = String(row[3] || '').trim(); // Col D: DOMINIO
-      const rawTasks = String(row[4] || '').trim(); // Col E: Sector / Tareas
+    const sources = [
+      { rows: otsRows, originTab: 'ots' },
+      { rows: antRows, originTab: 'ots_anteriores' }
+    ];
 
-      if (!rawOt || !rawTasks) continue;
+    for (const source of sources) {
+      for (const row of source.rows) {
+        const rawOt = String(row[2] || '').trim(); // Col C: ORDEN Nº
+        const rawDominio = String(row[3] || '').trim(); // Col D: DOMINIO
+        const rawTasks = String(row[4] || '').trim(); // Col E: Sector / Tareas
+        const rawColIJson = String(row[8] || '').trim(); // Col I: JSON COORDINACION
 
-      const cleanOt = rawOt.replace(/^0+/, '') || rawOt;
-      const plate = parseDominio(rawDominio);
-      const parsedTaskList = parseTasksFromString(rawTasks);
+        if (!rawOt || !rawTasks) continue;
 
-      parsedTaskList.forEach((item, idx) => {
-        const taskId = `${cleanOt}-${plate}-${idx + 1}`;
-        const fingerprint = makeTaskFingerprint(cleanOt, plate, item.rubro, item.descripcion);
+        const cleanOt = rawOt.replace(/^0+/, '') || rawOt;
+        const plate = parseDominio(rawDominio);
+        const parsedTaskList = parseTasksFromString(rawTasks);
 
-        // Si ya existe en DB_OT_TASKS o en HISTORICO_COLD, SE SALTEA SIN TOCAR
-        if (existingTaskIds.has(taskId) || existingFingerprints.has(fingerprint)) {
-          skippedExistingCount++;
-          return;
+        let savedColI = null;
+        if (rawColIJson) {
+          try {
+            savedColI = JSON.parse(rawColIJson);
+          } catch (e) {}
         }
 
-        // Es una tarea genuinamente nueva (11 columnas: A:K)
-        newRowsToAppend.push([
-          taskId,
-          cleanOt,
-          plate,
-          item.rubro,
-          item.descripcion,
-          '', // Ubicación (vacía para asignar)
-          '', // Operario (vacío para asignar)
-          '', // Asignado (vacío)
-          '', // Empezó (vacío)
-          '', // Terminó (vacío)
-          'PENDIENTE' // Estado inicial
-        ]);
+        parsedTaskList.forEach((item, idx) => {
+          const taskId = `${cleanOt}-${plate}-${idx + 1}`;
+          const fingerprint = makeTaskFingerprint(cleanOt, plate, item.rubro, item.descripcion);
 
-        // Registrar en los sets locales para evitar duplicaciones dentro del mismo lote
-        existingTaskIds.add(taskId);
-        existingFingerprints.add(fingerprint);
-      });
+          // Si ya existe en DB_OT_TASKS o en HISTORICO_COLD, SE SALTEA SIN TOCAR
+          if (existingTaskIds.has(taskId) || existingFingerprints.has(fingerprint)) {
+            skippedExistingCount++;
+            return;
+          }
+
+          let colITask = null;
+          if (savedColI && Array.isArray(savedColI.tasks)) {
+            colITask = savedColI.tasks.find(t => t.id === taskId || t.desc === item.descripcion);
+          }
+
+          const ubicacion = (colITask && colITask.ubicacion) || (savedColI && savedColI.ubicacion) || '';
+          const operario = (colITask && (colITask.operarios || colITask.operario)) || '';
+          const asignado = (colITask && colITask.asignado) || '';
+          const empezo = (colITask && colITask.empezo) || '';
+          const termino = (colITask && colITask.termino) || '';
+          const estado = (colITask && colITask.estado) || (termino ? 'COMPLETADA' : (empezo ? 'EN_CURSO' : (operario ? 'ASIGNADA' : 'PENDIENTE')));
+
+          // 13 columnas (A:M)
+          newRowsToAppend.push([
+            taskId,
+            cleanOt,
+            plate,
+            item.rubro,
+            item.descripcion,
+            ubicacion,
+            operario,
+            asignado,
+            empezo,
+            termino,
+            estado,
+            source.originTab,
+            '' // Metadata JSON extensible
+          ]);
+
+          // Registrar en los sets locales para evitar duplicaciones dentro del mismo lote
+          existingTaskIds.add(taskId);
+          existingFingerprints.add(fingerprint);
+        });
+      }
     }
 
     // 6. Inserción atómica por APPEND (sin reescribir ni tocar filas previas)
     if (newRowsToAppend.length > 0) {
       await sheetsClient.spreadsheets.values.append({
         spreadsheetId,
-        range: `'${DB_TASKS_TAB}'!A:K`,
+        range: `'${DB_TASKS_TAB}'!A:M`,
         valueInputOption: 'USER_ENTERED',
         insertDataOption: 'INSERT_ROWS',
         requestBody: { values: newRowsToAppend }
       });
-      console.log(`✨ [AutoSync] ${newRowsToAppend.length} nuevas tareas agregadas a ${DB_TASKS_TAB}. (${skippedExistingCount} existentes preservadas intactas).`);
+      console.log(`✨ [AutoSync] ${newRowsToAppend.length} nuevas tareas agregadas a ${DB_TASKS_TAB} desde ots y ots_anteriores. (${skippedExistingCount} existentes preservadas intactas).`);
     } else {
       console.log(`✓ [AutoSync] Sin tareas nuevas (${skippedExistingCount} existentes comprobadas y preservadas intactas).`);
     }
@@ -525,10 +559,10 @@ async function updateTaskExecution({ sheetsClient, spreadsheetId, taskId, ubicac
     throw new Error('Parámetros requeridos: sheetsClient, spreadsheetId, taskId');
   }
 
-  // 1. Buscar la fila exacta en DB_OT_TASKS (11 columnas A:K)
+  // 1. Buscar la fila exacta en DB_OT_TASKS (13 columnas A:M)
   const res = await sheetsClient.spreadsheets.values.get({
     spreadsheetId,
-    range: `'${DB_TASKS_TAB}'!A:K`
+    range: `'${DB_TASKS_TAB}'!A:M`
   });
 
   const rows = res.data.values || [];
@@ -564,7 +598,7 @@ async function updateTaskExecution({ sheetsClient, spreadsheetId, taskId, ubicac
     newEstado = 'ASIGNADA';
   }
 
-  // 3. Escribir actualización en rango F{row}:K{row}
+  // 3. Escribir actualización en rango F{row}:K{row} de DB_OT_TASKS
   await sheetsClient.spreadsheets.values.update({
     spreadsheetId,
     range: `'${DB_TASKS_TAB}'!F${targetRowIndex}:K${targetRowIndex}`,
@@ -574,7 +608,82 @@ async function updateTaskExecution({ sheetsClient, spreadsheetId, taskId, ubicac
     }
   });
 
-  console.log(`✅ Tarea ${taskId} actualizada en fila ${targetRowIndex}: ${newEstado}`);
+  console.log(`✅ Tarea ${taskId} actualizada en DB_OT_TASKS fila ${targetRowIndex}: ${newEstado}`);
+
+  // Sincronizar también con Col I de 'ots' o 'ots_anteriores'
+  const otNumber = currentRowData[1];
+  const plate = currentRowData[2];
+  if (otNumber || plate) {
+    try {
+      const cleanOt = String(otNumber || '').trim().replace(/^0+/, '');
+      const cleanPlate = String(plate || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+      const tabsToCheck = [OTS_SOURCE_TAB, 'ots_anteriores'];
+
+      for (const tabName of tabsToCheck) {
+        const otsGet = await sheetsClient.spreadsheets.values.get({
+          spreadsheetId,
+          range: `'${tabName}'!A2:I1000`
+        });
+        const oRows = otsGet.data.values || [];
+        let matchedRowIdx = -1;
+        let matchedRow = null;
+
+        for (let ri = 0; ri < oRows.length; ri++) {
+          const rOt = String(oRows[ri][2] || '').trim().replace(/^0+/, '');
+          const rPlate = String(oRows[ri][3] || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+          if ((cleanOt && rOt === cleanOt) || (cleanPlate && rPlate === cleanPlate)) {
+            matchedRowIdx = ri + 2;
+            matchedRow = oRows[ri];
+            break;
+          }
+        }
+
+        if (matchedRowIdx > 0 && matchedRow) {
+          let colIObj = { tasks: [] };
+          if (matchedRow[8]) {
+            try {
+              const parsedI = JSON.parse(matchedRow[8]);
+              if (parsedI && typeof parsedI === 'object') colIObj = parsedI;
+              if (!Array.isArray(colIObj.tasks)) colIObj.tasks = [];
+            } catch (e) {}
+          }
+
+          let existingTask = colIObj.tasks.find(t => t.id === taskId);
+          if (!existingTask) {
+            existingTask = {
+              id: taskId,
+              sector: currentRowData[3] || '',
+              desc: currentRowData[4] || '',
+              ubicacion: newUbicacion,
+              operarios: newOperario,
+              asignado: newAsignado,
+              empezo: newEmpezo,
+              termino: newTermino,
+              estado: newEstado
+            };
+            colIObj.tasks.push(existingTask);
+          } else {
+            if (newUbicacion !== undefined) existingTask.ubicacion = newUbicacion;
+            if (newOperario !== undefined) existingTask.operarios = newOperario;
+            if (newAsignado !== undefined) existingTask.asignado = newAsignado;
+            if (newEmpezo !== undefined) existingTask.empezo = newEmpezo;
+            if (newTermino !== undefined) existingTask.termino = newTermino;
+            existingTask.estado = newEstado;
+          }
+
+          await sheetsClient.spreadsheets.values.update({
+            spreadsheetId,
+            range: `'${tabName}'!I${matchedRowIdx}`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: [[JSON.stringify(colIObj)]] }
+          });
+          break;
+        }
+      }
+    } catch (eSyncColI) {
+      console.warn('⚠️ Nota: Sync secundario a Col I:', eSyncColI.message);
+    }
+  }
 
   const updateResult = {
     success: true,
@@ -591,10 +700,10 @@ async function updateTaskExecution({ sheetsClient, spreadsheetId, taskId, ubicac
 
   if (io) {
     io.emit('task_updated', updateResult);
+    io.emit('task_status_changed', updateResult);
   }
 
   // 4. Verificar si la OT completa finalizó para enviar a Cold Storage
-  const otNumber = currentRowData[1];
   if (otNumber) {
     checkAndArchiveIfOtFinished({ sheetsClient, spreadsheetId, otNumber, io }).catch(e => {
       console.error('Error en checkAndArchiveIfOtFinished:', e.message);
@@ -863,13 +972,15 @@ async function updateOtTaskTerminado({ sheetsClient, spreadsheetId, otNumber, ta
   const cleanOt = String(otNumber).trim().replace(/^0+/, '');
 
   try {
-    const otsRes = await sheetsClient.spreadsheets.values.get({
-      spreadsheetId,
-      range: `'${OTS_SOURCE_TAB}'!A2:G500`
-    });
-    const rows = otsRes.data.values || [];
+    let targetTab = OTS_SOURCE_TAB;
     let targetRowIndex = -1;
     let currentRow = null;
+
+    const otsRes = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${OTS_SOURCE_TAB}'!A2:I1000`
+    });
+    const rows = otsRes.data.values || [];
 
     for (let i = 0; i < rows.length; i++) {
       const rowOt = String(rows[i][2] || '').trim().replace(/^0+/, '');
@@ -880,6 +991,30 @@ async function updateOtTaskTerminado({ sheetsClient, spreadsheetId, otNumber, ta
       }
     }
 
+    if (targetRowIndex === -1) {
+      try {
+        const antRes = await sheetsClient.spreadsheets.values.get({
+          spreadsheetId,
+          range: `'ots_anteriores'!A2:I3000`
+        });
+        const antRows = antRes.data.values || [];
+        for (let i = 0; i < antRows.length; i++) {
+          const rowOt = String(antRows[i][2] || '').trim().replace(/^0+/, '');
+          if (rowOt === cleanOt) {
+            targetRowIndex = i + 2;
+            targetTab = 'ots_anteriores';
+            currentRow = antRows[i];
+            break;
+          }
+        }
+      } catch (eAntSearch) {}
+    }
+
+    const nowIso = new Date().toISOString();
+    const nowTimeStr = new Date().toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
+    const safeTaskId = taskId || `${cleanOt}-${rubro}-${desc}`;
+
+    // Actualizar Col G (payload legado)
     let payload = { asignacion: [], recibido: [], terminado: [] };
     if (currentRow && currentRow[6]) {
       try {
@@ -892,7 +1027,6 @@ async function updateOtTaskTerminado({ sheetsClient, spreadsheetId, otNumber, ta
       } catch(e) {}
     }
 
-    const safeTaskId = taskId || `${cleanOt}-${rubro}-${desc}`;
     if (isCompleted) {
       const already = payload.terminado.some(t => (t.taskId && t.taskId === safeTaskId) || (t.desc === desc && t.rubro === rubro));
       if (!already) {
@@ -901,28 +1035,73 @@ async function updateOtTaskTerminado({ sheetsClient, spreadsheetId, otNumber, ta
           rubro: rubro || '',
           desc: desc || '',
           opId: String(opId || ''),
-          timestamp: new Date().toISOString()
+          timestamp: nowIso
         });
       }
     } else {
       payload.terminado = payload.terminado.filter(t => !((t.taskId && t.taskId === safeTaskId) || (t.desc === desc && t.rubro === rubro)));
     }
 
-    if (targetRowIndex > 0) {
-      await sheetsClient.spreadsheets.values.update({
-        spreadsheetId,
-        range: `'${OTS_SOURCE_TAB}'!G${targetRowIndex}`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: [[JSON.stringify(payload)]] }
-      });
-      console.log(`✅ [ots Col G] OT ${cleanOt} fila ${targetRowIndex}: ${payload.terminado.length} tareas terminadas.`);
+    // Actualizar Col I (JSON de Coordinación)
+    let colIJson = { tasks: [] };
+    if (currentRow && currentRow[8]) {
+      try {
+        const parsedI = JSON.parse(currentRow[8]);
+        if (parsedI && typeof parsedI === 'object') colIJson = parsedI;
+        if (!Array.isArray(colIJson.tasks)) colIJson.tasks = [];
+      } catch (e) {}
     }
 
-    // Sincronizar también con DB_OT_TASKS si existe
+    let existingColITask = colIJson.tasks.find(t => (t.id && t.id === safeTaskId) || (t.desc === desc));
+    if (!existingColITask) {
+      existingColITask = {
+        id: safeTaskId,
+        sector: rubro || '',
+        desc: desc || '',
+        operarios: opId || '',
+        asignado: nowIso,
+        empezo: nowIso,
+        termino: isCompleted ? nowIso : '',
+        estado: isCompleted ? 'TERMINADO' : 'PENDIENTE'
+      };
+      colIJson.tasks.push(existingColITask);
+    } else {
+      if (isCompleted) {
+        if (!existingColITask.empezo) existingColITask.empezo = nowIso;
+        existingColITask.termino = nowIso;
+        existingColITask.estado = 'TERMINADO';
+      } else {
+        existingColITask.termino = '';
+        existingColITask.estado = existingColITask.empezo ? 'EN_CURSO' : 'PENDIENTE';
+      }
+      if (opId && !existingColITask.operarios) existingColITask.operarios = opId;
+    }
+
+    if (targetRowIndex > 0) {
+      await sheetsClient.spreadsheets.values.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data: [
+            {
+              range: `'${targetTab}'!G${targetRowIndex}`,
+              values: [[JSON.stringify(payload)]]
+            },
+            {
+              range: `'${targetTab}'!I${targetRowIndex}`,
+              values: [[JSON.stringify(colIJson)]]
+            }
+          ]
+        }
+      });
+      console.log(`✅ [${targetTab} Col G e I] OT ${cleanOt} fila ${targetRowIndex}: Estado terminado actualizado.`);
+    }
+
+    // Sincronizar también con DB_OT_TASKS
     try {
       const dbTasksRes = await sheetsClient.spreadsheets.values.get({
         spreadsheetId,
-        range: `'${DB_TASKS_TAB}'!A2:K1500`
+        range: `'${DB_TASKS_TAB}'!A2:K2000`
       });
       const taskRows = dbTasksRes.data.values || [];
       for (let i = 0; i < taskRows.length; i++) {
@@ -931,14 +1110,15 @@ async function updateOtTaskTerminado({ sheetsClient, spreadsheetId, otNumber, ta
         const tDesc = String(taskRows[i][4] || '').trim();
         if ((safeTaskId && tId === safeTaskId) || (tOt === cleanOt && tDesc === desc)) {
           const rowNum = i + 2;
-          const nowStr = new Date().toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
-          const newTermino = isCompleted ? (taskRows[i][9] || nowStr) : '';
-          const newEstado = isCompleted ? 'COMPLETADA' : 'PENDIENTE';
+          const prevEmpezo = taskRows[i][8] || '';
+          const newEmpezo = prevEmpezo || (isCompleted ? nowTimeStr : '');
+          const newTermino = isCompleted ? (taskRows[i][9] || nowTimeStr) : '';
+          const newEstado = isCompleted ? 'COMPLETADA' : (newEmpezo ? 'EN_CURSO' : 'PENDIENTE');
           await sheetsClient.spreadsheets.values.update({
             spreadsheetId,
-            range: `'${DB_TASKS_TAB}'!J${rowNum}:K${rowNum}`,
+            range: `'${DB_TASKS_TAB}'!I${rowNum}:K${rowNum}`,
             valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [[newTermino, newEstado]] }
+            requestBody: { values: [[newEmpezo, newTermino, newEstado]] }
           });
           break;
         }
@@ -978,94 +1158,158 @@ async function getUnitTimelineTasks({ sheetsClient, spreadsheetId, tractorOt, se
   const cleanSemiPlate = String(semiPlate || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
 
   try {
-    const otsRes = await sheetsClient.spreadsheets.values.get({
-      spreadsheetId,
-      range: `'${OTS_SOURCE_TAB}'!A2:G500`
+    // 1. Leer tareas directamente desde DB_OT_TASKS (Col A:M) como capa viva única
+    let tRows = [];
+    try {
+      const tasksRes = await sheetsClient.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${DB_TASKS_TAB}'!A2:M2000`
+      });
+      tRows = tasksRes.data.values || [];
+    } catch (eTasks) {
+      console.warn('⚠️ Error al leer DB_OT_TASKS:', eTasks.message);
+    }
+
+    // Mapa de tareas activas para cruzar estados con histórico si aplica
+    const dbTasksMap = new Map();
+    tRows.forEach(r => {
+      const tId = String(r[0] || '').trim();
+      if (tId) {
+        dbTasksMap.set(tId, {
+          ubicacion: String(r[5] || '').trim(),
+          operario: String(r[6] || '').trim(),
+          asignado: String(r[7] || '').trim(),
+          empezo: String(r[8] || '').trim(),
+          termino: String(r[9] || '').trim(),
+          estado: String(r[10] || 'PENDIENTE').trim()
+        });
+      }
     });
-    const rows = otsRes.data.values || [];
+
+    // Helper para mapear una fila de DB_OT_TASKS a objeto de tarea
+    const mapRowToTask = (r, defaultType) => {
+      const taskId = String(r[0] || '').trim();
+      const ot = String(r[1] || '').trim().replace(/^0+/, '');
+      const dom = parseDominio(r[2]);
+      const rubro = String(r[3] || '').trim().toUpperCase();
+      const desc = String(r[4] || '').trim();
+      const ubicacion = String(r[5] || '').trim();
+      const operario = String(r[6] || '').trim();
+      const asignado = String(r[7] || '').trim();
+      const empezo = String(r[8] || '').trim();
+      const termino = String(r[9] || '').trim();
+      const estado = String(r[10] || 'PENDIENTE').trim().toUpperCase();
+
+      const isTerminado = !!(termino && termino.trim()) || estado === 'COMPLETADA';
+      const isEmpezado = !!(empezo && empezo.trim()) || estado === 'EN_CURSO';
+
+      return {
+        id: taskId,
+        ot,
+        dominio: dom,
+        type: defaultType,
+        rubro: rubro || 'GENERAL',
+        desc: desc || '',
+        ubicacion,
+        operario,
+        asignado,
+        empezo,
+        termino,
+        estado,
+        isTerminado,
+        isEmpezado
+      };
+    };
+
+    // Helper para filtrar tareas de DB_OT_TASKS que coincidan con la unidad
+    const findTasksInDb = (rows) => {
+      const tractorList = [];
+      const semiList = [];
+
+      rows.forEach(r => {
+        const rowOt = String(r[1] || '').trim().replace(/^0+/, '');
+        const rowDom = parseDominio(r[2]);
+        if (!rowOt && !rowDom) return;
+
+        const isTractorByOt = cleanTractorOt && (rowOt === cleanTractorOt);
+        const isTractorByPlate = cleanTractorPlate && (rowDom === cleanTractorPlate);
+        const isSemiByOt = cleanSemiOt && (rowOt === cleanSemiOt);
+        const isSemiByPlate = cleanSemiPlate && (rowDom === cleanSemiPlate);
+
+        if (isTractorByOt || isTractorByPlate) {
+          tractorList.push(mapRowToTask(r, 'TRACTOR'));
+        } else if (isSemiByOt || isSemiByPlate) {
+          semiList.push(mapRowToTask(r, 'SEMI'));
+        }
+      });
+      return { tractorList, semiList };
+    };
+
+    let { tractorList, semiList } = findTasksInDb(tRows);
+
+    // Si no se encontraron tareas pero hay OTs asignadas, sincronizar desde 'ots' y reintentar
+    if (tractorList.length === 0 && semiList.length === 0 && (cleanTractorOt || cleanSemiOt)) {
+      try {
+        await syncOtsToTasksDatabase({ sheetsClient, spreadsheetId });
+        const retryRes = await sheetsClient.spreadsheets.values.get({
+          spreadsheetId,
+          range: `'${DB_TASKS_TAB}'!A2:M2000`
+        });
+        tRows = retryRes.data.values || [];
+        const retryFound = findTasksInDb(tRows);
+        tractorList = retryFound.tractorList;
+        semiList = retryFound.semiList;
+      } catch (eRetry) {
+        console.warn('⚠️ Reintento de sincronización DB_OT_TASKS:', eRetry.message);
+      }
+    }
 
     const timelineGroups = [];
 
-    // Helper para buscar filas coincidentes
-    const findMatchingRows = (ot, plate, type) => {
-      const matches = [];
-      rows.forEach(r => {
-        const rowOt = String(r[2] || '').trim().replace(/^0+/, '');
-        const rowDom = parseDominio(r[3]);
-        const isOtMatch = ot && (rowOt === ot);
-        const isPlateMatch = plate && (rowDom === plate);
-        if (isOtMatch || isPlateMatch) {
-          matches.push({ row: r, type });
-        }
+    // Agrupar tareas por OT para TRACTOR y SEMI
+    const groupTasksByOt = (tasks, defaultOt, defaultType) => {
+      if (!tasks || tasks.length === 0) return;
+      const byOt = new Map();
+      tasks.forEach(t => {
+        const key = t.ot || defaultOt || 'S/OT';
+        if (!byOt.has(key)) byOt.set(key, []);
+        byOt.get(key).push(t);
       });
-      return matches;
+
+      byOt.forEach((taskList, otNum) => {
+        let dateLabel = '';
+        for (const t of taskList) {
+          if (t.asignado) {
+            dateLabel = t.asignado.slice(0, 5);
+            break;
+          } else if (t.empezo) {
+            dateLabel = t.empezo.slice(0, 5);
+            break;
+          }
+        }
+        if (!dateLabel) {
+          const now = new Date();
+          dateLabel = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`;
+        }
+
+        timelineGroups.push({
+          ot: otNum,
+          type: defaultType,
+          date: dateLabel,
+          tasks: taskList
+        });
+      });
     };
 
-    const allMatches = [
-      ...findMatchingRows(cleanTractorOt, cleanTractorPlate, 'TRACTOR'),
-      ...findMatchingRows(cleanSemiOt, cleanSemiPlate, 'SEMI')
-    ];
+    groupTasksByOt(tractorList, cleanTractorOt, 'TRACTOR');
+    groupTasksByOt(semiList, cleanSemiOt, 'SEMI');
 
-    // Desduplicar filas por ORDEN Nº y DOMINIO
-    const seenOtKeys = new Set();
-    const uniqueMatches = [];
-    allMatches.forEach(m => {
-      const key = `${m.row[2]}__${m.row[3]}`;
-      if (!seenOtKeys.has(key)) {
-        seenOtKeys.add(key);
-        uniqueMatches.push(m);
-      }
-    });
-
-    uniqueMatches.forEach(m => {
-      const r = m.row;
-      const rawOt = String(r[2] || '').trim();
-      const cleanOt = rawOt.replace(/^0+/, '') || rawOt;
-      const rawDate = String(r[1] || '').trim(); // HORA ENVIO o fecha
-      const dateLabel = rawDate ? rawDate.slice(0, 5) : 'dd/mm';
-      const rawTasks = String(r[4] || '').trim();
-      const parsedTasks = parseTasksFromString(rawTasks);
-
-      // Leer payload de Col G para estados 'terminado'
-      let payload = { asignacion: [], recibido: [], terminado: [] };
-      if (r[6]) {
-        try {
-          payload = JSON.parse(r[6]);
-        } catch(e) {}
-      }
-      const terminadoList = Array.isArray(payload.terminado) ? payload.terminado : [];
-
-      const tasks = parsedTasks.map((t, idx) => {
-        const taskId = `${cleanOt}-${parseDominio(r[3]) || m.type}-${idx + 1}`;
-        const isTerminado = terminadoList.some(item => 
-          (item.taskId && item.taskId === taskId) || 
-          (item.desc && item.desc.toLowerCase() === t.descripcion.toLowerCase())
-        );
-
-        return {
-          id: taskId,
-          ot: cleanOt,
-          type: m.type,
-          rubro: t.rubro,
-          desc: t.descripcion,
-          isTerminado: !!isTerminado
-        };
-      });
-
-      timelineGroups.push({
-        ot: cleanOt,
-        type: m.type,
-        date: dateLabel,
-        tasks
-      });
-    });
-
-    // Leer OTs históricas (últimos 6 meses) desde ots_anteriores con TODAS sus columnas igual que tab ots
+    // Leer OTs históricas (últimos 6 meses) desde ots_anteriores con TODAS sus columnas (A2:I)
     const historicalNodes = [];
     try {
       const antRes = await sheetsClient.spreadsheets.values.get({
         spreadsheetId,
-        range: `'ots_anteriores'!A2:G1000`
+        range: `'ots_anteriores'!A2:I2000`
       });
       const antRows = antRes.data.values || [];
       const seenAntKeys = new Set();
@@ -1105,9 +1349,28 @@ async function getUnitTimelineTasks({ sheetsClient, spreadsheetId, tractorOt, se
         const terminadoList = Array.isArray(payload.terminado) ? payload.terminado : [];
         const colFStatus = String(r[5] || '').trim();
 
+        // Leer Col I para ots_anteriores
+        let colI = null;
+        if (r[8]) {
+          try {
+            colI = JSON.parse(r[8]);
+          } catch(e) {}
+        }
+
         const tasks = parsedTasks.map((t, idx) => {
           const taskId = `${cleanOt}-${dom}-${idx + 1}`;
-          const isTerminado = (colFStatus.toUpperCase() === 'TERMINADO' || colFStatus.toUpperCase() === 'CERRADA') ||
+          const dbState = dbTasksMap.get(taskId) || {};
+          let colITask = null;
+          if (colI && Array.isArray(colI.tasks)) {
+            colITask = colI.tasks.find(item => item.id === taskId || (item.desc && item.desc.toLowerCase() === t.descripcion.toLowerCase()));
+          }
+
+          const operario = (colITask && (colITask.operarios || colITask.operario)) || dbState.operario || '';
+          const asignado = (colITask && colITask.asignado) || dbState.asignado || '';
+          const empezo = (colITask && colITask.empezo) || dbState.empezo || '';
+          const termino = (colITask && colITask.termino) || dbState.termino || '';
+
+          const isTerminado = !!termino || (colFStatus.toUpperCase() === 'TERMINADO' || colFStatus.toUpperCase() === 'CERRADA') ||
             terminadoList.some(item => 
               (item.taskId && item.taskId === taskId) || 
               (item.desc && item.desc.toLowerCase() === t.descripcion.toLowerCase())
@@ -1116,9 +1379,14 @@ async function getUnitTimelineTasks({ sheetsClient, spreadsheetId, tractorOt, se
           return {
             id: taskId,
             ot: cleanOt,
+            dominio: dom,
             type: otType,
             rubro: t.rubro,
             desc: t.descripcion,
+            operario,
+            asignado,
+            empezo,
+            termino,
             isTerminado: !!isTerminado
           };
         });
@@ -1435,6 +1703,8 @@ async function saveOtCoordinacionJson({ sheetsClient, spreadsheetId, otNumber, p
     const rows = res.data.values || [];
     let targetRow = -1;
 
+    let targetTab = OTS_SOURCE_TAB;
+
     for (let i = 0; i < rows.length; i++) {
       const rowOt = String(rows[i][2] || '').trim().replace(/^0+/, '');
       const rowPlate = String(rows[i][3] || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
@@ -1446,26 +1716,72 @@ async function saveOtCoordinacionJson({ sheetsClient, spreadsheetId, otNumber, p
     }
 
     if (targetRow === -1) {
-      return { success: false, error: `No se encontró la OT ${cleanOt || cleanPlateStr} en la pestaña '${OTS_SOURCE_TAB}'` };
+      // Buscar fallback en 'ots_anteriores'
+      try {
+        const antRes = await sheetsClient.spreadsheets.values.get({
+          spreadsheetId,
+          range: `'ots_anteriores'!A2:I3000`
+        });
+        const antRows = antRes.data.values || [];
+        for (let i = 0; i < antRows.length; i++) {
+          const rowOt = String(antRows[i][2] || '').trim().replace(/^0+/, '');
+          const rowPlate = String(antRows[i][3] || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+          if ((cleanOt && rowOt === cleanOt) || (cleanPlateStr && rowPlate === cleanPlateStr)) {
+            targetRow = i + 2;
+            targetTab = 'ots_anteriores';
+            break;
+          }
+        }
+      } catch (eAntSearch) {
+        console.warn('⚠️ Error al buscar en ots_anteriores:', eAntSearch.message);
+      }
+    }
+
+    if (targetRow === -1) {
+      return { success: false, error: `No se encontró la OT ${cleanOt || cleanPlateStr} en 'ots' ni en 'ots_anteriores'` };
     }
 
     const jsonString = typeof data === 'string' ? data : JSON.stringify(data);
 
     await sheetsClient.spreadsheets.values.update({
       spreadsheetId,
-      range: `'${OTS_SOURCE_TAB}'!I${targetRow}`,
+      range: `'${targetTab}'!I${targetRow}`,
       valueInputOption: 'USER_ENTERED',
       requestBody: {
         values: [[jsonString]]
       }
     });
 
-    console.log(`✅ [Coordinación] JSON guardado exitosamente en '${OTS_SOURCE_TAB}'!I${targetRow} para OT ${cleanOt || cleanPlateStr}`);
+    console.log(`✅ [Coordinación] JSON guardado exitosamente en '${targetTab}'!I${targetRow} para OT ${cleanOt || cleanPlateStr}`);
+
+    // Sincronizar tareas individuales a DB_OT_TASKS si data contiene tasks
+    if (data && Array.isArray(data.tasks)) {
+      try {
+        for (const t of data.tasks) {
+          if (t.id) {
+            await updateTaskExecution({
+              sheetsClient,
+              spreadsheetId,
+              taskId: t.id,
+              ubicacion: t.ubicacion,
+              operario: t.operarios || t.operario,
+              asignado: t.asignado,
+              empezo: t.empezo,
+              termino: t.termino,
+              estado: t.estado
+            });
+          }
+        }
+      } catch (eSyncTasks) {
+        console.warn('⚠️ Nota: Sync secundario de tareas a DB_OT_TASKS:', eSyncTasks.message);
+      }
+    }
 
     if (io) {
       io.emit('coordinacion_ot_updated', {
         otNumber: cleanOt,
         plate: cleanPlateStr,
+        tab: targetTab,
         rowNumber: targetRow,
         data
       });
@@ -1473,6 +1789,7 @@ async function saveOtCoordinacionJson({ sheetsClient, spreadsheetId, otNumber, p
 
     return {
       success: true,
+      tab: targetTab,
       rowNumber: targetRow,
       otNumber: cleanOt,
       plate: cleanPlateStr

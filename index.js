@@ -121,6 +121,7 @@ io.use((socket, next) => {
 
 // === 1. CREDENCIALES CENTRALIZADAS CON GOOGLE SHEETS ===
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ';
+const SOURCE_SPREADSHEET_ID = process.env.SOURCE_SPREADSHEET_ID || '1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk';
 const MES_MOVIMIENTOS_ID = process.env.MES_MOVIMIENTOS_ID || '1Bwj8WCykMn_FbZhQ_FqnDH3K_WCod52YTSvsaxIDNS8';
 const OT_SYNC_INTERVAL_MINUTES = parseInt(process.env.OT_SYNC_INTERVAL_MINUTES || '0', 10);
 
@@ -367,7 +368,7 @@ async function syncDataFromSheets(force = false) {
           const semiBrand = (ramSemi?.semiBrand) || (otMatch?.marcaSemi) || (semiPlate ? 'SEMI' : '');
 
           const tractorOt = otMatch?.ot || String(row[4] || '').trim();
-          const semiOt = otMatch?.semiOt || (otMatch && otMatch.semi ? (tractorOt ? String(parseInt(tractorOt, 10) + 1) : '') : '');
+          const semiOt = otMatch?.semiOt || '';
 
           ordersMap[reqId] = {
             reqId: reqId,
@@ -626,6 +627,18 @@ app.get('/api/auth/status', (req, res) => {
   const token = cookies.sys_auth || req.headers['x-auth-token'];
   const isValid = verifyAuthToken(token);
   res.json({ authenticated: isValid, user: isValid ? SYSTEM_USER : null });
+});
+
+// Información del entorno actual (Localhost vs Render)
+app.get('/api/env-info', (req, res) => {
+  const isProd = (process.env.NODE_ENV === 'production') || (SPREADSHEET_ID === '1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc');
+  res.json({
+    environment: isProd ? 'production' : 'development',
+    isProduction: isProd,
+    spreadsheetTitle: isProd ? 'Database PRUEBAS' : 'Database PRUEBAS LOCAL',
+    spreadsheetIdShort: SPREADSHEET_ID.slice(0, 6) + '...' + SPREADSHEET_ID.slice(-4),
+    serverTime: new Date().toISOString()
+  });
 });
 
 // Rutas estáticas de scripts esenciales (disponibles para cliente)
@@ -1333,7 +1346,7 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
       });
     }
     else if (action === 'syncOtsToTasks') {
-      result = { success: true, suspended: true, message: 'DB_OT_TASKS suspendido' };
+      result = await syncOtsToTasksDatabase({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
     }
     else if (action === 'getHistoricalTasks') {
       result = await getHistoricalTasks({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
@@ -1371,6 +1384,19 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
         opId: params.opId,
         isCompleted: params.isCompleted,
         io
+      });
+    }
+    else if (action === 'getFleetSearchCatalog') {
+      result = await otsManager.getFleetSearchCatalog(sheets, SPREADSHEET_ID);
+    }
+    else if (action === 'findUnitOrOt') {
+      const query = args[0];
+      const type = args[1];
+      result = await otsManager.findUnitOrOt({
+        sheetsClient: sheets,
+        spreadsheetId: SPREADSHEET_ID,
+        query,
+        type
       });
     }
     else {
@@ -1511,7 +1537,12 @@ app.post('/api/tasks/update', async (req, res) => {
 });
 
 app.post('/api/tasks/sync', async (req, res) => {
-  res.json({ success: true, suspended: true, message: 'DB_OT_TASKS suspendido temporalmente' });
+  try {
+    const result = await syncOtsToTasksDatabase({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.get('/api/tasks/history', async (req, res) => {
@@ -1668,7 +1699,8 @@ app.all('/api/sync-ots', async (req, res) => {
     const result = await syncCanonicalFleetToDbOtList({
       sheetsClient: sheets,
       targetSpreadsheetId: SPREADSHEET_ID,
-      movimientosSpreadsheetId: MES_MOVIMIENTOS_ID
+      movimientosSpreadsheetId: MES_MOVIMIENTOS_ID,
+      formSpreadsheetId: SOURCE_SPREADSHEET_ID
     });
     // Distribuir en la carga
     await otsManager.distribuirOtsEnCarga(sheets, SPREADSHEET_ID, io);
@@ -1698,7 +1730,8 @@ if (OT_SYNC_INTERVAL_MINUTES > 0) {
       const result = await syncCanonicalFleetToDbOtList({
         sheetsClient: sheets,
         targetSpreadsheetId: SPREADSHEET_ID,
-        movimientosSpreadsheetId: MES_MOVIMIENTOS_ID
+        movimientosSpreadsheetId: MES_MOVIMIENTOS_ID,
+        formSpreadsheetId: SOURCE_SPREADSHEET_ID
       });
       await otsManager.distribuirOtsEnCarga(sheets, SPREADSHEET_ID, io);
       io.emit('ot_sync_completed', result);
@@ -1724,7 +1757,14 @@ function startServer(port) {
   });
 
   server.once('listening', async () => {
-    console.log('🚀 Servidor Monolito Pañol activo en puerto ' + port);
+    const isProd = (process.env.NODE_ENV === 'production') || (SPREADSHEET_ID === '1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc');
+    console.log('================================================================');
+    console.log(`🚀 Servidor Monolito Pañol activo en puerto ${port}`);
+    console.log(`🌍 Entorno:          ${isProd ? '🔴 PRODUCCIÓN (Render Cloud)' : '🟢 LOCAL / DESARROLLO (VS Code / localhost)'}`);
+    console.log(`📊 Spreadsheet Base: ${isProd ? 'Database PRUEBAS' : 'Database PRUEBAS LOCAL'}`);
+    console.log(`🆔 ID Planilla:      ${SPREADSHEET_ID}`);
+    console.log(`🔗 URL Base:         http://localhost:${port}`);
+    console.log('================================================================');
     
     // 1. Carga en memoria RAM de unidades desde diagramasnode (HTTP externo, no gasta cuota de Sheets)
     try {
@@ -1759,14 +1799,20 @@ function startServer(port) {
       const otSyncRes = await syncCanonicalFleetToDbOtList({
         sheetsClient: sheets,
         targetSpreadsheetId: SPREADSHEET_ID,
-        movimientosSpreadsheetId: MES_MOVIMIENTOS_ID
+        movimientosSpreadsheetId: MES_MOVIMIENTOS_ID,
+        formSpreadsheetId: SOURCE_SPREADSHEET_ID
       });
       console.log('✅ Sincronización inicial de OTs finalizada:', otSyncRes);
     } catch (e) {
       console.error('⚠️ Advertencia: No se pudo completar sincronización inicial de OTs:', e.message);
     }
 
-    // Nota: DB_OT_TASKS suspendido temporalmente a solicitud.
+    try {
+      console.log('🔄 Sincronizando tareas operativas de OTs (DB_OT_TASKS & ots_anteriores)...');
+      await syncOtsToTasksDatabase({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
+    } catch (eTasksInit) {
+      console.warn('⚠️ Error en sincronización inicial de tareas:', eTasksInit.message);
+    }
   });
 
   server.listen(port);

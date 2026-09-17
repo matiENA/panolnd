@@ -1,1 +1,38 @@
-[]
+[
+  {
+    "key": "AB882WX - 00004142",
+    "fecha": "14/10/2025",
+    "rawOt": "4142",
+    "ot": "4142",
+    "dominio": "AB882WX",
+    "sectorTareas": "[Electricidad] Cambiar Sensor Sobrellenado C6 | [Electricidad] Problema Electrico | [ENGRASE] Engrasar Semi Completo | [Gomeria] Cambio De Cubierta | [Lavadero] Lavado Completo | [Mecanica] Realizar Checklist Ingreso A Taller",
+    "cierreRespaldo": "[Electricidad - Cambiar Sensor Sobrellenado C6] - Op: Betancourt Felipe Posada Carrazan Juan Mateo - Ini: 16/10/2025 14:07:00 - Fin: 16/10/2025 14:07:00 - Obs: Hecho | [Electricidad - Problema Electrico] - Op: Betancourt Felipe - Ini: 16/10/2025 14:08:00 - Fin: 16/10/2025 14:08:00 - Obs: Realizada reparacion de corto cirtuitode los conectores de retroceso del semi. | [Gomeria - Cambio De Cubierta] - Op: Muñoz Franco - Ini: 22/10/2025 11:49:00 - Fin: 22/10/2025 13:49:00 - Obs: Se cambio una cubierta de eje neumatico",
+    "payload": "",
+    "confirmacion": "Sin confirmar",
+    "archivedAt": "2026-09-17T14:40:22.357Z"
+  },
+  {
+    "key": "JLG - 00003253",
+    "fecha": "02/09/2025",
+    "rawOt": "3253",
+    "ot": "3253",
+    "dominio": "JLG",
+    "sectorTareas": "[Electricidad] Revision General | [Mecanica] Realizar Checklist Ingreso A Taller",
+    "cierreRespaldo": "",
+    "payload": "",
+    "confirmacion": "",
+    "archivedAt": "2026-09-17T14:40:22.356Z"
+  },
+  {
+    "key": "JLG - 00003254",
+    "fecha": "02/09/2025",
+    "rawOt": "3254",
+    "ot": "3254",
+    "dominio": "JLG",
+    "sectorTareas": "[Electricidad] Revision General | [Mecanica] Realizar Checklist Ingreso A Taller",
+    "cierreRespaldo": "",
+    "payload": "",
+    "confirmacion": "",
+    "archivedAt": "2026-09-17T14:40:22.357Z"
+  }
+]

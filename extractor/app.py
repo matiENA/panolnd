@@ -1,4 +1,5 @@
 import os
+import sys
 import re
 import io
 import glob
@@ -7,6 +8,13 @@ import json
 import socket
 import webbrowser
 import datetime
+
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 from typing import List, Optional
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -39,7 +47,21 @@ class CustomCORSMiddleware(BaseHTTPMiddleware):
 app.add_middleware(CustomCORSMiddleware)
 
 # Configuration
-SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", "17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ")
+LOCAL_SPREADSHEET_ID = "17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ"
+PROD_SPREADSHEET_ID = "1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc"
+
+def get_target_spreadsheet_ids() -> List[str]:
+    """Retorna la lista de planillas que deben mantenerse actualizadas en paralelo (Sync Dual)"""
+    env_multi = os.environ.get("SPREADSHEET_IDS", "").strip()
+    if env_multi:
+        return [s.strip() for s in env_multi.split(",") if s.strip()]
+    env_single = os.environ.get("SPREADSHEET_ID", "").strip()
+    if env_single and env_single not in [LOCAL_SPREADSHEET_ID, PROD_SPREADSHEET_ID]:
+        return [env_single]
+    # Sincronización dual activa por defecto para paridad total Local vs Render
+    return [LOCAL_SPREADSHEET_ID, PROD_SPREADSHEET_ID]
+
+SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID", LOCAL_SPREADSHEET_ID)
 TAB_NAME = "ots"
 SERVICE_ACCOUNT_EMAIL = "firebase-adminsdk-fbsvc@ute-logistica.iam.gserviceaccount.com"
 
@@ -402,17 +424,20 @@ class RegisterOTRequest(BaseModel):
 @app.get("/api/status")
 def check_status():
     cred_path = get_service_account_path()
+    target_ids = get_target_spreadsheet_ids()
     return {
         "connected": cred_path is not None,
         "credentials_path": cred_path,
         "spreadsheet_id": SPREADSHEET_ID,
+        "target_spreadsheet_ids": target_ids,
         "tab_name": TAB_NAME,
-        "service_account": SERVICE_ACCOUNT_EMAIL
+        "service_account": SERVICE_ACCOUNT_EMAIL,
+        "mode": "DUAL_SYNC" if len(target_ids) > 1 else "SINGLE_SYNC"
     }
 
 @app.get("/api/ots-status")
 def get_ots_status():
-    """Consulta el estado de la carpeta otsE, descargas, seguimiento de cargadas y Google Sheets"""
+    """Consulta el estado de la carpeta otsE, descargas, seguimiento de cargadas y Google Sheets (Dual Sync)"""
     ensure_folders()
     sync_downloads_to_ot_folder()
     
@@ -436,12 +461,33 @@ def get_ots_status():
     # Pendientes = descargadas que no están en el tracker de cargadas
     pending_ots = sorted(list(registered - uploaded_set), key=lambda x: int(x) if str(x).isdigit() else str(x))
 
-    sheet_rows = 0
+    # Inspección de ambas planillas
+    target_ids = get_target_spreadsheet_ids()
+    sheets_info = []
+    max_sheet_rows = 0
     try:
         client = get_gspread_client()
-        ws = client.open_by_key(SPREADSHEET_ID).worksheet(TAB_NAME)
-        sheet_rows = len(ws.col_values(1)) - 1
-        if sheet_rows < 0: sheet_rows = 0
+        for sid in target_ids:
+            s_rows = 0
+            s_title = "Desconocida"
+            try:
+                sp = client.open_by_key(sid)
+                s_title = sp.title
+                ws = sp.worksheet(TAB_NAME)
+                s_rows = len(ws.col_values(1)) - 1
+                if s_rows < 0: s_rows = 0
+            except Exception as ex_s:
+                s_title = f"Error: {str(ex_s)[:30]}"
+            
+            sheets_info.append({
+                "id": sid,
+                "title": s_title,
+                "rows": s_rows,
+                "is_prod": sid == PROD_SPREADSHEET_ID,
+                "is_local": sid == LOCAL_SPREADSHEET_ID
+            })
+            if s_rows > max_sheet_rows:
+                max_sheet_rows = s_rows
     except Exception:
         pass
 
@@ -453,7 +499,9 @@ def get_ots_status():
         "pending_count": len(pending_ots),
         "pending_ots": pending_ots,
         "registered_ots": sorted(list(registered), key=lambda x: int(x) if str(x).isdigit() else str(x)),
-        "sheet_rows": sheet_rows
+        "sheet_rows": max_sheet_rows,
+        "sheets": sheets_info,
+        "mode": "DUAL_SYNC" if len(target_ids) > 1 else "SINGLE_SYNC"
     }
 
 @app.post("/api/upload-batch")
@@ -616,9 +664,9 @@ def process_folder_direct():
     sync_res["total_files_scanned"] = len(files)
     return sync_res
 
-def do_sync_to_sheets(items: List[SyncItem]) -> dict:
-    client = get_gspread_client()
-    spreadsheet = client.open_by_key(SPREADSHEET_ID)
+def _sync_single_spreadsheet(client, sheet_id: str, items: List[SyncItem], cargadas: dict, now_str: str) -> dict:
+    spreadsheet = client.open_by_key(sheet_id)
+    sheet_title = getattr(spreadsheet, 'title', sheet_id)
     
     # Asegurar las 3 pestañas canónicas del ciclo de OTs
     sheet_names = [s.title for s in spreadsheet.worksheets()]
@@ -681,8 +729,6 @@ def do_sync_to_sheets(items: List[SyncItem]) -> dict:
             if d:
                 ots_by_dom[d] = (idx + 2, r)
 
-    cargadas = load_cargadas_tracker()
-    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for (d, o) in cold_map:
         if o not in cargadas:
             cargadas[o] = {"ot": o, "dominio": d, "estado": "HISTORICO_COLD", "fecha_carga": now_str}
@@ -822,37 +868,87 @@ def do_sync_to_sheets(items: List[SyncItem]) -> dict:
         start_r = len(ots_all) + 1
         for i in range(0, len(ots_to_append), 50):
             chunk = ots_to_append[i:i+50]
+            padded_chunk = [r[:8] + [""] * max(0, 8 - len(r[:8])) for r in chunk]
             chunk_start = start_r + i
             chunk_end = chunk_start + len(chunk) - 1
-            ws_ots.update(range_name=f"A{chunk_start}:H{chunk_end}", values=chunk)
+            ws_ots.update(range_name=f"A{chunk_start}:H{chunk_end}", values=padded_chunk)
 
     if ant_to_append:
         start_r = len(ant_all) + 1
         for i in range(0, len(ant_to_append), 50):
             chunk = ant_to_append[i:i+50]
+            max_cols = max(len(r) for r in chunk) if chunk else 8
+            max_cols = max(max_cols, 8)
+            end_col = chr(ord('A') + max_cols - 1)
+            padded_chunk = [r + [""] * (max_cols - len(r)) for r in chunk]
             chunk_start = start_r + i
             chunk_end = chunk_start + len(chunk) - 1
-            ws_ant.update(range_name=f"A{chunk_start}:H{chunk_end}", values=chunk)
+            ws_ant.update(range_name=f"A{chunk_start}:{end_col}{chunk_end}", values=padded_chunk)
 
     if cold_to_append:
         start_r = len(cold_all) + 1
         for i in range(0, len(cold_to_append), 50):
             chunk = cold_to_append[i:i+50]
+            padded_chunk = [r[:8] + [""] * max(0, 8 - len(r[:8])) for r in chunk]
             chunk_start = start_r + i
             chunk_end = chunk_start + len(chunk) - 1
-            ws_cold.update(range_name=f"A{chunk_start}:H{chunk_end}", values=chunk)
-
-    save_cargadas_tracker(cargadas)
+            ws_cold.update(range_name=f"A{chunk_start}:H{chunk_end}", values=padded_chunk)
 
     return {
         "success": True,
+        "spreadsheet_id": sheet_id,
+        "sheet_title": sheet_title,
         "inserted_ots": inserted_count,
         "updated_ots": updated_count,
         "superseded_moved": superseded_count,
         "already_archived_skipped": skipped_count,
         "total_processed": len(items),
-        "sheet_url": f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit"
+        "sheet_url": f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
     }
+
+def do_sync_to_sheets(items: List[SyncItem]) -> dict:
+    """Sincroniza el lote de OTs a todas las planillas objetivo (Dual Sync: Local + Render)"""
+    client = get_gspread_client()
+    target_ids = get_target_spreadsheet_ids()
+    cargadas = load_cargadas_tracker()
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    sync_results = []
+    primary_res = None
+
+    for sid in target_ids:
+        try:
+            print(f"[Dual Sync] Sincronizando {len(items)} OTs en planilla {sid}...")
+            res = _sync_single_spreadsheet(client, sid, items, cargadas, now_str)
+            print(f"[Dual Sync] Exito en {res.get('sheet_title')}: {res.get('inserted_ots')} nuevas, {res.get('updated_ots')} actualizadas")
+            sync_results.append(res)
+            if not primary_res:
+                primary_res = res
+        except Exception as e:
+            print(f"[Dual Sync] Error en planilla {sid}: {e}")
+            sync_results.append({
+                "success": False,
+                "spreadsheet_id": sid,
+                "error": str(e)
+            })
+
+    save_cargadas_tracker(cargadas)
+
+    if not primary_res:
+        primary_res = {
+            "success": False,
+            "inserted_ots": 0,
+            "updated_ots": 0,
+            "superseded_moved": 0,
+            "already_archived_skipped": 0,
+            "total_processed": len(items),
+            "sheet_url": ""
+        }
+
+    primary_res["multi_sync_results"] = sync_results
+    primary_res["synced_sheets_count"] = len([r for r in sync_results if r.get("success")])
+    primary_res["mode"] = "DUAL_SYNC" if len(target_ids) > 1 else "SINGLE_SYNC"
+    return primary_res
 
 @app.get("/api/ots/cold-storage/download")
 def download_cold_storage():
@@ -879,17 +975,29 @@ def download_cold_storage():
 
 @app.post("/api/ots/cold-storage/clear")
 def clear_cold_storage():
-    """Limpia las filas de HISTORICO_COLD manteniendo los encabezados A1:H1"""
+    """Limpia las filas de HISTORICO_COLD manteniendo los encabezados A1:H1 en todas las planillas objetivo"""
     client = get_gspread_client()
-    spreadsheet = client.open_by_key(SPREADSHEET_ID)
-    try:
-        ws_cold = spreadsheet.worksheet("HISTORICO_COLD")
-        max_rows = ws_cold.row_count
-        if max_rows > 1:
-            ws_cold.batch_clear([f"A2:H{max_rows}"])
-        return {"success": True, "message": "Pestaña HISTORICO_COLD limpiada exitosamente"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    target_ids = get_target_spreadsheet_ids()
+    cleaned = []
+    errors = []
+    for sid in target_ids:
+        try:
+            spreadsheet = client.open_by_key(sid)
+            ws_cold = spreadsheet.worksheet("HISTORICO_COLD")
+            max_rows = ws_cold.row_count
+            if max_rows > 1:
+                ws_cold.batch_clear([f"A2:H{max_rows}"])
+            cleaned.append(getattr(spreadsheet, 'title', sid))
+        except Exception as e:
+            errors.append(f"{sid}: {str(e)}")
+
+    if errors and not cleaned:
+        return {"success": False, "error": "; ".join(errors)}
+    return {
+        "success": True, 
+        "message": f"HISTORICO_COLD limpiada en {', '.join(cleaned)}",
+        "errors": errors if errors else None
+    }
 
 @app.post("/api/sync-sheets")
 def sync_to_sheets(payload: SyncRequest):
