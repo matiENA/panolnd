@@ -1,0 +1,34 @@
+{
+  "files": [
+    {
+      "id": "9cf01514-64a0-4683-9f57-76ac9d326fe9",
+      "name": "appsscript",
+      "type": "json",
+      "source": "{\n  \"timeZone\": \"America/Argentina/Buenos_Aires\",\n  \"dependencies\": {\n  },\n  \"exceptionLogging\": \"STACKDRIVER\",\n  \"runtimeVersion\": \"V8\"\n}"
+    },
+    {
+      "id": "323bc659-d021-498f-b0a8-7f1a5e012f08",
+      "name": "Código",
+      "type": "server_js",
+      "source": "function timestamp() {\nvar archivo = SpreadsheetApp.getActiveSpreadsheet();\nvar ss = archivo.getSheetByName(\"Respuestas de formulario 4\");\nvar activa = ss.getActiveCell();\nvar valor = activa.getValue();\nvar filaActiva = activa.getRow();\nvar colActiva = activa.getColumn();\n\nif (filaActiva>=2 && (colActiva==71|| colActiva==73 || colActiva==75 || colActiva==63 || colActiva==65) && archivo.getActiveSheet().getName()==\"Respuestas de formulario 4\") { \n  if(activa.offset(0,1).getValue()){ \n  }else{  \n  activa.offset(0,1).setValue(new Date());\n  }\n }\n\n  }"
+    },
+    {
+      "id": "dfd82ad4-b331-4bd5-820b-e4e7e4bc7a0e",
+      "name": "Sin título",
+      "type": "server_js",
+      "source": "function onEdit(e) {\n  registrarCambios(e);\n}\nfunction registrarCambios(e) {\n  var hojaRegistro = e.source.getSheetByName('Registro');\n  var hojaEditada = e.range.getSheet().getName();\n\n  if (hojaEditada == 'Registro') return; // Evita registrar cambios en la hoja de registro\n\n  var direccion = e.range.getA1Notation();\n  var valorNuevo = e.value;\n  var valorViejo = e.oldValue || \"\";\n  var fechaEdicion = new Date();\n  var usuario = Session.getEffectiveUser().getEmail();\n \n\n  hojaRegistro.appendRow([hojaEditada, direccion, valorViejo, valorNuevo, fechaEdicion, usuario]);\n}"
+    },
+    {
+      "id": "1e0985c6-bd6d-4769-8a7c-5e5adde7b448",
+      "name": "Sin título 2",
+      "type": "server_js",
+      "source": "function onOpen() {\n  const ui = SpreadsheetApp.getUi();\n  ui.createMenu('Menú Personalizado')\n    .addItem('Autorizar Script', 'authorizeScript')\n    .addToUi();\n}\n\nfunction authorizeScript() {\n  const user = Session.getActiveUser().getEmail();\n\n  const ui = SpreadsheetApp.getUi();\n  ui.alert('Autorización Exitosa', 'Has autorizado correctamente el script.', ui.ButtonSet.OK);\n  console.info(`Authorization successful for user: ${user}`);\n}"
+    },
+    {
+      "id": "1746d2b0-8c6b-47d6-b2d9-a5077e915d05",
+      "name": "panol",
+      "type": "server_js",
+      "source": "// ==============================================================================\n// EMISOR Y CONTROLADOR MAESTRO DE DATOS: Code.gs\n// Planilla de Origen: 1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk (Respuestas de formulario 4)\n// Evento: Al enviar formulario (onFormSubmit)\n// ==============================================================================\n\n// Lista de Bases de Datos destino a sincronizar en simultáneo\nconst TARGET_SS_IDS = [\n  \"1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc\", // Database PRUEBAS\n  \"17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ\"  // Database PRUEBAS LOCAL\n];\n\nfunction onNuevaOTFormulario(e) {\n  if (!e || !e.range) return;\n\n  const sourceSheet = e.range.getSheet();\n  const rowNum = e.range.getRow();\n  const rowData = sourceSheet.getRange(rowNum, 1, 1, sourceSheet.getLastColumn()).getValues()[0];\n\n  const rawPlate = String(rowData[4] || '').toUpperCase().trim(); // Col E (Índice 4): Dom Tractor / Semi\n  const newOt = String(rowData[8] || '').trim();                  // Col I (Índice 8): N° Orden\n\n  if (!rawPlate || !newOt) return; \n\n  // Normalización y extracción de patentes (Mercosur: AA123BB / Tradicional: AAA123)\n  const cleanPlateString = rawPlate.replace(/[\\s\\-_.]/g, '');\n  const plateRegex = /([A-Z]{2}\\d{3}[A-Z]{2}|[A-Z]{3}\\d{3})/g;\n  const matches = cleanPlateString.match(plateRegex);\n  \n  if (!matches || matches.length === 0) return; \n\n  // ============================================================================\n  // PASO 1: ACTUALIZAR DB_OT_LIST EN AMBAS BASES DE DATOS\n  // ============================================================================\n  TARGET_SS_IDS.forEach(function(targetId) {\n    try {\n      const targetSS = SpreadsheetApp.openById(targetId);\n      const targetSheet = targetSS.getSheetByName(\"DB_OT_LIST\");\n      if (!targetSheet) {\n        console.warn(\"No se encontró la pestaña DB_OT_LIST en spreadsheet: \" + targetId);\n        return;\n      }\n\n      const dbData = targetSheet.getDataRange().getValues();\n      let dbUpdated = false;\n\n      // Recorrer filas de DB_OT_LIST (ignorar encabezado fila 1)\n      for (let i = 1; i < dbData.length; i++) {\n        const dbTractor = String(dbData[i][0] || '').toUpperCase().replace(/[\\s\\-_.]/g, ''); // Col A: UNIT_ID (Tractor)\n        const dbSemi = String(dbData[i][2] || '').toUpperCase().replace(/[\\s\\-_.]/g, '');    // Col C: SEMI\n\n        const isTractorMatch = matches.some(function(p) { return dbTractor && p === dbTractor; });\n        const isSemiMatch = matches.some(function(p) { return dbSemi && p === dbSemi; });\n\n        if (isTractorMatch || isSemiMatch) {\n          if (isTractorMatch) {\n            targetSheet.getRange(i + 1, 2).setValue(newOt); // Col B: OT Tractor\n          }\n          if (isSemiMatch) {\n            targetSheet.getRange(i + 1, 4).setValue(newOt); // Col D: OT Semi\n          }\n          dbUpdated = true;\n          break; // Poka-Yoke: detener de inmediato para evitar duplicaciones\n        }\n      }\n\n      // Poka-Yoke: Si no pertenece a la flota canónica activa, NO usar appendRow para no corromper la tabla\n      if (!dbUpdated) {\n        console.warn(\"Patente \" + rawPlate + \" no pertenece a la flota canónica en \" + targetId + \". Inserción omitida para proteger DB_OT_LIST.\");\n      }\n    } catch (errDb) {\n      console.error(\"Error al actualizar DB_OT_LIST en \" + targetId + \":\", errDb);\n    }\n  });\n\n  // ============================================================================\n  // PASO 2: NOTIFICACIÓN EN TIEMPO REAL A RENDER (WEBSOCKET + TABLA OTS)\n  // ============================================================================\n  try {\n    const payload = {\n      dirtyPlate: rawPlate,\n      otNumber: newOt,\n      sectorTareas: String(rowData[5] || ''),\n      cierreRespaldo: String(rowData[6] || ''),\n      fecha: String(rowData[2] || ''),\n      confirmacion: String(rowData[7] || '')\n    };\n\n    const options = {\n      method: \"post\",\n      contentType: \"application/json\",\n      payload: JSON.stringify(payload),\n      muteHttpExceptions: true\n    };\n\n    UrlFetchApp.fetch(\"https://panolnd.onrender.com/webhook/nueva-ot\", options);\n  } catch (errWebhook) {\n    console.error(\"Error al notificar webhook en Render:\", errWebhook);\n  }\n}"
+    }
+  ]
+}

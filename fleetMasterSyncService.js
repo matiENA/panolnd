@@ -237,6 +237,8 @@ async function syncCanonicalFleetToDbOtList({
   const existingRows = existingRes.data.values || [];
   const brandMap = new Map();
   const manualExceptions = new Map();
+  const existingOtTractorMap = new Map();
+  const existingOtSemiMap = new Map();
 
   existingRows.forEach(r => {
     const rawT = String(r[0] || '').trim();
@@ -251,6 +253,10 @@ async function syncCanonicalFleetToDbOtList({
     const sClean = cleanPlate(rawS);
     if (tClean && marcaT) brandMap.set(tClean, marcaT);
     if (sClean && marcaS) brandMap.set(sClean, marcaS);
+
+    // Preservar OTs canónicas inyectadas directamente por GAS en DB_OT_LIST
+    if (tClean && ot) existingOtTractorMap.set(tClean, ot);
+    if (sClean && semiOt) existingOtSemiMap.set(sClean, semiOt);
 
     // Detectar y preservar excepciones permanentes como INTERNO TALLER
     const upperT = rawT.toUpperCase();
@@ -288,13 +294,12 @@ async function syncCanonicalFleetToDbOtList({
     spreadsheetId: movimientosSpreadsheetId
   });
 
-  // 3. Extraer OTs de Tractores desde Formulario 4 (1HKXGsRC149Kw4aBXQwGcPVpAvObvTUFis6YV6R5cTXk)
-  const formTractorOts = await extractLatestOtsFromForm({
-    sheetsClient,
-    formSpreadsheetId
-  });
+  // 3. OTs de Tractores: Desacopladas de Node.
+  // El proceso de Formulario 4 ahora es directo vía Google Apps Script (GAS) a DB_OT_LIST.
+  // Node preserva las OTs existentes en DB_OT_LIST sin consultar Formulario 4.
+  const formTractorOts = existingOtTractorMap;
 
-  // 4. Extraer OTs de Semis desde la pestaña 'ots' (buscar Col C SEMI en Col D DOMINIO -> tomar Col C ORDEN Nº)
+  // 4. Extraer OTs de Semis desde DB_OT_LIST existente o fallback en pestaña 'ots'
   const otsTabOts = await extractActiveOtsFromOtsTab({
     sheetsClient,
     targetSpreadsheetId
@@ -308,11 +313,13 @@ async function syncCanonicalFleetToDbOtList({
     const tractor = unit.tractor;
     const semi = unit.semi;
 
-    // BUSCAR Tractor (Col A) en Formulario 4 -> Col B: OT Tractor
+    // Preservar OT Tractor directa de GAS
     const otNumber = (tractor && formTractorOts.has(tractor)) ? formTractorOts.get(tractor) : '';
 
-    // BUSCAR Semi (Col C) en pestaña 'ots' (Col D DOMINIO -> Col C ORDEN Nº) -> Col D: OT Semi
-    const semiOtNumber = (semi && otsTabOts.has(semi)) ? otsTabOts.get(semi) : '';
+    // Preservar OT Semi directa de GAS o de pestaña 'ots'
+    const semiOtNumber = (semi && existingOtSemiMap.has(semi))
+      ? existingOtSemiMap.get(semi)
+      : ((semi && otsTabOts.has(semi)) ? otsTabOts.get(semi) : '');
 
     if (otNumber || semiOtNumber) matchedCount++;
 
@@ -335,7 +342,9 @@ async function syncCanonicalFleetToDbOtList({
     const tPlate = cleanPlate(ex.tractor);
     const sPlate = cleanPlate(ex.semi);
     const tOt = (tPlate && formTractorOts.has(tPlate)) ? formTractorOts.get(tPlate) : (ex.otNumber || '');
-    const sOt = (sPlate && otsTabOts.has(sPlate)) ? otsTabOts.get(sPlate) : (ex.semiOt || '');
+    const sOt = (sPlate && existingOtSemiMap.has(sPlate))
+      ? existingOtSemiMap.get(sPlate)
+      : ((sPlate && otsTabOts.has(sPlate)) ? otsTabOts.get(sPlate) : (ex.semiOt || ''));
 
     canonicalRows.push([
       ex.tractor,
