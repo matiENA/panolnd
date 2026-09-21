@@ -6,7 +6,7 @@
   // ⚠️ CONFIGURACIÓN DE BACKEND ACTIVO
   // Para volver a Render en el futuro (Rollback): descomentar Render y comentar Railway.
   // const BACKEND_PROD_URL = "https://panol-monolith-service.onrender.com"; // RENDER (FALLBACK / ROLLBACK)
-  const BACKEND_PROD_URL = "https://panolnd-production.up.railway.app"; // RAILWAY (ACTIVO)
+  const BACKEND_PROD_URL = "https://panolnd-taller.up.railway.app"; // RAILWAY (ACTIVO)
 
   const isLocal = typeof window !== 'undefined' && window.location && (
     window.location.hostname === 'localhost' ||
@@ -20,7 +20,7 @@
   window.PANOL_CONFIG = {
     BACKEND_URL: resolvedBackendUrl,
     RENDER_URL: "https://panol-monolith-service.onrender.com",
-    RAILWAY_URL: "https://panolnd-production.up.railway.app",
+    RAILWAY_URL: "https://panolnd-taller.up.railway.app",
     IS_LOCAL: isLocal
   };
 
