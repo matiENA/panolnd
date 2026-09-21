@@ -8,6 +8,7 @@
   <meta name="theme-color" content="#0f172a">
   <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/2950/2950663.png">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <script src="/config.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -279,16 +280,23 @@
       setLoading(true);
 
       try {
-        const response = await fetch('/api/auth/login', {
+        const loginUrl = (window.BACKEND_URL || '') + '/api/auth/login';
+        const response = await fetch(loginUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ username, password, next: nextUrl })
         });
 
         const data = await response.json().catch(() => ({}));
 
         if (response.ok && data.success) {
-          try { localStorage.setItem('sys_auth_ok', '1'); } catch(e) {}
+          try {
+            localStorage.setItem('sys_auth_ok', '1');
+            if (data.token) {
+              localStorage.setItem('sys_auth_token', data.token);
+            }
+          } catch(e) {}
           window.location.href = data.redirect || nextUrl;
         } else {
           showError(data.error || 'Credenciales inválidas. Verificá usuario y contraseña.');

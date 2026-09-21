@@ -34,7 +34,8 @@ const OTS_HEADERS = [
   'CIERRE / RESPALDO TAREAS',
   'PAYLOAD',
   'CONFIRMACIÓN DE TAREAS',
-  'COORDINACION_JSON'
+  'COORDINACION_JSON',
+  'PORCENTAJE'
 ];
 
 /**
@@ -110,7 +111,7 @@ async function ensureOtsStructure(sheetsClient, spreadsheetId, force = false) {
         addSheet: {
           properties: {
             title: OTS_TAB,
-            gridProperties: { rowCount: 1000, columnCount: 10 }
+            gridProperties: { rowCount: 1000, columnCount: 12 }
           }
         }
       });
@@ -121,7 +122,7 @@ async function ensureOtsStructure(sheetsClient, spreadsheetId, force = false) {
         addSheet: {
           properties: {
             title: OTS_ANTERIORES_TAB,
-            gridProperties: { rowCount: 2000, columnCount: 10 }
+            gridProperties: { rowCount: 2000, columnCount: 12 }
           }
         }
       });
@@ -132,7 +133,7 @@ async function ensureOtsStructure(sheetsClient, spreadsheetId, force = false) {
         addSheet: {
           properties: {
             title: HISTORICO_COLD_TAB,
-            gridProperties: { rowCount: 3000, columnCount: 10 }
+            gridProperties: { rowCount: 3000, columnCount: 12 }
           }
         }
       });
@@ -146,44 +147,44 @@ async function ensureOtsStructure(sheetsClient, spreadsheetId, force = false) {
       console.log(`✅ [otsManager] Pestañas creadas: ${requests.map(r => r.addSheet.properties.title).join(', ')}`);
     }
 
-    // Asegurar encabezados en 'ots' (A1:I1)
+    // Asegurar encabezados en 'ots' (A1:J1)
     const otsHeadRes = await sheetsClient.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${OTS_TAB}'!A1:I1`
+      range: `'${OTS_TAB}'!A1:J1`
     });
-    if (!otsHeadRes.data.values || otsHeadRes.data.values.length === 0 || otsHeadRes.data.values[0].length < 9) {
+    if (!otsHeadRes.data.values || otsHeadRes.data.values.length === 0 || otsHeadRes.data.values[0].length < 10) {
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${OTS_TAB}'!A1:I1`,
+        range: `'${OTS_TAB}'!A1:J1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [OTS_HEADERS] }
       });
     }
 
-    // Asegurar encabezados en 'ots_anteriores' (A1:I1)
+    // Asegurar encabezados en 'ots_anteriores' (A1:J1)
     const antHeadRes = await sheetsClient.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${OTS_ANTERIORES_TAB}'!A1:I1`
+      range: `'${OTS_ANTERIORES_TAB}'!A1:J1`
     });
-    if (!antHeadRes.data.values || antHeadRes.data.values.length === 0 || antHeadRes.data.values[0].length < 9) {
+    if (!antHeadRes.data.values || antHeadRes.data.values.length === 0 || antHeadRes.data.values[0].length < 10) {
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${OTS_ANTERIORES_TAB}'!A1:I1`,
+        range: `'${OTS_ANTERIORES_TAB}'!A1:J1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [OTS_HEADERS] }
       });
       console.log(`✅ [otsManager] Encabezados inicializados en ${OTS_ANTERIORES_TAB}`);
     }
 
-    // Asegurar encabezados en 'HISTORICO_COLD' (A1:I1)
+    // Asegurar encabezados en 'HISTORICO_COLD' (A1:J1)
     const coldHeadRes = await sheetsClient.spreadsheets.values.get({
       spreadsheetId,
-      range: `'${HISTORICO_COLD_TAB}'!A1:I1`
+      range: `'${HISTORICO_COLD_TAB}'!A1:J1`
     });
-    if (!coldHeadRes.data.values || coldHeadRes.data.values.length === 0 || coldHeadRes.data.values[0].length < 9) {
+    if (!coldHeadRes.data.values || coldHeadRes.data.values.length === 0 || coldHeadRes.data.values[0].length < 10) {
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${HISTORICO_COLD_TAB}'!A1:I1`,
+        range: `'${HISTORICO_COLD_TAB}'!A1:J1`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [OTS_HEADERS] }
       });
@@ -304,7 +305,7 @@ async function migrateAndDeduplicateOts(sheetsClient, spreadsheetId) {
   // 1. Una sola lectura HTTP en batch para 'ots', 'ots_anteriores' e 'HISTORICO_COLD' (mínimo trabajo de backend)
   const batchRes = await sheetsClient.spreadsheets.values.batchGet({
     spreadsheetId,
-    ranges: [`'${OTS_TAB}'!A2:I1000`, `'${OTS_ANTERIORES_TAB}'!A2:I3000`, `'${HISTORICO_COLD_TAB}'!A2:I5000`]
+    ranges: [`'${OTS_TAB}'!A2:J1000`, `'${OTS_ANTERIORES_TAB}'!A2:J3000`, `'${HISTORICO_COLD_TAB}'!A2:J5000`]
   });
 
   const valRanges = batchRes.data.valueRanges || [];
@@ -467,13 +468,13 @@ async function migrateAndDeduplicateOts(sheetsClient, spreadsheetId) {
   if (otsChanged) {
     await sheetsClient.spreadsheets.values.clear({
       spreadsheetId,
-      range: `'${OTS_TAB}'!A2:I1000`
+      range: `'${OTS_TAB}'!A2:J1000`
     });
 
     if (rowsToKeepInOts.length > 0) {
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${OTS_TAB}'!A2:I${rowsToKeepInOts.length + 1}`,
+        range: `'${OTS_TAB}'!A2:J${rowsToKeepInOts.length + 1}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: rowsToKeepInOts }
       });
@@ -486,13 +487,13 @@ async function migrateAndDeduplicateOts(sheetsClient, spreadsheetId) {
   if (antChanged) {
     await sheetsClient.spreadsheets.values.clear({
       spreadsheetId,
-      range: `'${OTS_ANTERIORES_TAB}'!A2:I3000`
+      range: `'${OTS_ANTERIORES_TAB}'!A2:J3000`
     });
 
     if (finalAntRows.length > 0) {
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${OTS_ANTERIORES_TAB}'!A2:I${finalAntRows.length + 1}`,
+        range: `'${OTS_ANTERIORES_TAB}'!A2:J${finalAntRows.length + 1}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: finalAntRows }
       });
@@ -505,13 +506,13 @@ async function migrateAndDeduplicateOts(sheetsClient, spreadsheetId) {
   if (coldChanged) {
     await sheetsClient.spreadsheets.values.clear({
       spreadsheetId,
-      range: `'${HISTORICO_COLD_TAB}'!A2:I5000`
+      range: `'${HISTORICO_COLD_TAB}'!A2:J5000`
     });
 
     if (finalColdRows.length > 0) {
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
-        range: `'${HISTORICO_COLD_TAB}'!A2:I${finalColdRows.length + 1}`,
+        range: `'${HISTORICO_COLD_TAB}'!A2:J${finalColdRows.length + 1}`,
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: finalColdRows }
       });

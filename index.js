@@ -32,6 +32,8 @@ const {
   startAutomaticTaskSync,
   getActiveTasksBoard,
   updateTaskExecution,
+  calculateAndSaveOtPercentage,
+  updateAllOtsPercentages,
   getHistoricalTasks,
   getOperarioHoldOts,
   saveOperarioHoldOts,
@@ -44,6 +46,9 @@ const {
   saveAllCoordinacionBatch
 } = require('./taskSyncService');
 
+const compression = require('compression');
+const db = require('./utils/db');
+
 process.on('unhandledRejection', (reason, promise) => {
   console.warn('⚠️ [Process] Unhandled Rejection:', (reason && reason.stack) ? reason.stack : (reason?.message || reason));
 });
@@ -53,7 +58,16 @@ process.on('uncaughtException', (err) => {
 });
 
 const app = express();
-app.use(cors());
+// ⚡ 1. Compresión gzip global para reducir el consumo de bandwidth en un 75-85%
+app.use(compression());
+
+// ⚡ 2. CORS tolerante para habilitar Static Sites de Render y localhost con credenciales
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token', 'X-Requested-With']
+}));
 app.use(express.json());
 
 // === AUTENTICACIÓN CENTRALIZADA DEL SISTEMA (CAPA 1: ACCESO DISPOSITIVO) ===
@@ -102,7 +116,8 @@ function verifyAuthToken(token) {
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: (origin, callback) => callback(null, true),
+    credentials: true,
     methods: ['GET', 'POST']
   }
 });
@@ -123,18 +138,20 @@ io.use((socket, next) => {
 const PROD_SPREADSHEET_ID = '1aKptNgy8a9Ca3rDW-HSlWEiriMRJMOIJuFsdViwEGFc';   // Database PRUEBAS (Render Cloud / Producción)
 const LOCAL_SPREADSHEET_ID = '17yFPBMz8ExHf53e6ssh9LyDTjKCCJApoiCNXP-4KINQ';  // Database PRUEBAS LOCAL (Localhost / Desarrollo)
 
-// Determinación robusta del entorno (Render inyecta RENDER=true y NODE_ENV=production)
+// Determinación robusta del entorno (Render / Railway / Producción)
 const isProdEnvironment = (process.env.NODE_ENV === 'production') || 
                           (process.env.RENDER === 'true') || 
                           (process.env.RENDER === '1') ||
+                          Boolean(process.env.RAILWAY_ENVIRONMENT) ||
+                          Boolean(process.env.RAILWAY_PROJECT_ID) ||
                           (process.env.SPREADSHEET_ID === PROD_SPREADSHEET_ID);
 
 // Fallback por defecto según entorno
 let targetSpreadsheetId = process.env.SPREADSHEET_ID || (isProdEnvironment ? PROD_SPREADSHEET_ID : LOCAL_SPREADSHEET_ID);
 
 // SALVAGUARDA POKA-YOKE:
-// En producción (Render Cloud), NUNCA permitir que SPREADSHEET_ID apunte a la base LOCAL (17yFPB...).
-// Si por desconfiguración de variables en Render se recibe el ID local, se redirige inmediatamente a PRODUCCIÓN.
+// En producción (Render Cloud / Railway), NUNCA permitir que SPREADSHEET_ID apunte a la base LOCAL (17yFPB...).
+// Si por desconfiguración de variables en Render/Railway se recibe el ID local, se redirige inmediatamente a PRODUCCIÓN.
 if (isProdEnvironment && targetSpreadsheetId === LOCAL_SPREADSHEET_ID) {
   console.warn(`🚨 [POKA-YOKE ENTORNO] Proceso en PRODUCCIÓN detectó SPREADSHEET_ID apuntando a LOCAL (${LOCAL_SPREADSHEET_ID}). Redirigiendo forzosamente a PRODUCCIÓN (${PROD_SPREADSHEET_ID}).`);
   targetSpreadsheetId = PROD_SPREADSHEET_ID;
@@ -190,14 +207,26 @@ let ramFleetCache = new Map(); // normalizedPlate -> { tractorPlate, tractorBran
 let lastDiagramasSync = 0;
 
 async function syncFleetFromDiagramasNode() {
-  const DIAGRAMAS_URL = 'https://diagramasnode.onrender.com/api/datos';
-  try {
+  const PRIMARY_URL = process.env.DIAGRAMAS_URL || 'https://diagramasnode-production.up.railway.app/api/datos';
+  const FALLBACK_URL = 'https://diagramasnode.onrender.com/api/datos';
+
+  const fetchFromUrl = async (url) => {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
-    const res = await fetch(DIAGRAMAS_URL, { signal: controller.signal });
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timeout);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    return await res.json();
+  };
+
+  try {
+    let data;
+    try {
+      data = await fetchFromUrl(PRIMARY_URL);
+    } catch (primaryErr) {
+      console.warn(`⚠️ [RAM] Falló endpoint primario de diagramas (${PRIMARY_URL}: ${primaryErr.message}). Intentando fallback (${FALLBACK_URL})...`);
+      data = await fetchFromUrl(FALLBACK_URL);
+    }
     const units = data.diagramas?.unidades || data.ut || [];
     if (!Array.isArray(units) || units.length === 0) return;
 
@@ -544,7 +573,8 @@ async function checkAutoDeliveredOrders() {
 setInterval(checkAutoDeliveredOrders, 10000);
 
 // === 3. RUTAS DE AUTENTICACIÓN Y MONOLITO (PROTECCIÓN DE ACCESO GENERAL) ===
-app.use((req, res, next) => {
+// Protección de caché estricta únicamente para endpoints dinámicos de API
+app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.set('Pragma', 'no-cache');
   res.set('Expires', '0');
@@ -553,8 +583,8 @@ app.use((req, res, next) => {
 
 // Función de detección de entorno local de desarrollo
 function isLocalRequest(req) {
-  if (!req) return false;
-  const host = String(req.hostname || req.headers?.host || '').toLowerCase();
+  if (!req || isProdEnvironment) return false;
+  const host = String(req.headers['x-forwarded-host'] || req.hostname || req.headers?.host || '').toLowerCase();
   const ip = String(req.ip || req.connection?.remoteAddress || req.socket?.remoteAddress || '');
   return (
     host.includes('localhost') ||
@@ -562,8 +592,7 @@ function isLocalRequest(req) {
     ip.includes('127.0.0.1') ||
     ip === '::1' ||
     ip === '::ffff:127.0.0.1' ||
-    process.env.NODE_ENV === 'development' ||
-    !process.env.RENDER
+    process.env.NODE_ENV === 'development'
   );
 }
 
@@ -623,9 +652,9 @@ app.post('/api/auth/login', (req, res) => {
     const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
     res.setHeader(
       'Set-Cookie', 
-      `sys_auth=${encodeURIComponent(token)}; Path=/; Max-Age=${SESSION_MAX_AGE_MS / 1000}; SameSite=Lax${isHttps ? '; Secure' : ''}`
+      `sys_auth=${encodeURIComponent(token)}; Path=/; Max-Age=${SESSION_MAX_AGE_MS / 1000}; SameSite=${isHttps ? 'None' : 'Lax'}${isHttps ? '; Secure' : ''}`
     );
-    return res.json({ success: true, redirect: next || '/' });
+    return res.json({ success: true, token, redirect: next || '/' });
   }
 
   return res.status(401).json({ 
@@ -649,16 +678,48 @@ app.get('/api/auth/status', (req, res) => {
   res.json({ authenticated: isValid, user: isValid ? SYSTEM_USER : null });
 });
 
-// Información del entorno actual (Localhost vs Render)
+// Información del entorno actual (Localhost vs Render vs Railway)
 app.get('/api/env-info', (req, res) => {
   res.json({
     environment: isProdEnvironment ? 'production' : 'development',
     isProduction: isProdEnvironment,
+    hosting: process.env.RAILWAY_ENVIRONMENT ? 'railway' : (process.env.RENDER ? 'render' : 'localhost'),
     spreadsheetTitle: isProdEnvironment ? 'Database PRUEBAS' : 'Database PRUEBAS LOCAL',
     spreadsheetId: SPREADSHEET_ID,
     spreadsheetIdShort: SPREADSHEET_ID.slice(0, 6) + '...' + SPREADSHEET_ID.slice(-4),
     serverTime: new Date().toISOString()
   });
+});
+
+// === ENDPOINTS DE SALUD Y DIAGNÓSTICO (RAILWAY / RENDER) ===
+app.get('/api/health', (req, res) => {
+  const mem = process.memoryUsage();
+  res.json({
+    status: 'ok',
+    service: 'panol-monolith-service',
+    timestamp: new Date().toISOString(),
+    uptimeSeconds: Math.round(process.uptime()),
+    environment: isProdEnvironment ? 'production' : 'development',
+    hosting: process.env.RAILWAY_ENVIRONMENT ? 'railway' : (process.env.RENDER ? 'render' : 'localhost'),
+    postgresConfigured: db.isConfigured(),
+    memory: {
+      rssMB: +(mem.rss / 1024 / 1024).toFixed(2),
+      heapUsedMB: +(mem.heapUsed / 1024 / 1024).toFixed(2),
+      heapTotalMB: +(mem.heapTotal / 1024 / 1024).toFixed(2)
+    }
+  });
+});
+
+app.get('/api/db/health', async (req, res) => {
+  const health = await db.checkHealth();
+  res.status(health.ok ? 200 : (db.isConfigured() ? 503 : 200)).json({
+    ...health,
+    notice: db.isConfigured() ? 'PostgreSQL activo' : 'DATABASE_URL no configurada (Modo Fallback Google Sheets)'
+  });
+});
+
+app.get('/api/db/metrics', (req, res) => {
+  res.json(db.getPoolMetrics());
 });
 
 // Rutas estáticas de scripts esenciales (disponibles para cliente)
@@ -696,8 +757,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// Servidor de archivos estáticos (JS, CSS, imágenes) deshabilitando index automático
-app.use(express.static(path.join(__dirname, 'public'), { index: false, etag: false }));
+// Servidor de archivos estáticos (JS, CSS, imágenes) con compresión y caché de 2 horas con validación ETag
+app.use(express.static(path.join(__dirname, 'public'), {
+  index: false,
+  etag: true,
+  lastModified: true,
+  maxAge: '2h'
+}));
 
 async function updateStockByName(itemName, deltaQty) {
   if (!sheets || !itemName || !deltaQty) return;
@@ -1438,7 +1504,24 @@ app.post('/api/rpc', requireAuth, async (req, res) => {
       });
     }
     else if (action === 'syncOtsToTasks') {
-      result = await syncOtsToTasksDatabase({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
+      result = await syncOtsToTasksDatabase({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID, io });
+    }
+    else if (action === 'calculateOtPercentage' || action === 'calculateAndSaveOtPercentage') {
+      const payload = args[0] || {};
+      result = await calculateAndSaveOtPercentage({
+        sheetsClient: sheets,
+        spreadsheetId: SPREADSHEET_ID,
+        otNumber: payload.otNumber || payload.ot,
+        plate: payload.plate || payload.dominio,
+        io
+      });
+    }
+    else if (action === 'updateAllOtsPercentages') {
+      result = await updateAllOtsPercentages({
+        sheetsClient: sheets,
+        spreadsheetId: SPREADSHEET_ID,
+        io
+      });
     }
     else if (action === 'getHistoricalTasks') {
       result = await getHistoricalTasks({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
@@ -1563,10 +1646,11 @@ app.post('/api/coordinacion/save-all', async (req, res) => {
 app.post('/api/coordinacion/assign', async (req, res) => {
   try {
     const { taskId, otNumber, plate, ubicacion, operario, asignado, empezo, termino, estado, tasksPayload } = req.body;
+    let updateResult = null;
     
     // 1. Actualizar DB_OT_TASKS si taskId está disponible
     if (taskId) {
-      await updateTaskExecution({
+      updateResult = await updateTaskExecution({
         sheetsClient: sheets,
         spreadsheetId: SPREADSHEET_ID,
         taskId,
@@ -1598,7 +1682,18 @@ app.post('/api/coordinacion/assign', async (req, res) => {
       });
     }
 
-    res.json({ success: true, message: 'Asignación guardada en DB y escrita en Columna I de tab ots' });
+    res.json({
+      success: true,
+      taskId,
+      ubicacion,
+      operario,
+      asignado,
+      empezo,
+      termino,
+      estado,
+      updateResult,
+      message: 'Asignación guardada en DB_OT_TASKS y sincronizada en Col I/J de ots'
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1630,7 +1725,36 @@ app.post('/api/tasks/update', async (req, res) => {
 
 app.post('/api/tasks/sync', async (req, res) => {
   try {
-    const result = await syncOtsToTasksDatabase({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID });
+    const result = await syncOtsToTasksDatabase({ sheetsClient: sheets, spreadsheetId: SPREADSHEET_ID, io });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/tasks/percentage', async (req, res) => {
+  try {
+    const { otNumber, ot, plate, dominio } = req.body;
+    const result = await calculateAndSaveOtPercentage({
+      sheetsClient: sheets,
+      spreadsheetId: SPREADSHEET_ID,
+      otNumber: otNumber || ot,
+      plate: plate || dominio,
+      io
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/tasks/percentage/all', async (req, res) => {
+  try {
+    const result = await updateAllOtsPercentages({
+      sheetsClient: sheets,
+      spreadsheetId: SPREADSHEET_ID,
+      io
+    });
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -1913,7 +2037,7 @@ function startServer(port) {
     }
   });
 
-  server.listen(port);
+  server.listen(port, '0.0.0.0');
 }
 
 startServer(DEFAULT_PORT);

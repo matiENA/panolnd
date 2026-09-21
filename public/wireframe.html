@@ -9,6 +9,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   
+  <!-- Configuración de Backend & Rollback -->
+  <script src="/config.js"></script>
+
   <!-- WebSockets Client (Socket.io) -->
   <script src="/socket.io/socket.io.min.js"></script>
 
@@ -983,7 +986,8 @@
     // SERVER SYNC FUNCTIONS
     async function fetchLiveTasks() {
       try {
-        const res = await fetch('/api/tasks');
+        const fetchFn = window.panolFetch || fetch;
+        const res = await fetchFn('/api/tasks');
         if (!res.ok) throw new Error('Status ' + res.status);
         const data = await res.json();
         if (data && data.units && data.units.length > 0) {
@@ -1010,7 +1014,8 @@
     async function syncLiveFromGoogleSheets() {
       showToast("🔄 Sincronizando con pestaña 'ots' en Google Sheets...");
       try {
-        const res = await fetch('/api/tasks/sync', { method: 'POST' });
+        const fetchFn = window.panolFetch || fetch;
+        const res = await fetchFn('/api/tasks/sync', { method: 'POST' });
         const data = await res.json();
         if (data.success) {
           showToast(`✅ Sincronización exitosa: ${data.totalTasks} tareas cargadas.`);
@@ -1028,9 +1033,9 @@
     async function postTaskUpdateToBackend(payload) {
       if (!isServerLive) return;
       try {
-        await fetch('/api/tasks/update', {
+        const fetchFn = window.panolFetch || fetch;
+        await fetchFn('/api/tasks/update', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
       } catch (e) {
@@ -1591,10 +1596,12 @@
       toastTimeout = setTimeout(() => toast.classList.remove('show'), 3000);
     }
 
-    // WEBSOCKETS SETUP
     if (typeof io !== 'undefined') {
       try {
-        const socket = io();
+        const authToken = localStorage.getItem('sys_auth_token') || '';
+        const socket = (window.BACKEND_URL && window.BACKEND_URL !== window.location.origin)
+          ? io(window.BACKEND_URL, { auth: { token: authToken }, withCredentials: true })
+          : io({ auth: { token: authToken }, withCredentials: true });
         socket.on('task_updated', (data) => {
           console.log('⚡ Evento task_updated recibido vía Socket:', data);
           fetchLiveTasks();

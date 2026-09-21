@@ -5,6 +5,7 @@
   <meta charset="utf-8">
   <title>Taller — Terminal de Órdenes & Pedidos</title>
   
+  <script src="/config.js"></script>
   <script src="/socket.io/socket.io.min.js"></script>
   <script src="/js/client-shim.js"></script>
   
@@ -4042,7 +4043,10 @@
     // ===========================================
     function initWebSockets() {
       if (typeof io === 'undefined') return;
-      const socket = io();
+      const authToken = localStorage.getItem('sys_auth_token') || '';
+      const socket = (window.BACKEND_URL && window.BACKEND_URL !== window.location.origin)
+        ? io(window.BACKEND_URL, { auth: { token: authToken }, withCredentials: true })
+        : io({ auth: { token: authToken }, withCredentials: true });
 
       socket.on('taller_hold_updated', data => {
         if (data && data.opId === activeOpId) {

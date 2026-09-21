@@ -1,4 +1,43 @@
 services:
+  # ==============================================================
+  # 🚀 STATIC SITE EN RENDER (Activo para ahorrar Bandwidth y evitar suspensión)
+  # Publica la carpeta ./public con CDN gratuito de Render (100 GB/mes)
+  # Mantiene los mismos enlaces (/coordinacion, /panol, /mobile, /login) mediante rewrites
+  # ==============================================================
+  - type: static
+    name: panol-static-site
+    region: oregon
+    staticPublishPath: ./public
+    routes:
+      - type: rewrite
+        source: /coordinacion
+        destination: /coordinacion.html
+      - type: rewrite
+        source: /panol
+        destination: /panol.html
+      - type: rewrite
+        source: /monitor
+        destination: /panol.html
+      - type: rewrite
+        source: /mobile
+        destination: /mobile.html
+      - type: rewrite
+        source: /m
+        destination: /mobile.html
+      - type: rewrite
+        source: /app-mecanico
+        destination: /mobile.html
+      - type: rewrite
+        source: /login
+        destination: /login.html
+      - type: rewrite
+        source: /wireframe
+        destination: /coordinacion.html
+
+  # ==============================================================
+  # 🔄 WEB SERVICE MONOLITO EN RENDER (Para Rollback)
+  # Descomentar o mantener para volver a correr el backend directamente en Render
+  # ==============================================================
   - type: web
     name: panol-monolith-service
     env: node
@@ -17,6 +56,9 @@ services:
       - key: NODE_ENV
         value: production
 
+  # ==============================================================
+  # ⚙️ EXTRACTOR SERVICE PYTHON
+  # ==============================================================
   - type: web
     name: ot-extractor-service
     env: python

@@ -203,7 +203,7 @@ function makeTaskFingerprint(otNumber, plate, rubro, descripcion) {
  * - NO procesa tareas ya existentes en DB_OT_TASKS ni en HISTORICO_COLD.
  * - Solo inserta (APPEND) tareas nuevas sin columna INTERNO_TIPO.
  */
-async function syncOtsToTasksDatabase({ sheetsClient, spreadsheetId }) {
+async function syncOtsToTasksDatabase({ sheetsClient, spreadsheetId, io }) {
   if (!sheetsClient || !spreadsheetId) throw new Error('Cliente o Spreadsheet ID inválido');
 
   if (isSyncRunning) {
@@ -358,6 +358,11 @@ async function syncOtsToTasksDatabase({ sheetsClient, spreadsheetId }) {
       console.log(`✓ [AutoSync] Sin tareas nuevas (${skippedExistingCount} existentes comprobadas y preservadas intactas).`);
     }
 
+    // Actualizar porcentajes de todas las OTs activas en Col J de 'ots'
+    updateAllOtsPercentages({ sheetsClient, spreadsheetId, io }).catch(ePct => {
+      console.warn('⚠️ Nota: Actualización de porcentajes en sync:', ePct.message);
+    });
+
     const durationMs = Date.now() - startTime;
     return {
       success: true,
@@ -386,7 +391,7 @@ function startAutomaticTaskSync({ sheetsClient, spreadsheetId, io, intervalMinut
   console.log(`🤖 Automatización iniciada: Sincronizador de DB_OT_TASKS activo cada ${intervalMinutes} minuto(s).`);
 
   // Primera ejecución inicial
-  syncOtsToTasksDatabase({ sheetsClient, spreadsheetId }).then(res => {
+  syncOtsToTasksDatabase({ sheetsClient, spreadsheetId, io }).then(res => {
     if (res.newTasksAppended > 0 && io) {
       io.emit('tasks_synced', res);
     }
@@ -395,7 +400,7 @@ function startAutomaticTaskSync({ sheetsClient, spreadsheetId, io, intervalMinut
   // Tarea periódica
   autoSyncIntervalTimer = setInterval(async () => {
     try {
-      const res = await syncOtsToTasksDatabase({ sheetsClient, spreadsheetId });
+      const res = await syncOtsToTasksDatabase({ sheetsClient, spreadsheetId, io });
       if (res.newTasksAppended > 0 && io) {
         io.emit('tasks_synced', res);
       }
@@ -541,6 +546,16 @@ async function getActiveTasksBoard({ sheetsClient, spreadsheetId }) {
     if (allDone) {
       u.status = 'terminado';
     }
+    let totalWeight = 0;
+    allTasks.forEach(t => {
+      const isDone = (t.termino && t.termino.trim() !== '') || ['COMPLETADA', 'TERMINADO', 'DESCARTADA'].includes(String(t.estado || '').toUpperCase().trim());
+      const isInProgress = (t.empezo && t.empezo.trim() !== '') || String(t.estado || '').toUpperCase().trim() === 'EN_CURSO';
+      if (isDone) totalWeight += 1.0;
+      else if (isInProgress) totalWeight += 0.5;
+    });
+    const pct = allTasks.length > 0 ? Math.round((totalWeight / allTasks.length) * 100) : 0;
+    u.porcentaje = `${pct}%`;
+    u.porcentajeNum = pct;
   });
 
   return {
@@ -703,7 +718,14 @@ async function updateTaskExecution({ sheetsClient, spreadsheetId, taskId, ubicac
     io.emit('task_status_changed', updateResult);
   }
 
-  // 4. Verificar si la OT completa finalizó para enviar a Cold Storage
+  // 4. Calcular y persistir porcentaje de la OT en Col J de 'ots'
+  if (otNumber || plate) {
+    calculateAndSaveOtPercentage({ sheetsClient, spreadsheetId, otNumber, plate, io }).catch(e => {
+      console.error('Error en calculateAndSaveOtPercentage:', e.message);
+    });
+  }
+
+  // 5. Verificar si la OT completa finalizó para enviar a Cold Storage
   if (otNumber) {
     checkAndArchiveIfOtFinished({ sheetsClient, spreadsheetId, otNumber, io }).catch(e => {
       console.error('Error en checkAndArchiveIfOtFinished:', e.message);
@@ -711,6 +733,236 @@ async function updateTaskExecution({ sheetsClient, spreadsheetId, taskId, ubicac
   }
 
   return updateResult;
+}
+
+/**
+ * Calcula y persiste el porcentaje de avance de una OT en la columna J de 'ots'.
+ * Reglas de cálculo según especificación:
+ * - Fuente: DB_OT_TASKS (Col I: EMPEZO, Col J: TERMINO, Col K: ESTADO)
+ * - Tarea con TERMINO (o COMPLETADA/TERMINADO/DESCARTADA) = 1.0 (100% de la tarea)
+ * - Tarea con EMPEZO (o EN_CURSO) = 0.5 (50% de la tarea)
+ * - Tarea no iniciada = 0.0
+ * - Total tareas N = total de tareas registradas para esa OT
+ * - Porcentaje OT = N > 0 ? Math.round((suma_pesos / N) * 100) : 0
+ * - Destino: Hoja 'ots', Columna J (fila de la OT) con formato 'XX%'
+ */
+async function calculateAndSaveOtPercentage({ sheetsClient, spreadsheetId, otNumber, plate, io }) {
+  if (!sheetsClient || !spreadsheetId || (!otNumber && !plate)) {
+    return { success: false, error: 'Parámetros requeridos: sheetsClient, spreadsheetId, otNumber o plate' };
+  }
+
+  const cleanOt = String(otNumber || '').trim().replace(/^0+/, '');
+  const cleanPlate = String(plate || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+
+  try {
+    // 1. Obtener tareas de DB_OT_TASKS (A:K)
+    const tasksRes = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${DB_TASKS_TAB}'!A2:K3000`
+    });
+    const taskRows = tasksRes.data.values || [];
+
+    const matchedTasks = [];
+    for (const r of taskRows) {
+      const rOt = String(r[1] || '').trim().replace(/^0+/, '');
+      const rPlate = String(r[2] || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+      if ((cleanOt && rOt === cleanOt) || (!cleanOt && cleanPlate && rPlate === cleanPlate)) {
+        matchedTasks.push(r);
+      }
+    }
+
+    let percentage = 0;
+    let totalTasks = matchedTasks.length;
+    let completedCount = 0;
+    let inProgressCount = 0;
+
+    if (totalTasks > 0) {
+      let totalWeight = 0;
+      for (const t of matchedTasks) {
+        const empezo = String(t[8] || '').trim();
+        const termino = String(t[9] || '').trim();
+        const estado = String(t[10] || '').toUpperCase().trim();
+
+        if (termino !== '' || ['COMPLETADA', 'TERMINADO', 'DESCARTADA'].includes(estado)) {
+          totalWeight += 1.0;
+          completedCount++;
+        } else if (empezo !== '' || estado === 'EN_CURSO') {
+          totalWeight += 0.5;
+          inProgressCount++;
+        }
+      }
+      percentage = Math.round((totalWeight / totalTasks) * 100);
+    } else {
+      // Si no hay tareas activas en DB_OT_TASKS, verificar si ya fue archivada en Cold Storage
+      try {
+        const coldRes = await sheetsClient.spreadsheets.values.get({
+          spreadsheetId,
+          range: `'${COLD_STORAGE_TAB}'!A2:K1000`
+        });
+        const coldRows = coldRes.data.values || [];
+        const matchedCold = coldRows.filter(r => {
+          const rOt = String(r[1] || '').trim().replace(/^0+/, '');
+          const rPlate = String(r[2] || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+          return (cleanOt && rOt === cleanOt) || (!cleanOt && cleanPlate && rPlate === cleanPlate);
+        });
+        if (matchedCold.length > 0) {
+          percentage = 100;
+          totalTasks = matchedCold.length;
+          completedCount = matchedCold.length;
+        }
+      } catch (eCold) {}
+    }
+
+    const percentageFormatted = `${percentage}%`;
+
+    // 2. Localizar la fila en 'ots' (Cols A a J)
+    const otsRes = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${OTS_SOURCE_TAB}'!A2:J1000`
+    });
+    const otsRows = otsRes.data.values || [];
+
+    let targetRowIndex = -1;
+    for (let i = 0; i < otsRows.length; i++) {
+      const rOt = String(otsRows[i][2] || '').trim().replace(/^0+/, '');
+      const rPlate = String(otsRows[i][3] || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+      if ((cleanOt && rOt === cleanOt) || (!cleanOt && cleanPlate && rPlate === cleanPlate)) {
+        targetRowIndex = i + 2;
+        break;
+      }
+    }
+
+    if (targetRowIndex !== -1) {
+      await sheetsClient.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'${OTS_SOURCE_TAB}'!J${targetRowIndex}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [[percentageFormatted]]
+        }
+      });
+      console.log(`📊 [Porcentaje OT] OT ${cleanOt || cleanPlate} -> ${percentageFormatted} (Completadas: ${completedCount}, En Curso: ${inProgressCount}, Total: ${totalTasks}) escrito en '${OTS_SOURCE_TAB}'!J${targetRowIndex}`);
+    } else {
+      console.warn(`⚠️ [Porcentaje OT] No se encontró la fila en '${OTS_SOURCE_TAB}' para OT ${cleanOt || cleanPlate}`);
+    }
+
+    const resultPayload = {
+      success: true,
+      otNumber: cleanOt,
+      plate: cleanPlate,
+      percentage,
+      percentageFormatted,
+      totalTasks,
+      completedCount,
+      inProgressCount,
+      row: targetRowIndex
+    };
+
+    // 3. Notificar en tiempo real vía WebSocket
+    if (io) {
+      io.emit('ot_percentage_updated', resultPayload);
+    }
+
+    return resultPayload;
+  } catch (err) {
+    console.error('❌ Error en calculateAndSaveOtPercentage:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Recalcula y actualiza en lote el porcentaje de avance de todas las OTs en la hoja 'ots' (Col J).
+ */
+async function updateAllOtsPercentages({ sheetsClient, spreadsheetId, io }) {
+  if (!sheetsClient || !spreadsheetId) return { success: false, error: 'No client or spreadsheetId' };
+
+  try {
+    // 1. Obtener todas las tareas de DB_OT_TASKS
+    const tasksRes = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${DB_TASKS_TAB}'!A2:K3000`
+    });
+    const taskRows = tasksRes.data.values || [];
+
+    // Agrupar pesos por OT y por Patente
+    const otStatsMap = new Map();
+    for (const t of taskRows) {
+      const ot = String(t[1] || '').trim().replace(/^0+/, '');
+      const plate = String(t[2] || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+      const key = ot || plate;
+      if (!key) continue;
+
+      if (!otStatsMap.has(key)) {
+        otStatsMap.set(key, { total: 0, weight: 0, completed: 0, inProgress: 0 });
+      }
+      const st = otStatsMap.get(key);
+      st.total++;
+
+      const empezo = String(t[8] || '').trim();
+      const termino = String(t[9] || '').trim();
+      const estado = String(t[10] || '').toUpperCase().trim();
+
+      if (termino !== '' || ['COMPLETADA', 'TERMINADO', 'DESCARTADA'].includes(estado)) {
+        st.weight += 1.0;
+        st.completed++;
+      } else if (empezo !== '' || estado === 'EN_CURSO') {
+        st.weight += 0.5;
+        st.inProgress++;
+      }
+    }
+
+    // 2. Obtener filas de 'ots' (Cols A a J)
+    const otsRes = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${OTS_SOURCE_TAB}'!A2:J2000`
+    });
+    const otsRows = otsRes.data.values || [];
+
+    const updateData = [];
+    const updatedList = [];
+
+    for (let i = 0; i < otsRows.length; i++) {
+      const row = otsRows[i];
+      const rowOt = String(row[2] || '').trim().replace(/^0+/, '');
+      const rowPlate = String(row[3] || '').trim().toUpperCase().replace(/[\s\-_.]/g, '');
+      const currentPct = String(row[9] || '').trim();
+
+      const stats = otStatsMap.get(rowOt) || otStatsMap.get(rowPlate);
+      let calcPct = 0;
+      if (stats && stats.total > 0) {
+        calcPct = Math.round((stats.weight / stats.total) * 100);
+      }
+
+      const formatted = `${calcPct}%`;
+      if (currentPct !== formatted) {
+        updateData.push({
+          range: `'${OTS_SOURCE_TAB}'!J${i + 2}`,
+          values: [[formatted]]
+        });
+        updatedList.push({ ot: rowOt || rowPlate, percentage: calcPct, percentageFormatted: formatted, row: i + 2 });
+      }
+    }
+
+    if (updateData.length > 0) {
+      await sheetsClient.spreadsheets.values.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          valueInputOption: 'USER_ENTERED',
+          data: updateData
+        }
+      });
+      console.log(`📊 [updateAllOtsPercentages] ${updateData.length} porcentajes actualizados en '${OTS_SOURCE_TAB}' Col J.`);
+    }
+
+    if (io && updatedList.length > 0) {
+      io.emit('all_ots_percentages_updated', { totalUpdated: updatedList.length, updates: updatedList });
+    }
+
+    return { success: true, count: updateData.length, updates: updatedList };
+  } catch (err) {
+    console.error('❌ Error en updateAllOtsPercentages:', err.message);
+    return { success: false, error: err.message };
+  }
 }
 
 /**
@@ -811,6 +1063,30 @@ async function checkAndArchiveIfOtFinished({ sheetsClient, spreadsheetId, otNumb
       requestBody: { requests: deleteRequests }
     });
     console.log(`🧹 Hot Purge completado: ${deleteRequests.length} filas eliminadas de ${DB_TASKS_TAB}.`);
+  }
+
+  // Asegurar que en la hoja 'ots' la OT archivada quede con 100% en Col J
+  try {
+    const cleanOt = String(otNumber || '').trim().replace(/^0+/, '');
+    const otsRes = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `'${OTS_SOURCE_TAB}'!A2:J1000`
+    });
+    const otsRows = otsRes.data.values || [];
+    for (let i = 0; i < otsRows.length; i++) {
+      const rowOt = String(otsRows[i][2] || '').trim().replace(/^0+/, '');
+      if (cleanOt && rowOt === cleanOt) {
+        await sheetsClient.spreadsheets.values.update({
+          spreadsheetId,
+          range: `'${OTS_SOURCE_TAB}'!J${i + 2}`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [['100%']] }
+        });
+        break;
+      }
+    }
+  } catch (eEnsurePct) {
+    console.warn('⚠️ Error al asegurar 100% en ots tras archivado:', eEnsurePct.message);
   }
 
   if (io) {
@@ -1292,10 +1568,31 @@ async function getUnitTimelineTasks({ sheetsClient, spreadsheetId, tractorOt, se
           dateLabel = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`;
         }
 
+        let totalWeight = 0;
+        let completedCount = 0;
+        let inProgressCount = 0;
+        taskList.forEach(t => {
+          const isDone = (t.termino && t.termino.trim() !== '') || t.isTerminado || ['COMPLETADA', 'TERMINADO', 'DESCARTADA'].includes(String(t.estado || '').toUpperCase().trim());
+          const isInProgress = (t.empezo && t.empezo.trim() !== '') || String(t.estado || '').toUpperCase().trim() === 'EN_CURSO';
+          if (isDone) {
+            totalWeight += 1.0;
+            completedCount++;
+          } else if (isInProgress) {
+            totalWeight += 0.5;
+            inProgressCount++;
+          }
+        });
+        const pct = taskList.length > 0 ? Math.round((totalWeight / taskList.length) * 100) : 0;
+
         timelineGroups.push({
           ot: otNum,
           type: defaultType,
           date: dateLabel,
+          porcentaje: `${pct}%`,
+          porcentajeNum: pct,
+          totalTasks: taskList.length,
+          completedCount,
+          inProgressCount,
           tasks: taskList
         });
       });
@@ -1397,6 +1694,8 @@ async function getUnitTimelineTasks({ sheetsClient, spreadsheetId, tractorOt, se
           dominio: dom,
           date: dateLabel,
           status: colFStatus || 'FINALIZADA',
+          porcentaje: '100%',
+          porcentajeNum: 100,
           tasks,
           taskCount: tasks.length
         });
@@ -1661,13 +1960,25 @@ async function getCoordinacionBoard({ sheetsClient, spreadsheetId }) {
 
     const unitsList = Array.from(unitsMap.values());
 
-    // Calcular estado general por unidad
+    // Calcular estado general y porcentaje por unidad
     unitsList.forEach(u => {
       const allTasks = [...u.tractor.tasks, ...u.semi.tasks];
       const allDone = allTasks.length > 0 && allTasks.every(t => t.termino && t.termino.trim() !== '');
       if (allDone) {
         u.status = 'terminado';
       }
+      let totalWeight = 0;
+      const weightPerTask = allTasks.length > 0 ? (100 / allTasks.length) : 0;
+      allTasks.forEach(t => {
+        t.taskWeightPct = weightPerTask > 0 ? `${Math.round(weightPerTask)}%` : '0%';
+        const isDone = (t.termino && t.termino.trim() !== '') || ['COMPLETADA', 'TERMINADO', 'DESCARTADA'].includes(String(t.estado || '').toUpperCase().trim());
+        const isInProgress = (t.empezo && t.empezo.trim() !== '') || String(t.estado || '').toUpperCase().trim() === 'EN_CURSO';
+        if (isDone) totalWeight += 1.0;
+        else if (isInProgress) totalWeight += 0.5;
+      });
+      const pct = allTasks.length > 0 ? Math.round((totalWeight / allTasks.length) * 100) : 0;
+      u.porcentaje = `${pct}%`;
+      u.porcentajeNum = pct;
     });
 
     return {
@@ -1882,6 +2193,8 @@ module.exports = {
   startAutomaticTaskSync,
   getActiveTasksBoard,
   updateTaskExecution,
+  calculateAndSaveOtPercentage,
+  updateAllOtsPercentages,
   checkAndArchiveIfOtFinished,
   getHistoricalTasks,
   getOperarioHoldOts,

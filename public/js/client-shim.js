@@ -14,15 +14,22 @@
   window.google = window.google || {};
   window.google.script = window.google.script || {};
 
-  // Determinar base URL (en caso de abrir por file:// o directamente en localhost)
-  const API_BASE = (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') 
-    ? 'http://localhost:3000' 
-    : '';
+  // Determinar base URL (usar window.BACKEND_URL configurado por config.js, o localhost/relativo)
+  const API_BASE = (typeof window !== 'undefined' && (window.BACKEND_URL || window.PANOL_CONFIG?.BACKEND_URL))
+    ? (window.BACKEND_URL || window.PANOL_CONFIG?.BACKEND_URL)
+    : ((typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') 
+      ? 'http://localhost:3000' 
+      : '');
+
+  let authToken = '';
+  try { authToken = localStorage.getItem('sys_auth_token') || ''; } catch(e) {}
 
   // Conexión WebSockets para actualización instantánea
   if (typeof io !== 'undefined') {
     try {
-      const socket = API_BASE ? io(API_BASE) : io();
+      const socket = API_BASE 
+        ? io(API_BASE, { auth: { token: authToken }, withCredentials: true }) 
+        : io({ auth: { token: authToken }, withCredentials: true });
       socket.on('orders_sync', function(orders) {
         if (typeof window.onDataReceived === 'function') {
           window.onDataReceived(orders);
@@ -40,7 +47,10 @@
 
   // Auto-cargar info de entorno al arrancar para UI
   try {
-    fetch((API_BASE || '') + '/api/env-info')
+    fetch((API_BASE || '') + '/api/env-info', {
+      headers: authToken ? { 'x-auth-token': authToken } : {},
+      credentials: 'include'
+    })
       .then(r => r.ok ? r.json() : null)
       .then(info => {
         if (!info) return;
@@ -68,14 +78,18 @@
 
         return function(...args) {
           const makeRequest = (attempt = 1) => {
+            const reqHeaders = { 'Content-Type': 'application/json' };
+            if (authToken) reqHeaders['x-auth-token'] = authToken;
+
             fetch(API_BASE + '/api/rpc', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: reqHeaders,
+              credentials: 'include',
               body: JSON.stringify({ action: prop, args: args })
             })
             .then(async res => {
               if (res.status === 401) {
-                window.location.href = (API_BASE || '') + '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+                window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname + window.location.search);
                 return;
               }
               // Si el servidor de Render está reiniciando (502, 503, 504, 520), reintentar automáticamente
