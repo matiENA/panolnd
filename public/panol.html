@@ -1288,6 +1288,7 @@
       let carouselTimer = null;
       let isCarouselHovered = false;
       let lastCardInteractionTime = 0;
+      const cardItemsScrollMemory = {};
 
       function isInteractingWithCard() {
         // 1. ¿Hay algún modal activo en pantalla?
@@ -1409,6 +1410,21 @@
           lastCardInteractionTime = Date.now();
         }, { passive: true });
 
+        // Capturar scroll vertical interno de las tarjetas (rueda, touch, touchpad o scrollbar)
+        view.addEventListener('scroll', (e) => {
+          const container = e.target && e.target.classList && e.target.classList.contains('card-items-container')
+            ? e.target
+            : (e.target && e.target.closest ? e.target.closest('.card-items-container') : null);
+          if (container) {
+            lastCardInteractionTime = Date.now();
+            const card = container.closest('.card');
+            if (card && card.id) {
+              const reqId = card.id.replace(/^card-/, '');
+              cardItemsScrollMemory[reqId] = container.scrollTop;
+            }
+          }
+        }, { capture: true, passive: true });
+
         // Scroll con rueda del mouse:
         // .card-items-container tiene instancia de scroll independiente para navegar por los ítems verticalmente
         view.addEventListener('wheel', (e) => {
@@ -1429,6 +1445,10 @@
               // Instancia de scroll vertical independiente para navegar por los ítems
               if (itemsContainer.scrollHeight > itemsContainer.clientHeight) {
                 itemsContainer.scrollTop += e.deltaY;
+                const reqIdMatch = card.id.match(/card-(.+)/);
+                if (reqIdMatch) {
+                  cardItemsScrollMemory[reqIdMatch[1]] = itemsContainer.scrollTop;
+                }
                 e.preventDefault();
                 e.stopPropagation();
                 return;
@@ -1554,6 +1574,19 @@
         const view = document.getElementById('view-despacho');
         const prevScrollLeft = view ? view.scrollLeft : 0;
 
+        // 1. Guardar posición de scroll de los ítems de cada tarjeta antes del render
+        if (board) {
+          board.querySelectorAll('.card').forEach(card => {
+            const reqId = card.id ? card.id.replace(/^card-/, '') : null;
+            if (reqId) {
+              const itemsContainer = card.querySelector('.card-items-container');
+              if (itemsContainer) {
+                cardItemsScrollMemory[reqId] = itemsContainer.scrollTop;
+              }
+            }
+          });
+        }
+
         if (!orders || orders.length === 0) {
           const msg = currentPedidosSubtab === 'COMPLETADOS'
             ? { icon: '📦', title: 'Sin pedidos completados', text: 'No hay pedidos entregados recientemente' }
@@ -1574,6 +1607,32 @@
         if (view && prevScrollLeft > 0) {
           view.scrollLeft = prevScrollLeft;
         }
+
+        // 2. Restaurar posición exacta de scroll interno para cada tarjeta (sin salto ni animación)
+        board.querySelectorAll('.card').forEach(card => {
+          const reqId = card.id ? card.id.replace(/^card-/, '') : null;
+          if (reqId && cardItemsScrollMemory[reqId] && cardItemsScrollMemory[reqId] > 0) {
+            const itemsContainer = card.querySelector('.card-items-container');
+            if (itemsContainer) {
+              const targetTop = cardItemsScrollMemory[reqId];
+              itemsContainer.style.scrollBehavior = 'auto';
+              itemsContainer.scrollTop = targetTop;
+              if (typeof itemsContainer.scrollTo === 'function') {
+                itemsContainer.scrollTo({ top: targetTop, behavior: 'instant' });
+              }
+              itemsContainer.style.scrollBehavior = '';
+            }
+          }
+        });
+
+        // 3. Limpiar memoria de pedidos que ya no existen en el tablero
+        const currentReqIds = new Set(orders.map(o => String(o.reqId)));
+        Object.keys(cardItemsScrollMemory).forEach(reqId => {
+          if (!currentReqIds.has(reqId)) {
+            delete cardItemsScrollMemory[reqId];
+          }
+        });
+
         updateCarouselState();
       }
 
@@ -1754,7 +1813,7 @@
         const initialItems = o.items.slice(0, MAX_VISIBLE);
         const extraItems = o.items.slice(MAX_VISIBLE);
 
-        let itemsHtml = '<div class="card-items-container">';
+        let itemsHtml = `<div class="card-items-container" id="items-container-${o.reqId}">`;
         initialItems.forEach((item, idx) => {
           itemsHtml += renderItemCard(item, idx);
         });
@@ -1908,6 +1967,12 @@
             dropdownEl.classList.remove('expanded');
             dropdownEl.classList.add('collapsed');
             btnEl.textContent = `▼ Ver ${remaining} más`;
+            delete cardItemsScrollMemory[reqId];
+            const itemsContainer = document.getElementById(`items-container-${reqId}`) ||
+              document.querySelector(`#card-${CSS.escape(reqId)} .card-items-container`);
+            if (itemsContainer) {
+              itemsContainer.scrollTop = 0;
+            }
           }
         } else {
           applyFilters();
