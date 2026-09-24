@@ -72,9 +72,148 @@ app.use(express.json());
 
 // === AUTENTICACIÓN CENTRALIZADA DEL SISTEMA (CAPA 1: ACCESO DISPOSITIVO) ===
 const SYSTEM_USER = (process.env.SYSTEM_USER || 'taller').trim().toLowerCase();
-const SYSTEM_PASSWORD = (process.env.SYSTEM_PASSWORD || 'taller2026').trim();
-const SYSTEM_AUTH_SECRET = process.env.SYSTEM_AUTH_SECRET || 'panol-secret-auth-key-2026-xyz';
+const RENDER_BASE_PASSWORD = 'taller2026';
+const RENDER_BASE_SECRET = 'panol-secret-auth-key-2026-xyz';
+const SYSTEM_AUTH_SECRET = process.env.SYSTEM_AUTH_SECRET || RENDER_BASE_SECRET;
 const SESSION_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000; // 90 días
+
+// Función para obtener todas las contraseñas válidas:
+// Siempre incluye la de Render (taller2026) + cualquier variable adicional en Railway
+function getAllowedPasswords() {
+  const allowed = new Set();
+  // 1. Clave original de Render (siempre garantizada para nunca romper compatibilidad)
+  allowed.add(RENDER_BASE_PASSWORD);
+
+  // 2. Si se definió SYSTEM_PASSWORD (puede tener varias separadas por coma)
+  if (process.env.SYSTEM_PASSWORD) {
+    process.env.SYSTEM_PASSWORD.split(',').forEach(p => {
+      const trimmed = p.trim();
+      if (trimmed) allowed.add(trimmed);
+    });
+  }
+
+  // 3. Variable de claves adicionales en Railway (RAILWAY_PASSWORDS o EXTRA_PASSWORDS)
+  const extraKeys = process.env.RAILWAY_PASSWORDS || process.env.EXTRA_PASSWORDS || '';
+  if (extraKeys) {
+    extraKeys.split(',').forEach(p => {
+      const trimmed = p.trim();
+      if (trimmed) allowed.add(trimmed);
+    });
+  }
+
+  // 4. Variables dinámicas añadidas en Railway (ej: CLAVE_1, CLAVE_TABLET, RAILWAY_PASS_...)
+  Object.keys(process.env).forEach(key => {
+    if (/^(CLAVE_|RAILWAY_PASS_|ACCESS_KEY_|EXTRA_PASS_)/i.test(key) && process.env[key]) {
+      const val = process.env[key].trim();
+      if (val) allowed.add(val);
+    }
+  });
+
+  return Array.from(allowed);
+}
+
+// Almacén multi-acceso: Mapea usuario -> lista de contraseñas autorizadas
+function getValidUserCredentials() {
+  const userMap = new Map();
+
+  function addCred(u, p) {
+    if (!u || !p) return;
+    const cleanUser = String(u).trim().toLowerCase();
+    const cleanPass = String(p).trim();
+    if (!cleanUser || !cleanPass) return;
+    if (!userMap.has(cleanUser)) {
+      userMap.set(cleanUser, new Set());
+    }
+    userMap.get(cleanUser).add(cleanPass);
+  }
+
+  // 1. Acceso base histórico de Render (siempre garantizado: taller / taller2026)
+  addCred('taller', RENDER_BASE_PASSWORD);
+
+  // 2. Acceso configurado en SYSTEM_USER / SYSTEM_PASSWORD / RAILWAY_PASSWORDS
+  const baseUser = (process.env.SYSTEM_USER || 'taller').trim().toLowerCase();
+  getAllowedPasswords().forEach(p => addCred(baseUser, p));
+
+  // 3. Múltiples accesos definidos en lista de pares: EXTRA_USERS o AUTH_USERS o SYSTEM_USERS
+  // Formato: "usuario:clave, otro_usuario:otra_clave" (ej. EXTRA_USERS=supervisor:super2026,admin:secreto123)
+  const multiUsersEnv = process.env.EXTRA_USERS || process.env.AUTH_USERS || process.env.SYSTEM_USERS || '';
+  if (multiUsersEnv) {
+    multiUsersEnv.split(',').forEach(entry => {
+      const trimmed = entry.trim();
+      if (!trimmed) return;
+      const colonIdx = trimmed.indexOf(':');
+      if (colonIdx !== -1) {
+        const u = trimmed.slice(0, colonIdx).trim();
+        const p = trimmed.slice(colonIdx + 1).trim();
+        addCred(u, p);
+      }
+    });
+  }
+
+  // 4. Variables individuales por pares en Railway:
+  // USER_1=supervisor y PASS_1=clave123 (o USER_SUPERVISOR / PASS_SUPERVISOR)
+  Object.keys(process.env).forEach(key => {
+    const match = key.match(/^USER_(.+)$/i);
+    if (match) {
+      const suffix = match[1];
+      const u = process.env[key];
+      const p = process.env[`PASS_${suffix}`] || process.env[`PASSWORD_${suffix}`] || process.env[`CLAVE_${suffix}`];
+      if (u && p) {
+        addCred(u, p);
+      }
+    }
+  });
+
+  // 5. Variables individuales con prefijo ACCESO_usuario=clave (ej. ACCESO_SUPERVISOR=super2026)
+  Object.keys(process.env).forEach(key => {
+    const match = key.match(/^ACCESO_(.+)$/i);
+    if (match) {
+      const u = match[1].toLowerCase();
+      const p = process.env[key];
+      if (u && p) {
+        addCred(u, p);
+      }
+    }
+  });
+
+  return userMap;
+}
+
+// Autenticar credenciales contra todos los accesos registrados
+function authenticateUser(username, password) {
+  const u = String(username || '').trim().toLowerCase();
+  const p = String(password || '').trim();
+  if (!p) return { success: false };
+
+  const credentials = getValidUserCredentials();
+
+  // Si especificó usuario en el login
+  if (u) {
+    if (credentials.has(u) && credentials.get(u).has(p)) {
+      return { success: true, user: u };
+    }
+    return { success: false };
+  }
+
+  // Si no especificó usuario (ingresó directo la clave)
+  for (const [user, passwords] of credentials.entries()) {
+    if (passwords.has(p)) {
+      return { success: true, user };
+    }
+  }
+
+  return { success: false };
+}
+
+// Lista de secrets válidos (secret de Railway + secret base de Render para no invalidar sesiones)
+function getValidSecrets() {
+  const secrets = new Set();
+  if (process.env.SYSTEM_AUTH_SECRET) {
+    secrets.add(process.env.SYSTEM_AUTH_SECRET.trim());
+  }
+  secrets.add(RENDER_BASE_SECRET);
+  return Array.from(secrets);
+}
 
 function parseCookies(cookieHeader) {
   const list = {};
@@ -105,9 +244,16 @@ function verifyAuthToken(token) {
     const [user, expStr] = payloadStr.split(':');
     const expiresAt = Number(expStr);
     if (!expiresAt || Date.now() > expiresAt) return false;
-    const expectedHmac = crypto.createHmac('sha256', SYSTEM_AUTH_SECRET).update(payloadStr).digest('hex');
-    if (parts[1].length !== expectedHmac.length) return false;
-    return crypto.timingSafeEqual(Buffer.from(parts[1]), Buffer.from(expectedHmac));
+
+    // Verificar contra el secret actual de Railway y el secret histórico de Render
+    const secrets = getValidSecrets();
+    for (const secret of secrets) {
+      const expectedHmac = crypto.createHmac('sha256', secret).update(payloadStr).digest('hex');
+      if (parts[1].length === expectedHmac.length && crypto.timingSafeEqual(Buffer.from(parts[1]), Buffer.from(expectedHmac))) {
+        return user || 'taller';
+      }
+    }
+    return false;
   } catch (e) {
     return false;
   }
@@ -642,19 +788,20 @@ app.get('/login', (req, res) => {
 
 app.post('/api/auth/login', (req, res) => {
   const { username, password, next = '/' } = req.body || {};
-  const u = String(username || '').trim().toLowerCase();
-  const p = String(password || '').trim();
   const isLocal = isLocalRequest(req);
 
+  const authResult = authenticateUser(username, password);
+
   // En entorno local permite cualquier contraseña para pruebas ágiles
-  if (isLocal || (u === SYSTEM_USER && p === SYSTEM_PASSWORD)) {
-    const token = createAuthToken(u || 'local-dev');
+  if (isLocal || authResult.success) {
+    const activeUser = authResult.user || String(username || '').trim().toLowerCase() || SYSTEM_USER || 'local-dev';
+    const token = createAuthToken(activeUser);
     const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
     res.setHeader(
       'Set-Cookie', 
       `sys_auth=${encodeURIComponent(token)}; Path=/; Max-Age=${SESSION_MAX_AGE_MS / 1000}; SameSite=${isHttps ? 'None' : 'Lax'}${isHttps ? '; Secure' : ''}`
     );
-    return res.json({ success: true, token, redirect: next || '/' });
+    return res.json({ success: true, token, user: activeUser, redirect: next || '/' });
   }
 
   return res.status(401).json({ 
@@ -674,8 +821,11 @@ app.all(['/api/auth/logout', '/logout'], (req, res) => {
 app.get('/api/auth/status', (req, res) => {
   const cookies = parseCookies(req.headers.cookie);
   const token = cookies.sys_auth || req.headers['x-auth-token'];
-  const isValid = verifyAuthToken(token);
-  res.json({ authenticated: isValid, user: isValid ? SYSTEM_USER : null });
+  const verifiedUser = verifyAuthToken(token);
+  res.json({ 
+    authenticated: Boolean(verifiedUser), 
+    user: typeof verifiedUser === 'string' ? verifiedUser : (verifiedUser ? SYSTEM_USER : null) 
+  });
 });
 
 // Información del entorno actual (Localhost vs Render vs Railway)
